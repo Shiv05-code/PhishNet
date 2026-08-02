@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/loading_screen.dart';
+import 'theme/app_colors.dart';
 
 void main() {
   runApp(const PhishNetApp());
@@ -15,27 +16,30 @@ class PhishNetApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        // Blue & white scheme matching the mockup.
+        scaffoldBackgroundColor: AppColors.white,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2E7BE0),
-          primary: const Color(0xFF2E7BE0),
-          background: const Color(0xFFEAF1FB),
+          seedColor: AppColors.primary,
+          primary: AppColors.primary,
+          secondary: AppColors.highlight,
+          background: AppColors.white,
         ),
-        scaffoldBackgroundColor: const Color(0xFFEAF1FB),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFEAF1FB),
-          foregroundColor: Colors.black87,
+          backgroundColor: AppColors.white,
+          foregroundColor: AppColors.black,
           elevation: 0,
+        ),
+        textTheme: const TextTheme().apply(
+          bodyColor: AppColors.black,
+          displayColor: AppColors.black,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2E7BE0),
-            foregroundColor: Colors.white,
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.black,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
         ),
       ),
-      // main.dart only decides the FIRST screen shown.
-      // All other navigation happens inside the screens themselves.
       home: const LoadingScreen(),
     );
   }

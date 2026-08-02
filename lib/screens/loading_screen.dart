@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import '../widgets/swimming_fish.dart';
+import '../theme/app_colors.dart';
 
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
@@ -17,7 +18,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
   }
 
   Future<void> _goToLogin() async {
-    await Future.delayed(const Duration(seconds: 2, milliseconds: 500));
+    await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -27,13 +28,11 @@ class _LoadingScreenState extends State<LoadingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Light blue background matching the mockup.
-      backgroundColor: const Color(0xFFEAF1FB),
+      backgroundColor: AppColors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Real logo asset — circular, transparent background.
             Image.asset(
               'assets/images/phishnet_logo.png',
               width: 140,
@@ -45,17 +44,16 @@ class _LoadingScreenState extends State<LoadingScreen> {
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: AppColors.black,
               ),
             ),
             const SizedBox(height: 8),
             const Text(
               'Your Shield Against Scams',
-              style: TextStyle(fontSize: 14, color: Colors.black54),
+              style: TextStyle(fontSize: 14, color: AppColors.black),
             ),
-            const SizedBox(height: 50),
-            // Swimming fish loading animation, replacing the generic spinner.
-            const SwimmingFish(width: 220),
+            const SizedBox(height: 40),
+            const SwimmingFish(size: 220),
           ],
         ),
       ),
