@@ -122,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextField(
                       controller: _emailController,
                       style: const TextStyle(color: Colors.white),
-                      decoration: _fieldDecoration('Enter your email'),
+                      decoration: _isSignUp ? _fieldDecoration('someone@yahoo.com') : _fieldDecoration("Enter your email"),
                     ),
                     const SizedBox(height: 20),
 
