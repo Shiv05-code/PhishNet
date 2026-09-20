@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import '../widgets/swimming_fish.dart';
+import '../theme/auth_theme.dart';
 import 'app_colors.dart';
 
 class LoadingScreen extends StatefulWidget {
@@ -29,53 +30,36 @@ class _LoadingScreenState extends State<LoadingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.screenBackground,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset(
-              'assets/images/phishnet_logo.png',
-              width: 180,
-              height: 180,
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'PhishNet',
-              style: TextStyle(
-                fontFamily: 'SFProDisplay',
-                fontSize: 30,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+      body: Container(
+        color: AppColors.screenBackground,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(
+                'assets/images/phishnet_logo.png',
+                width: 155,
+                height: 155,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'POWERED BY PHISHERS',
-              style: TextStyle(
-                fontFamily: 'SFProText',
-                fontSize: 11,
-                letterSpacing: 1.5,
-                color: Colors.white.withValues(alpha: 0.6),
+              const SizedBox(height: 20),
+              const Text(
+                'Your Shield Against Scams',
+                style: TextStyle(
+                  fontFamily: 'SFProText',
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AuthTheme.secondaryText,
+                ),
               ),
-            ),
-            const SizedBox(height: 40),
-            const Text(
-              'Your Shield Against Scams',
-              style: TextStyle(
-                fontFamily: 'SFProText',
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.lightCyan,
+              const SizedBox(height: 58),
+              const SizedBox(
+                width: 185,
+                height: 185,
+                child: SwimmingFish(size: 185),
               ),
+            ],
             ),
-            const SizedBox(height: 60),
-            const SizedBox(
-              width: 220,
-              height: 220,
-              child: SwimmingFish(size: 220),
-            ),
-          ],
-        ),
+          ),
       ),
     );
   }

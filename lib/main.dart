@@ -16,16 +16,16 @@ class PhishNetApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: AppColors.white,
+        scaffoldBackgroundColor: AppColors.background,
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.primary,
           primary: AppColors.primary,
           secondary: AppColors.highlight,
-          background: AppColors.white,
+          surface: AppColors.background,
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.white,
-          foregroundColor: AppColors.black,
+          backgroundColor: AppColors.background,
+          foregroundColor: AppColors.text,
           elevation: 0,
         ),
         textTheme: const TextTheme().apply(

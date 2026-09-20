@@ -3,18 +3,22 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Backgrounds
-  static const screenBackground = Color(0xFF0B1220);
-  static const cardSurface = Color(0xFF141F30);
+  // Figma light surface palette
+  static const screenBackground = Color(0xFFF8F5EE);
+  static const cardSurface = Color(0xFFFDFCF9);
+  static const surface = Color(0xFFFDFCF9);
 
   // Brand colors
   static const primaryBlue = Color(0xFF359BCD); // Buttons, active nav, links
   static const lightCyan = Color(0xFFB0E5FF); // Subtitles, loading accents
-  static const accentGreen = Color(0xFF4ADE80); // Safe / verified states
+  static const accentGreen = Color(0xFF4EAF83); // Safe / verified states
 
   // Status colors
-  static const dangerRed = Color(0xFFEF4444); // Scam detected, warnings
-  static const cautionAmber = Color(0xFFF59E0B); // Unsure / needs review
+  static const dangerRed = Color(0xFFD95E65); // Scam detected, warnings
+  static const cautionAmber = Color(0xFFD69439); // Unsure / needs review
+  static const text = Color(0xFF101D27);
+  static const muted = Color(0xFF71808A);
+  static const fieldFill = Color(0xFFF0F1F2);
 }
 
 class AppTextStyles {

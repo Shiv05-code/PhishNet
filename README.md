@@ -11,7 +11,6 @@ PhishNet is a cross-platform mobile app (iOS + Android, built with Flutter) that
 - **AI Chat** — ask follow-up questions about a specific message or scam pattern
 - **Family/Social** — share a flagged message with trusted contacts for a second opinion
 - **History** — review past captures, chats, and detections
-- **Analytics** — track scam trends and personal "learning outcomes" over time
 
 ## Tech Stack
 
@@ -33,7 +32,6 @@ lib/
 │   ├── family_social_screen.dart
 │   ├── settings_screen.dart
 │   ├── history_screen.dart
-│   └── analytics_screen.dart
 ├── widgets/                  # Shared, reusable UI components
 │   ├── app_drawer.dart       # Main navigation drawer
 │   └── swimming_fish.dart    # Loading-screen animation

@@ -1,98 +1,108 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import 'app_colors.dart';
 import '../widgets/app_drawer.dart';
 import 'results_screen.dart';
+import '../widgets/figma_app_bar.dart';
+import '../widgets/figma_gradient_background.dart';
+import '../widgets/figma_glass_button.dart';
 
 class CaptureScreen extends StatelessWidget {
-  const CaptureScreen({super.key});
+  final bool isGuest;
+
+  const CaptureScreen({super.key, this.isGuest = false});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.white,
-      appBar: AppBar(
-        // "Capture" as a filled pill badge, matching the mockup —
-        // not a plain text title.
-        title: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Text(
-            'Capture',
-            style: TextStyle(
-              color: AppColors.black,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'monospace',
+      backgroundColor: AppColors.screenBackground,
+      appBar: const FigmaAppBar(title: 'Capture'),
+      drawer: AppDrawer(currentPage: 'Capture', isGuest: isGuest),
+      body: FigmaGradientBackground(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: LayoutBuilder(
+          builder: (context, constraints) => Center(
+            child: Container(
+              width: double.infinity,
+              constraints: BoxConstraints(
+                maxWidth: 520,
+                minHeight: constraints.maxHeight,
+              ),
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 30),
+              decoration: BoxDecoration(
+                color: const Color(0xD9FDFCF9),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xB8FFFFFF),
+                  width: 1.2,
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x300B718E),
+                    blurRadius: 16,
+                    offset: Offset(0, 7),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                const Text(
+                  'Tap to Upload',
+                  style: TextStyle(
+                    fontFamily: 'SFProText',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+                const Spacer(),
+                FigmaGlassUploadButton(
+                  onPressed: () => _openResults(context),
+                ),
+                const Spacer(),
+                FigmaGlassButton(
+                  width: double.infinity,
+                  height: 58,
+                  semanticLabel: 'Scan',
+                  onPressed: () => _openResults(context),
+                  child: const Text(
+                    'Scan',
+                    style: TextStyle(
+                      fontFamily: 'SFProText',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryBlue,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                FigmaGlassButton(
+                  width: double.infinity,
+                  height: 58,
+                  semanticLabel: 'Insert text',
+                  onPressed: () => _openResults(context),
+                  child: const Text(
+                    'Insert Text',
+                    style: TextStyle(
+                      fontFamily: 'SFProText',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryBlue,
+                    ),
+                  ),
+                ),
+                ],
+              ),
             ),
           ),
         ),
-        centerTitle: true,
       ),
-      drawer: const AppDrawer(),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Tap to Upload',
-              style: TextStyle(fontSize: 22, color: AppColors.black),
-            ),
-            const SizedBox(height: 32),
-            // Upload circle — primary fill, highlight-colored icon,
-            // no text label inside.
-            InkWell(
-              borderRadius: BorderRadius.circular(200),
-              onTap: () {
-                // Placeholder — wire up image/file picker later.
-              },
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.file_upload_outlined,
-                  size: 90,
-                  color: AppColors.highlight,
-                ),
-              ),
-            ),
-            const SizedBox(height: 48),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const ResultsScreen()),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text('Scan', style: TextStyle(fontSize: 16)),
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Placeholder — wire up clipboard paste later.
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text('Copy/Paste', style: TextStyle(fontSize: 16)),
-              ),
-            ),
-          ],
-        ),
-      ),
+    );
+  }
+
+  void _openResults(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ResultsScreen(isGuest: isGuest)),
     );
   }
 }
