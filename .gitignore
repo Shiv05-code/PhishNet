@@ -10,6 +10,7 @@
 .history
 .svn/
 .swiftpm/
+ios/**/xcshareddata/swiftpm/
 migrate_working_dir/
 
 # IntelliJ related

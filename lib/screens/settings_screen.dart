@@ -43,23 +43,23 @@ class SettingsScreen extends StatelessWidget {
                   _settingButton(
                     context,
                     'Terms & Conditions',
-                    onPressed: () => Navigator.of(context).push(
-                      fadeRoute(const TermsConditionsScreen()),
-                    ),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).push(fadeRoute(const TermsConditionsScreen())),
                   ),
                   _settingButton(
                     context,
                     'Privacy Policy',
-                    onPressed: () => Navigator.of(context).push(
-                      fadeRoute(const PrivacyPolicyScreen()),
-                    ),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).push(fadeRoute(const PrivacyPolicyScreen())),
                   ),
                   _settingButton(
                     context,
                     'Payment Plan',
-                    onPressed: () => Navigator.of(context).push(
-                      fadeRoute(const PaymentPlanScreen()),
-                    ),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).push(fadeRoute(const PaymentPlanScreen())),
                   ),
                   _settingButton(
                     context,
@@ -67,30 +67,30 @@ class SettingsScreen extends StatelessWidget {
                     enabled: !isGuest,
                     onPressed: isGuest
                         ? null
-                        : () => Navigator.of(context).push(
-                            fadeRoute(const ForgotPasswordScreen()),
-                          ),
+                        : () => Navigator.of(
+                            context,
+                          ).push(fadeRoute(const ForgotPasswordScreen())),
                   ),
                   const SizedBox(height: 8),
                   FigmaGlassButton(
                     width: 170,
                     height: 54,
-                    semanticLabel: 'Log out',
+                    semanticLabel: isGuest ? 'Login' : 'Log out',
                     onPressed: () => Navigator.of(context).pushAndRemoveUntil(
                       instantRoute(const LoginScreen()),
                       (_) => false,
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.logout,
+                          isGuest ? Icons.login : Icons.logout,
                           size: 28,
                           color: AppColors.primaryBlue,
                         ),
                         SizedBox(width: 10),
                         Text(
-                          'Log Out',
+                          isGuest ? 'Login' : 'Log Out',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
@@ -161,11 +161,7 @@ class _ProfileAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(
-        Icons.person,
-        size: 92,
-        color: Color(0xFFFDFCF9),
-      ),
+      child: const Icon(Icons.person, size: 92, color: Color(0xFFFDFCF9)),
     );
   }
 }

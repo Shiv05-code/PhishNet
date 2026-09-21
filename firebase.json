@@ -1,0 +1,1 @@
+{"flutter":{"platforms":{"ios":{"default":{"projectId":"phishnet-b93e0","appId":"1:784915305063:ios:c599cd0c0a59a6094d7ac2","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"phishnet-b93e0","configurations":{"ios":"1:784915305063:ios:c599cd0c0a59a6094d7ac2"}}}}}}
