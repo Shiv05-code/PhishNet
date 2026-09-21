@@ -18,11 +18,7 @@ class AppDrawer extends StatelessWidget {
   final String currentPage;
   final bool isGuest;
 
-  const AppDrawer({
-    super.key,
-    required this.currentPage,
-    this.isGuest = false,
-  });
+  const AppDrawer({super.key, required this.currentPage, this.isGuest = false});
 
   void _navigate(BuildContext context, String label, Widget screen) {
     Navigator.of(context).pop();
@@ -30,12 +26,11 @@ class AppDrawer extends StatelessWidget {
     Navigator.of(context).pushReplacement(fadeRoute(screen));
   }
 
-  void _logout(BuildContext context) {
+  void _openLogin(BuildContext context) {
     Navigator.of(context).pop();
-    Navigator.of(context).pushAndRemoveUntil(
-      instantRoute(const LoginScreen()),
-      (_) => false,
-    );
+    Navigator.of(
+      context,
+    ).pushAndRemoveUntil(instantRoute(const LoginScreen()), (_) => false);
   }
 
   Widget _menuItem(
@@ -60,10 +55,10 @@ class AppDrawer extends StatelessWidget {
               shadows: enabled
                   ? const [
                       Shadow(
-                    color: Color(0x30000000),
-                    blurRadius: 2,
-                    offset: Offset(0, 1),
-                  ),
+                        color: Color(0x30000000),
+                        blurRadius: 2,
+                        offset: Offset(0, 1),
+                      ),
                     ]
                   : null,
             ),
@@ -103,16 +98,8 @@ class AppDrawer extends StatelessWidget {
                   const HomeScreen(),
                   enabled: !isGuest,
                 ),
-                _menuItem(
-                  context,
-                  'Capture',
-                  CaptureScreen(isGuest: isGuest),
-                ),
-                _menuItem(
-                  context,
-                  'Results',
-                  ResultsScreen(isGuest: isGuest),
-                ),
+                _menuItem(context, 'Capture', CaptureScreen(isGuest: isGuest)),
+                _menuItem(context, 'Results', ResultsScreen(isGuest: isGuest)),
                 _menuItem(
                   context,
                   'AI Chat',
@@ -173,13 +160,13 @@ class AppDrawer extends StatelessWidget {
                   ),
                 ),
                 InkWell(
-                  onTap: () => _logout(context),
-                  child: const Padding(
+                  onTap: () => _openLogin(context),
+                  child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: Row(
                       children: [
                         Icon(
-                          Icons.logout,
+                          isGuest ? Icons.login : Icons.logout,
                           color: AppColors.primary,
                           shadows: [
                             Shadow(
@@ -191,7 +178,7 @@ class AppDrawer extends StatelessWidget {
                         ),
                         SizedBox(width: 10),
                         Text(
-                          'Logout',
+                          isGuest ? 'Login' : 'Logout',
                           style: TextStyle(
                             fontSize: 16,
                             color: AppColors.primary,
@@ -229,22 +216,18 @@ class _FigmaMenuPainter extends CustomPainter {
       ..strokeWidth = 6
       ..strokeCap = StrokeCap.round;
     final shadowPaint = Paint()
-        ..color = const Color(0x40000000)
-        ..style = PaintingStyle.stroke
+      ..color = const Color(0x40000000)
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 7
-        ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.round;
     for (final y in [6.0, 19.0, 32.0]) {
-        canvas.drawLine(
+      canvas.drawLine(
         Offset(3, y + 2),
-          Offset(size.width - 2, y + 2),
-          shadowPaint,
-        );
-        canvas.drawLine(
-        Offset(3, y),
-          Offset(size.width - 2, y),
-          paint,
-        );
-      }
+        Offset(size.width - 2, y + 2),
+        shadowPaint,
+      );
+      canvas.drawLine(Offset(3, y), Offset(size.width - 2, y), paint);
+    }
   }
 
   @override

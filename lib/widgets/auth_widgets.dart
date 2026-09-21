@@ -38,12 +38,10 @@ Route<T> slideToLoginRoute<T>(Widget page) {
         begin: const Offset(1, 0),
         end: Offset.zero,
       ).chain(CurveTween(curve: Curves.easeInOutCubic)).animate(animation);
-      final outgoingOffset = Tween<Offset>(
-        begin: Offset.zero,
-        end: const Offset(-1, 0),
-      ).chain(CurveTween(curve: Curves.easeInOutCubic)).animate(
-        secondaryAnimation,
-      );
+      final outgoingOffset =
+          Tween<Offset>(begin: Offset.zero, end: const Offset(-1, 0))
+              .chain(CurveTween(curve: Curves.easeInOutCubic))
+              .animate(secondaryAnimation);
 
       return SlideTransition(
         position: incomingOffset,
@@ -125,6 +123,10 @@ class AuthField extends StatelessWidget {
   final bool obscureText;
   final TextInputType keyboardType;
   final VoidCallback? onToggleObscure;
+  final String? errorText;
+  final TextInputAction? textInputAction;
+  final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
 
   const AuthField({
     super.key,
@@ -134,6 +136,10 @@ class AuthField extends StatelessWidget {
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
     this.onToggleObscure,
+    this.errorText,
+    this.textInputAction,
+    this.validator,
+    this.onChanged,
   });
 
   @override
@@ -143,10 +149,14 @@ class AuthField extends StatelessWidget {
       children: [
         Text(label, style: AuthTheme.label),
         const SizedBox(height: 5),
-        TextField(
+        TextFormField(
           controller: controller,
+          validator: validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          onChanged: onChanged,
           obscureText: obscureText,
           keyboardType: keyboardType,
+          textInputAction: textInputAction,
           style: const TextStyle(
             fontFamily: 'SFProText',
             fontSize: 13,
@@ -179,6 +189,8 @@ class AuthField extends StatelessWidget {
             border: _border(),
             enabledBorder: _border(),
             focusedBorder: _border(width: 1.5),
+            errorText: errorText,
+            errorMaxLines: 2,
           ),
         ),
       ],
@@ -194,7 +206,7 @@ class AuthField extends StatelessWidget {
 }
 
 class AuthArrowButton extends StatelessWidget {
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final String semanticLabel;
 
   const AuthArrowButton({
@@ -261,9 +273,7 @@ class _AuthLinkState extends State<AuthLink> {
   @override
   Widget build(BuildContext context) {
     final isHighlighted = _isHovered || _hasFocus;
-    final baseStyle = widget.legal
-        ? AuthTheme.legalLinkStyle
-        : AuthTheme.link;
+    final baseStyle = widget.legal ? AuthTheme.legalLinkStyle : AuthTheme.link;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
