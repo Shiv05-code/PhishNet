@@ -63,13 +63,13 @@ respectful, never rushed or condescending.
 
 | Step | What you do | What PhishNet gives you |
 | --- | --- | --- |
-| **1. Share** | Paste a message, or select a screenshot. | Text is read from screenshots right on your phone, so the image never needs to be uploaded. |
-| **2. Understand** | Read the result. | A plain-language breakdown of the warning signs, with no technical terms. |
-| **3. Decide** | Ask a follow-up if you are unsure. | Clear, practical next steps, plus an AI chat for deeper explanations. |
+| **1. Share** | Paste a message, or select a screenshot, on the **Capture** screen. | Text is read from screenshots right on your phone, so the image never needs to be uploaded. |
+| **2. Understand** | Read the **Results** screen. | A plain-language breakdown of the warning signs, with no technical terms. |
+| **3. Decide** | Ask a follow-up in **AI Chat** if you are unsure. | Clear, practical next steps, plus detailed explanations on request. |
 
-**Looking out for each other.** PhishNet will also offer optional Yahoo inbox
-monitoring with alerts, a history of past scans, and family sharing so loved
-ones can help each other spot scams.
+**Looking out for each other.** PhishNet will also keep a **History** of your
+past scans, offer optional Yahoo inbox monitoring with alerts, and include a
+**Family/Social** screen so loved ones can help each other spot scams.
 
 > [!NOTE]
 > PhishNet is designed to support informed decisions. It does not replace your
@@ -84,12 +84,12 @@ milestones, not features that are available today.
 
 | ✅ Built so far | 🛠️ Planned |
 | --- | --- |
-| Firebase Email/Password authentication | Scam analysis powered by Claude |
-| Signup validation for Gmail and Yahoo addresses | AI chat for follow-up questions |
-| Email verification and verified-account login checks | Saved scan history and dashboard |
+| Firebase Email/Password authentication | Capture and Results screens connected to Claude scam analysis |
+| Signup validation for Gmail and Yahoo addresses | AI Chat for follow-up questions |
+| Email verification and verified-account login checks | History of saved scans and a Home dashboard |
 | Password reset by email | On-device screenshot text recognition |
 | Guest access to the capture flow | Yahoo inbox monitoring and push alerts |
-| Screen foundations: capture, results, AI chat, family/social, history, settings, and payment plans | Family sharing and scam-pattern insights |
+| Screen foundations: capture, results, AI chat, family/social, history, settings, and payment plans | Family/Social sharing and scam-pattern insights |
 | Shared, accessible styling across the app | Payment-plan backend |
 
 Follow day-to-day progress on the
@@ -104,10 +104,10 @@ windows and scheduled demos, and may change as work progresses.
 
 | Sprint | Window | Demo | Goal |
 | --- | --- | --- | --- |
-| **1 · Foundations** | Sep 30 – Oct 14, 2026 | Oct 21 | Accessible sign-in and account management, payment-plan experience, Firebase and Claude prepared |
-| **2 · Message checking** | Oct 15 – Oct 28, 2026 | Nov 4 | Message capture and results connected to Claude scam analysis, AI chat, Yahoo monitoring setup begins |
-| **3 · Monitoring and history** | Oct 29 – Nov 11, 2026 | Nov 18 | Scan history and dashboard, Yahoo monitoring with alerts, screenshot text recognition |
-| **4 · Sharing and polish** | Nov 12 – Nov 25, 2026 | Dec 2 (final demo) | Family sharing, saved AI chats, scam-pattern insights, payment-plan improvements |
+| **1 · Foundations** | Sep 30 – Oct 14, 2026 | Oct 21 | Accessible sign-in and account management, navigation and Settings, Payment Plans experience, Firebase and Claude prepared |
+| **2 · Message checking** | Oct 15 – Oct 28, 2026 | Nov 4 | Capture and Results screens connected to Claude scam analysis, AI Chat, Yahoo monitoring setup begins |
+| **3 · Monitoring and history** | Oct 29 – Nov 11, 2026 | Nov 18 | History and Home dashboard, Yahoo monitoring with alerts, screenshot text recognition |
+| **4 · Sharing and polish** | Nov 12 – Nov 25, 2026 | Dec 2 (final demo) | Family/Social sharing, saved AI Chat conversations, scam-pattern insights, Payment Plans improvements |
 
 <details>
 <summary><strong>What each sprint delivers</strong></summary>
@@ -116,24 +116,25 @@ windows and scheduled demos, and may change as work progresses.
 
 **Sprint 1 — Foundations**
 - Sign-in, sign-up, verification, password recovery, account settings, and account deletion
-- Accessible navigation and legal-information screens
+- Accessible navigation (Home and Menu) and legal-information screens (Terms & Conditions and Privacy Policy)
 - Firebase data services and Claude API integration prepared for Sprint 2
-- Payment-plan interface and supporting setup
+- Payment Plans interface and supporting setup
 
 **Sprint 2 — Message checking**
-- Message capture and results connected to Claude-powered scam analysis
-- Claude integrated into the AI chat experience
+- Capture screen and Results screen connected to Claude-powered scam analysis
+- Claude integrated into the AI Chat experience
 - AWS setup begins for Yahoo email monitoring
 
 **Sprint 3 — Monitoring and history**
-- Saved scans, recent detections, and a home/analytics dashboard
+- History screen with saved scans and recent detections
+- Home dashboard with analytics
 - Yahoo authorization and scheduled inbox monitoring, with notifications for flagged messages
-- On-device OCR so users can check text in screenshots
+- On-device OCR on the Capture screen so users can check text in screenshots
 
 **Sprint 4 — Sharing and polish**
-- Family/Social sharing through the iOS Share Sheet
-- Saved AI conversations and recurring scam-pattern insights
-- Payment-plan backend improvements and final feature polish
+- Family/Social screen with sharing through the iOS Share Sheet
+- Saved AI Chat conversations and recurring scam-pattern insights
+- Payment Plans backend improvements and final feature polish
 
 </details>
 
@@ -190,7 +191,7 @@ flowchart LR
 | **AWS Lambda** | Planned | Secure app requests: verifies the user's Firebase sign-in before calling Claude |
 | **Amazon EventBridge** | Planned | Scheduled Yahoo inbox checks (planned every 1–2 minutes, subject to Yahoo access and rate limits) |
 | **Claude Haiku** | Planned | Fast, routine message and email classification |
-| **Claude Sonnet** | Planned | AI chat and more detailed explanations |
+| **Claude Sonnet** | Planned | AI Chat and more detailed explanations |
 | **Yahoo OAuth 2.0** | Planned | Lets users authorize and disconnect inbox monitoring |
 
 ### Privacy by design
