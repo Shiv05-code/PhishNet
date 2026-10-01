@@ -14,8 +14,8 @@ class AiChatScreen extends StatelessWidget {
       body: FigmaGradientBackground(
         child: const Center(
           child: Text(
-          'AI Chat screen — placeholder.\nChat UI goes here.',
-          textAlign: TextAlign.center,
+            'AI Chat screen — placeholder.\nChat UI goes here.',
+            textAlign: TextAlign.center,
           ),
         ),
       ),

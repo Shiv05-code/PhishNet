@@ -35,15 +35,9 @@ class FigmaGlassButton extends StatelessWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xF2FFFFFF),
-                Color(0xCFEAF7FA),
-              ],
+              colors: [Color(0xF2FFFFFF), Color(0xCFEAF7FA)],
             ),
-            border: Border.all(
-              color: Color(0xB8FFFFFF),
-              width: 1.2,
-            ),
+            border: Border.all(color: Color(0xB8FFFFFF), width: 1.2),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x350B718E),

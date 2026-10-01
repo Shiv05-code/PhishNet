@@ -19,11 +19,7 @@ class AuthTheme {
     fontWeight: FontWeight.w700,
     color: text,
     shadows: [
-      Shadow(
-        color: Color(0x40000000),
-        blurRadius: 3,
-        offset: Offset(0, 2),
-      ),
+      Shadow(color: Color(0x40000000), blurRadius: 3, offset: Offset(0, 2)),
     ],
   );
 

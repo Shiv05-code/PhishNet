@@ -17,10 +17,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const FigmaAppBar(
-        title: 'Payment Plan',
-        showBackButton: true,
-      ),
+      appBar: const FigmaAppBar(title: 'Payment Plan', showBackButton: true),
       body: FigmaGradientBackground(
         child: SafeArea(
           top: false,
@@ -227,9 +224,7 @@ class _PlanCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 14, 16),
         decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xBFE0F6FC)
-              : const Color(0xD9FDFCF9),
+          color: selected ? const Color(0xBFE0F6FC) : const Color(0xD9FDFCF9),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: Colors.white70, width: 1.2),
           boxShadow: const [

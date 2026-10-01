@@ -14,8 +14,8 @@ class HistoryScreen extends StatelessWidget {
       body: FigmaGradientBackground(
         child: const Center(
           child: Text(
-          'History screen — placeholder.\nRecent captures/chats/detections go here.',
-          textAlign: TextAlign.center,
+            'History screen — placeholder.\nRecent captures/chats/detections go here.',
+            textAlign: TextAlign.center,
           ),
         ),
       ),

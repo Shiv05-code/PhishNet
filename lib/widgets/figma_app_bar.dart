@@ -82,17 +82,13 @@ class _MenuPainter extends CustomPainter {
       ..strokeWidth = 6
       ..strokeCap = StrokeCap.round;
     for (final y in [6.0, 19.0, 32.0]) {
-        canvas.drawLine(
-          Offset(3, y + 2),
-          Offset(size.width - 2, y + 2),
-          shadowPaint,
-        );
-        canvas.drawLine(
-          Offset(3, y),
-          Offset(size.width - 2, y),
-          paint,
-        );
-      }
+      canvas.drawLine(
+        Offset(3, y + 2),
+        Offset(size.width - 2, y + 2),
+        shadowPaint,
+      );
+      canvas.drawLine(Offset(3, y), Offset(size.width - 2, y), paint);
+    }
   }
 
   @override

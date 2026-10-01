@@ -19,7 +19,9 @@ void main() {
     expect(find.bySemanticsLabel('Sign in'), findsOneWidget);
   });
 
-  testWidgets('login and signup render the circular submit button', (tester) async {
+  testWidgets('login and signup render the circular submit button', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
     expect(find.byType(AuthArrowButton), findsOneWidget);
 

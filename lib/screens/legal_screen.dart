@@ -18,20 +18,20 @@ class LegalScreen extends StatelessWidget {
         child: Scrollbar(
           thumbVisibility: true,
           child: SingleChildScrollView(
-          primary: true,
-          physics: const AlwaysScrollableScrollPhysics(),
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-          child: Card(
-            color: AppColors.surface,
-            elevation: 3,
-            shadowColor: const Color(0x26000000),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: _LegalText(body),
+            primary: true,
+            physics: const AlwaysScrollableScrollPhysics(),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+            child: Card(
+              color: AppColors.surface,
+              elevation: 3,
+              shadowColor: const Color(0x26000000),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: _LegalText(body),
               ),
             ),
           ),
