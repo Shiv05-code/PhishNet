@@ -58,8 +58,8 @@ class _LoadingScreenState extends State<LoadingScreen> {
                 child: SwimmingFish(size: 185),
               ),
             ],
-            ),
           ),
+        ),
       ),
     );
   }

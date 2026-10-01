@@ -17,45 +17,45 @@ class HomeScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
           children: [
-          const Text(
-            'Hello',
-            style: TextStyle(
-              fontFamily: 'SFProText',
-              fontSize: 16,
-              color: AppColors.muted,
+            const Text(
+              'Hello',
+              style: TextStyle(
+                fontFamily: 'SFProText',
+                fontSize: 16,
+                color: AppColors.muted,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Stay protected from scams.',
-            style: TextStyle(
-              fontFamily: 'SFProDisplay',
-              fontSize: 25,
-              fontWeight: FontWeight.w700,
-              color: AppColors.text,
+            const SizedBox(height: 4),
+            const Text(
+              'Stay protected from scams.',
+              style: TextStyle(
+                fontFamily: 'SFProDisplay',
+                fontSize: 25,
+                fontWeight: FontWeight.w700,
+                color: AppColors.text,
+              ),
             ),
-          ),
-          const SizedBox(height: 22),
-          Card(
-            elevation: 3,
-            shadowColor: const Color(0x26000000),
-            color: AppColors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Padding(
-              padding: EdgeInsets.all(20),
-              child: Text(
-                'Use Capture to check a suspicious message, link, or email.',
-                style: TextStyle(
-                  fontFamily: 'SFProText',
-                  fontSize: 15,
-                  height: 1.4,
-                  color: AppColors.text,
+            const SizedBox(height: 22),
+            Card(
+              elevation: 3,
+              shadowColor: const Color(0x26000000),
+              color: AppColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Use Capture to check a suspicious message, link, or email.',
+                  style: TextStyle(
+                    fontFamily: 'SFProText',
+                    fontSize: 15,
+                    height: 1.4,
+                    color: AppColors.text,
+                  ),
                 ),
               ),
             ),
-          ),
           ],
         ),
       ),

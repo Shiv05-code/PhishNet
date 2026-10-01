@@ -27,9 +27,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   void _submit() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ResetPasswordScreen()));
   }
 
   @override
@@ -62,9 +62,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     maxLength: 1,
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     style: const TextStyle(
                       fontFamily: 'SFProText',
                       fontSize: 16,
@@ -82,7 +80,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
                       contentPadding: EdgeInsets.zero,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AuthTheme.fieldBorder),
+                        borderSide: const BorderSide(
+                          color: AuthTheme.fieldBorder,
+                        ),
                       ),
                     ),
                   ),
@@ -97,7 +97,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
             label: 'Resend Code',
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('A new verification code was requested.')),
+                const SnackBar(
+                  content: Text('A new verification code was requested.'),
+                ),
               );
             },
           ),

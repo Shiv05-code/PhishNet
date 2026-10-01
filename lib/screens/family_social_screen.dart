@@ -14,8 +14,8 @@ class FamilySocialScreen extends StatelessWidget {
       body: FigmaGradientBackground(
         child: const Center(
           child: Text(
-          'Family/Social screen — placeholder.\nContacts list goes here.',
-          textAlign: TextAlign.center,
+            'Family/Social screen — placeholder.\nContacts list goes here.',
+            textAlign: TextAlign.center,
           ),
         ),
       ),

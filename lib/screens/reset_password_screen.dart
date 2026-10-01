@@ -29,7 +29,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Reset Password', textAlign: TextAlign.center, style: AuthTheme.heading),
+          const Text(
+            'Reset Password',
+            textAlign: TextAlign.center,
+            style: AuthTheme.heading,
+          ),
           const SizedBox(height: 5),
           const Text(
             'Create a new password',
@@ -57,7 +61,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             controller: _confirmPasswordController,
             obscureText: _obscureConfirmPassword,
             onToggleObscure: () {
-              setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+              setState(
+                () => _obscureConfirmPassword = !_obscureConfirmPassword,
+              );
             },
           ),
           const SizedBox(height: 18),

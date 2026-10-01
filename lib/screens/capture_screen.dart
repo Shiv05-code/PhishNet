@@ -31,10 +31,7 @@ class CaptureScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xD9FDFCF9),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: const Color(0xB8FFFFFF),
-                  width: 1.2,
-                ),
+                border: Border.all(color: const Color(0xB8FFFFFF), width: 1.2),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x300B718E),
@@ -46,51 +43,51 @@ class CaptureScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.max,
                 children: [
-                const Text(
-                  'Tap to Upload',
-                  style: TextStyle(
-                    fontFamily: 'SFProText',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primaryBlue,
-                  ),
-                ),
-                const Spacer(),
-                FigmaGlassUploadButton(
-                  onPressed: () => _openResults(context),
-                ),
-                const Spacer(),
-                FigmaGlassButton(
-                  width: double.infinity,
-                  height: 58,
-                  semanticLabel: 'Scan',
-                  onPressed: () => _openResults(context),
-                  child: const Text(
-                    'Scan',
+                  const Text(
+                    'Tap to Upload',
                     style: TextStyle(
                       fontFamily: 'SFProText',
-                      fontSize: 22,
+                      fontSize: 20,
                       fontWeight: FontWeight.w600,
                       color: AppColors.primaryBlue,
                     ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                FigmaGlassButton(
-                  width: double.infinity,
-                  height: 58,
-                  semanticLabel: 'Insert text',
-                  onPressed: () => _openResults(context),
-                  child: const Text(
-                    'Insert Text',
-                    style: TextStyle(
-                      fontFamily: 'SFProText',
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primaryBlue,
+                  const Spacer(),
+                  FigmaGlassUploadButton(
+                    onPressed: () => _openResults(context),
+                  ),
+                  const Spacer(),
+                  FigmaGlassButton(
+                    width: double.infinity,
+                    height: 58,
+                    semanticLabel: 'Scan',
+                    onPressed: () => _openResults(context),
+                    child: const Text(
+                      'Scan',
+                      style: TextStyle(
+                        fontFamily: 'SFProText',
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryBlue,
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 14),
+                  FigmaGlassButton(
+                    width: double.infinity,
+                    height: 58,
+                    semanticLabel: 'Insert text',
+                    onPressed: () => _openResults(context),
+                    child: const Text(
+                      'Insert Text',
+                      style: TextStyle(
+                        fontFamily: 'SFProText',
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -101,8 +98,8 @@ class CaptureScreen extends StatelessWidget {
   }
 
   void _openResults(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ResultsScreen(isGuest: isGuest)),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ResultsScreen(isGuest: isGuest)));
   }
 }
