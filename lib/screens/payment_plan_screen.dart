@@ -1,3 +1,5 @@
+import 'package:in_app_purchase/in_app_purchase.dart';
+import '../services/purchase_service.dart';
 import 'package:flutter/material.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
@@ -13,6 +15,59 @@ class PaymentPlanScreen extends StatefulWidget {
 class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   bool _yearly = false;
   bool _plusSelected = true;
+  final PurchaseService _purchaseService = PurchaseService.instance;
+
+  bool _loadingStore = true;
+  String? _purchaseMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializePurchases();
+  }
+
+  Future<void> _initializePurchases() async {
+    await _purchaseService.initialize(
+      onChanged: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+      onVerifiedPurchase: _handleVerifiedPurchase,
+    );
+
+    if (mounted) {
+      setState(() {
+        _loadingStore = false;
+      });
+    }
+  }
+
+  Future<void> _handleVerifiedPurchase(PurchaseDetails purchase) async {
+    if (!mounted) return;
+
+    setState(() {
+      _purchaseMessage = 'Plus subscription activated!';
+    });
+  }
+
+  ProductDetails? get _selectedProduct {
+    final productId = _yearly
+        ? PurchaseService.yearlyProductId
+        : PurchaseService.monthlyProductId;
+
+    return _purchaseService.productFor(productId);
+  }
+
+  String get _plusPrice {
+    final product = _selectedProduct;
+
+    if (product == null) {
+      return _yearly ? 'Yearly' : 'Monthly';
+    }
+
+    return _yearly ? '${product.price}/year' : '${product.price}/month';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +110,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
               const SizedBox(height: 14),
               _PlanCard(
                 name: 'Plus',
-                price: _yearly ? '\$49.99/year' : '\$4.99/month',
+                price: _plusPrice,
                 selected: _plusSelected,
                 features: const [
                   'Everything in Free',
@@ -66,6 +121,69 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 ],
                 onTap: () => setState(() => _plusSelected = true),
               ),
+              const SizedBox(height: 20),
+
+              if (_loadingStore)
+                const Center(child: CircularProgressIndicator())
+              else if (_plusSelected) ...[
+                SizedBox(
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed:
+                        _purchaseService.purchasePending ||
+                            _selectedProduct == null
+                        ? null
+                        : () async {
+                            await _purchaseService.purchase(_selectedProduct!);
+                          },
+                    child: _purchaseService.purchasePending
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _yearly
+                                ? 'Start Plus Yearly'
+                                : 'Start Plus Monthly',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                TextButton(
+                  onPressed: () async {
+                    await _purchaseService.restorePurchases();
+                  },
+                  child: const Text('Restore Purchases'),
+                ),
+              ],
+
+              if (_purchaseMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _purchaseMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+
+              if (_purchaseService.errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _purchaseService.errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red, fontSize: 14),
+                ),
+              ],
             ],
           ),
         ),
