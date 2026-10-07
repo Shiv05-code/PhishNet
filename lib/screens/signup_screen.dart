@@ -60,9 +60,14 @@ class _SignupScreenState extends State<SignupScreen> {
       );
       await _authService.sendVerificationEmail();
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushReplacement(fadeRoute(EmailVerificationScreen(email: email)));
+      Navigator.of(context).pushReplacement(
+        fadeRoute(
+          EmailVerificationScreen(
+            email: email,
+            authService: widget.authService,
+          ),
+        ),
+      );
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       setState(() {
