@@ -66,5 +66,18 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.Phishers.PhishNetApp</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>phishnet</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
