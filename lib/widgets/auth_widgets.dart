@@ -411,12 +411,14 @@ class AuthLink extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   final bool legal;
+  final bool underline;
 
   const AuthLink({
     super.key,
     required this.label,
     required this.onTap,
     this.legal = false,
+    this.underline = false,
   });
 
   @override
@@ -430,7 +432,11 @@ class _AuthLinkState extends State<AuthLink> {
   @override
   Widget build(BuildContext context) {
     final isHighlighted = _isHovered || _hasFocus;
-    final baseStyle = widget.legal ? AuthTheme.legalLinkStyle : AuthTheme.link;
+    final baseStyle = widget.legal
+        ? AuthTheme.legalLinkStyle
+        : widget.underline
+        ? AuthTheme.link.copyWith(decoration: TextDecoration.underline)
+        : AuthTheme.link;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -459,6 +465,65 @@ class _AuthLinkState extends State<AuthLink> {
                 decorationThickness: 0.8,
               ),
               textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Circular arrow submit control in PhishNet's original Figma style, sized
+/// for a 48px tap target. Shows a spinner while [isLoading].
+class AuthArrowButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final String semanticLabel;
+  final bool isLoading;
+
+  const AuthArrowButton({
+    super.key,
+    required this.onPressed,
+    this.semanticLabel = 'Continue',
+    this.isLoading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: onPressed != null && !isLoading,
+      label: isLoading ? '$semanticLabel, loading' : semanticLabel,
+      excludeSemantics: true,
+      child: SizedBox(
+        width: 56,
+        height: 56,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: isLoading ? null : onPressed,
+            customBorder: const CircleBorder(),
+            child: Center(
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  color: AuthTheme.accent, // original Figma blue
+                  shape: BoxShape.circle,
+                ),
+                child: isLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(13),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.arrow_forward,
+                        size: 26,
+                        color: Colors.white,
+                      ),
+              ),
             ),
           ),
         ),
