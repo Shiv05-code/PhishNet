@@ -34,7 +34,7 @@ class SettingsScreen extends StatelessWidget {
                   const SizedBox(height: 26),
                   _settingButton(
                     context,
-                    'Delete My Data',
+                    'Delete My Account',
                     onPressed: () => Navigator.of(context).pushAndRemoveUntil(
                       fadeRoute(const SignupScreen()),
                       (_) => false,
