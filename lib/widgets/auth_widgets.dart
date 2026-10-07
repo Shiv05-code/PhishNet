@@ -89,6 +89,36 @@ class AuthPage extends StatelessWidget {
   }
 }
 
+/// PhishNet logo and wordmark shown above auth cards that users reach from
+/// emails, so the page is recognizably PhishNet.
+class AuthBrandHeader extends StatelessWidget {
+  const AuthBrandHeader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'PhishNet',
+      excludeSemantics: true,
+      child: Column(
+        children: [
+          Image.asset('assets/images/phishnet_logo.png', width: 72, height: 72),
+          const SizedBox(height: 6),
+          const Text(
+            'PhishNet',
+            style: TextStyle(
+              fontFamily: 'SFProDisplay',
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: AuthTheme.text,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
 class AuthCard extends StatelessWidget {
   final Widget child;
 
@@ -98,8 +128,7 @@ class AuthCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 430),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
       decoration: BoxDecoration(
         color: AuthTheme.card,
         borderRadius: BorderRadius.circular(16),
@@ -116,6 +145,55 @@ class AuthCard extends StatelessWidget {
   }
 }
 
+/// Icon badge, title and optional subtitle used at the top of auth cards.
+class AuthHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+  final Color iconColor;
+
+  const AuthHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.icon,
+    this.iconColor = AuthTheme.buttonFill,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (icon != null) ...[
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: iconColor.withAlpha(28),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 32, color: iconColor),
+          ),
+          const SizedBox(height: 14),
+        ],
+        Semantics(
+          header: true,
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AuthTheme.heading,
+          ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 8),
+          Text(subtitle!, textAlign: TextAlign.center, style: AuthTheme.body),
+        ],
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+}
+
 class AuthField extends StatelessWidget {
   final String label;
   final String hint;
@@ -127,6 +205,8 @@ class AuthField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final String? Function(String?)? validator;
   final ValueChanged<String>? onChanged;
+  final Iterable<String>? autofillHints;
+  final TextCapitalization textCapitalization;
 
   const AuthField({
     super.key,
@@ -140,6 +220,8 @@ class AuthField extends StatelessWidget {
     this.textInputAction,
     this.validator,
     this.onChanged,
+    this.autofillHints,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   @override
@@ -148,7 +230,7 @@ class AuthField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(label, style: AuthTheme.label),
-        const SizedBox(height: 5),
+        const SizedBox(height: 6),
         TextFormField(
           controller: controller,
           validator: validator,
@@ -157,93 +239,168 @@ class AuthField extends StatelessWidget {
           obscureText: obscureText,
           keyboardType: keyboardType,
           textInputAction: textInputAction,
-          style: const TextStyle(
-            fontFamily: 'SFProText',
-            fontSize: 13,
-            color: AuthTheme.text,
-          ),
+          autofillHints: autofillHints,
+          textCapitalization: textCapitalization,
+          style: AuthTheme.fieldText,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(
-              fontFamily: 'SFProText',
-              fontSize: 13,
-              color: AuthTheme.muted,
-            ),
+            hintStyle: AuthTheme.fieldText.copyWith(color: AuthTheme.muted),
             filled: true,
             fillColor: AuthTheme.fieldFill,
-            isDense: true,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 13,
-              vertical: 10,
+              horizontal: 14,
+              vertical: 14,
             ),
             suffixIcon: onToggleObscure == null
                 ? null
                 : IconButton(
+                    tooltip: obscureText ? 'Show password' : 'Hide password',
                     onPressed: onToggleObscure,
                     icon: Icon(
                       obscureText ? Icons.visibility_off : Icons.visibility,
-                      size: 17,
-                      color: AuthTheme.secondaryText,
+                      size: 22,
+                      color: AuthTheme.fieldBorder,
                     ),
                   ),
             border: _border(),
             enabledBorder: _border(),
-            focusedBorder: _border(width: 1.5),
+            focusedBorder: _border(width: 2.5),
+            errorBorder: _border(color: AuthTheme.error),
+            focusedErrorBorder: _border(color: AuthTheme.error, width: 2.5),
             errorText: errorText,
-            errorMaxLines: 2,
+            errorStyle: const TextStyle(fontSize: 14, color: AuthTheme.error),
+            errorMaxLines: 3,
           ),
         ),
       ],
     );
   }
 
-  OutlineInputBorder _border({double width = 1}) {
+  OutlineInputBorder _border({
+    Color color = AuthTheme.fieldBorder,
+    double width = 1.5,
+  }) {
     return OutlineInputBorder(
-      borderRadius: BorderRadius.circular(7),
-      borderSide: BorderSide(color: AuthTheme.fieldBorder, width: width),
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: color, width: width),
     );
   }
 }
 
-class AuthArrowButton extends StatelessWidget {
+/// Full-width, clearly labeled primary action with a loading state.
+class AuthPrimaryButton extends StatelessWidget {
+  final String label;
   final VoidCallback? onPressed;
-  final String semanticLabel;
+  final bool isLoading;
 
-  const AuthArrowButton({
+  const AuthPrimaryButton({
     super.key,
+    required this.label,
     required this.onPressed,
-    this.semanticLabel = 'Continue',
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AuthTheme.buttonFill,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: AuthTheme.buttonFill.withAlpha(150),
+          disabledForegroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontFamily: 'SFProText',
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        child: isLoading
+            ? Semantics(
+                label: '$label, loading',
+                child: const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            : Text(label),
+      ),
+    );
+  }
+}
+
+enum AuthStatus { info, success, error }
+
+/// Inline feedback banner announced to screen readers.
+class AuthStatusBanner extends StatelessWidget {
+  final AuthStatus status;
+  final String message;
+  final Widget? action;
+
+  const AuthStatusBanner({
+    super.key,
+    required this.status,
+    required this.message,
+    this.action,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final (fill, color, icon) = switch (status) {
+      AuthStatus.success => (
+        AuthTheme.successFill,
+        AuthTheme.success,
+        Icons.check_circle,
+      ),
+      AuthStatus.error => (AuthTheme.errorFill, AuthTheme.error, Icons.error),
+      AuthStatus.info => (
+        AuthTheme.infoFill,
+        AuthTheme.secondaryText,
+        Icons.info,
+      ),
+    };
     return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onPressed,
-            customBorder: const CircleBorder(),
-            child: Center(
-              child: Container(
-                width: 30,
-                height: 30,
-                decoration: const BoxDecoration(
-                  color: AuthTheme.accent,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_forward,
-                  size: 16,
-                  color: Colors.white,
-                ),
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withAlpha(110)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message,
+                    style: TextStyle(
+                      fontFamily: 'SFProText',
+                      fontSize: 15,
+                      height: 1.35,
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  ?action,
+                ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -254,12 +411,14 @@ class AuthLink extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   final bool legal;
+  final bool underline;
 
   const AuthLink({
     super.key,
     required this.label,
     required this.onTap,
     this.legal = false,
+    this.underline = false,
   });
 
   @override
@@ -273,7 +432,11 @@ class _AuthLinkState extends State<AuthLink> {
   @override
   Widget build(BuildContext context) {
     final isHighlighted = _isHovered || _hasFocus;
-    final baseStyle = widget.legal ? AuthTheme.legalLinkStyle : AuthTheme.link;
+    final baseStyle = widget.legal
+        ? AuthTheme.legalLinkStyle
+        : widget.underline
+        ? AuthTheme.link.copyWith(decoration: TextDecoration.underline)
+        : AuthTheme.link;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -310,32 +473,61 @@ class _AuthLinkState extends State<AuthLink> {
   }
 }
 
-class AuthSubmitRow extends StatelessWidget {
-  final String label;
-  final VoidCallback onPressed;
+/// Circular arrow submit control in PhishNet's original Figma style, sized
+/// for a 48px tap target. Shows a spinner while [isLoading].
+class AuthArrowButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final String semanticLabel;
+  final bool isLoading;
 
-  const AuthSubmitRow({
+  const AuthArrowButton({
     super.key,
-    required this.label,
     required this.onPressed,
+    this.semanticLabel = 'Continue',
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'SFProText',
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: AuthTheme.text,
+    return Semantics(
+      button: true,
+      enabled: onPressed != null && !isLoading,
+      label: isLoading ? '$semanticLabel, loading' : semanticLabel,
+      excludeSemantics: true,
+      child: SizedBox(
+        width: 56,
+        height: 56,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: isLoading ? null : onPressed,
+            customBorder: const CircleBorder(),
+            child: Center(
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  color: AuthTheme.accent, // original Figma blue
+                  shape: BoxShape.circle,
+                ),
+                child: isLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(13),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.arrow_forward,
+                        size: 26,
+                        color: Colors.white,
+                      ),
+              ),
+            ),
           ),
         ),
-        AuthArrowButton(onPressed: onPressed, semanticLabel: label),
-      ],
+      ),
     );
   }
 }

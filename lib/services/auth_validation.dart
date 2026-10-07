@@ -36,3 +36,10 @@ String? validateConfirmPassword(String? value, String password) {
   if (value != password) return 'Passwords do not match.';
   return null;
 }
+
+String? validateSignupName(String? value, {String field = 'name'}) {
+  final name = value?.trim() ?? '';
+  if (name.isEmpty) return 'Enter your $field.';
+  if (name.length > 50) return 'Use 50 characters or fewer.';
+  return null;
+}
