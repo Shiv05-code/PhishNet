@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>PhishNet</title>
+  <style>
+    :root { --bg:#F8F5EE; --card:#FDFCF9; --text:#101D27; --sub:#2C6E8E; --btn:#2479A6;
+            --muted:#5F6B73; --ok:#2E7D57; --okfill:#E6F4EC; --err:#B3261E; --errfill:#FBEAEA; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+           padding:24px 16px; font:18px/1.5 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+           color:var(--text); background:linear-gradient(135deg, var(--bg) 0%, #F4FBFC 48%, #BFEAF6 100%); }
+    main { width:100%; max-width:400px; text-align:center; }
+    .brand img { width:80px; height:80px; display:block; margin:0 auto; }
+    .brand div { font-size:28px; font-weight:700; margin-top:6px; }
+    .card { margin-top:18px; background:var(--card); border-radius:16px; padding:30px 22px 24px;
+            box-shadow:0 4px 8px rgba(0,0,0,.15); }
+    .icon { width:72px; height:72px; border-radius:50%; margin:0 auto 14px; display:flex;
+            align-items:center; justify-content:center; font-size:36px; font-weight:700; }
+    .icon.ok { background:var(--okfill); color:var(--ok); }
+    .icon.err { background:var(--errfill); color:var(--err); }
+    .icon.info { background:#E6F2F8; color:var(--btn); }
+    h1 { font-size:28px; line-height:1.25; margin:0 0 10px; }
+    p { margin:0 0 22px; color:var(--sub); }
+    .btn { display:block; padding:16px; border-radius:12px; background:var(--btn); color:#fff;
+           font-weight:700; text-decoration:none; font-size:20px; }
+    .note { margin-top:22px; padding-top:18px; border-top:1px solid rgba(16,29,39,.12);
+            font-size:17px; color:var(--muted); }
+    .note a { color:var(--btn); font-weight:600; }
+    .spinner { width:44px; height:44px; margin:10px auto 0; border:5px solid #E6F2F8;
+               border-top-color:var(--btn); border-radius:50%; animation:spin 1s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    footer { margin-top:18px; font-size:15px; color:var(--muted); }
+    [hidden] { display:none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><img src="/phishnet_logo.png" alt=""><div>PhishNet</div></div>
+
+    <!-- Email verification -->
+    <section class="card" id="verifying" hidden>
+      <h1>Verifying your email…</h1>
+      <div class="spinner" role="status" aria-label="Verifying"></div>
+    </section>
+    <section class="card" id="verified" hidden>
+      <div class="icon ok" aria-hidden="true">✓</div>
+      <h1>Your email is verified</h1>
+      <p>Thank you! Go back to PhishNet to finish setting up your account.</p>
+      <a class="btn" href="phishnet://app/email-verified">Open PhishNet</a>
+      <div class="note">If the app is already open, tap
+        <strong>I've Verified My Email</strong>.</div>
+    </section>
+    <section class="card" id="verifyFailed" hidden>
+      <div class="icon err" aria-hidden="true">!</div>
+      <h1>This link has expired</h1>
+      <p>Verification links work once and expire after a while. Open PhishNet and tap
+        <strong>Resend Email</strong> to get a new one.</p>
+      <a class="btn" href="phishnet://app/email-verified">Open PhishNet</a>
+    </section>
+    <section class="card" id="verifyOffline" hidden>
+      <div class="icon err" aria-hidden="true">!</div>
+      <h1>We couldn't verify right now</h1>
+      <p>Check your internet connection and try again.</p>
+      <a class="btn" href="#" onclick="location.reload(); return false;">Try Again</a>
+      <div class="note"><a class="fallback" href="#">Verify on the Firebase page instead</a></div>
+    </section>
+
+    <!-- Password reset -->
+    <section class="card" id="reset" hidden>
+      <div class="icon info" aria-hidden="true">🔒</div>
+      <h1>Reset your password</h1>
+      <p>Open PhishNet to choose a new password for your account.</p>
+      <a class="btn" id="openReset" href="#">Open PhishNet</a>
+      <div class="note" id="resetHelp" hidden>
+        App didn't open? Make sure you're on your iPhone with PhishNet installed, then tap
+        <strong>Open PhishNet</strong> again.<br><br>
+        <a class="fallback" href="#">Reset in your browser instead</a>
+      </div>
+    </section>
+
+    <!-- Broken link -->
+    <section class="card" id="broken" hidden>
+      <div class="icon err" aria-hidden="true">!</div>
+      <h1>This link isn't complete</h1>
+      <p>Please request a new email from the PhishNet app.</p>
+    </section>
+
+    <footer>Didn't request this? You can safely ignore the email.</footer>
+  </main>
+  <script>
+    // Firebase custom action handler for PhishNet. Codes are passed through
+    // untouched and never shown on the page.
+    var params = new URLSearchParams(location.search);
+    var mode = params.get('mode');
+    var code = params.get('oobCode');
+    var apiKey = params.get('apiKey');
+    var firebasePage = 'https://phishnet-b93e0.firebaseapp.com/__/auth/action' + location.search;
+    function show(id) { document.getElementById(id).hidden = false; }
+    document.querySelectorAll('a.fallback').forEach(function (a) { a.href = firebasePage; });
+
+    if (mode !== 'verifyEmail' && mode !== 'resetPassword') {
+      location.replace(firebasePage); // other actions use Firebase's page
+    } else if (!code) {
+      show('broken');
+    } else if (mode === 'verifyEmail') {
+      show('verifying');
+      // Applies the verification code (same call as the Firebase JS SDK's
+      // applyActionCode) using the API key Firebase includes in the link.
+      fetch('https://identitytoolkit.googleapis.com/v1/accounts:update?key=' +
+            encodeURIComponent(apiKey || ''), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oobCode: code })
+      }).then(function (res) {
+        return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+      }).then(function (r) {
+        document.getElementById('verifying').hidden = true;
+        var msg = (r.body && r.body.error && r.body.error.message) || '';
+        if (r.ok) show('verified');
+        else if (/OOB_CODE/.test(msg)) show('verifyFailed');
+        else show('verifyOffline');
+      }).catch(function () {
+        document.getElementById('verifying').hidden = true;
+        show('verifyOffline');
+      });
+    } else {
+      var appLink = 'phishnet://app/reset-password?oobCode=' + encodeURIComponent(code);
+      show('reset');
+      document.getElementById('openReset').href = appLink;
+      location.href = appLink; // try once automatically
+      setTimeout(function () { show('resetHelp'); }, 2500);
+    }
+  </script>
+</body>
+</html>
