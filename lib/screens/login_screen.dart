@@ -141,9 +141,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: AuthLink(
                         label: 'Forgot Password?',
                         onTap: () {
-                          Navigator.of(
-                            context,
-                          ).push(fadeRoute(const ForgotPasswordScreen()));
+                          Navigator.of(context).push(
+                            fadeRoute(
+                              ForgotPasswordScreen(
+                                initialEmail: _emailController.text.trim(),
+                                authService: widget.authService,
+                              ),
+                            ),
+                          );
                         },
                       ),
                     ),
