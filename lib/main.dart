@@ -2,6 +2,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'screens/loading_screen.dart';
+import 'screens/reset_password_screen.dart';
+import 'services/auth_service.dart';
+import 'services/reset_link.dart';
+import 'widgets/auth_widgets.dart';
 import 'theme/app_colors.dart';
 
 Future<void> main() async {
@@ -11,7 +15,9 @@ Future<void> main() async {
 }
 
 class PhishNetApp extends StatelessWidget {
-  const PhishNetApp({super.key});
+  final AuthService? authService;
+
+  const PhishNetApp({super.key, this.authService});
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +52,24 @@ class PhishNetApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const LoadingScreen(),
+      home: LoadingScreen(authService: authService),
+      // Password-reset links (see README "Password reset links") arrive as
+      // route names via Flutter deep linking and open the Reset screen.
+      onGenerateRoute: (settings) {
+        // Opened from the hosted "Email verified" page: re-check the session
+        // so a now-verified user lands on Home.
+        if (settings.name?.startsWith('/email-verified') ?? false) {
+          return fadeRoute(
+            LoadingScreen(authService: authService, clearStack: true),
+          );
+        }
+        final code = parseResetCode(settings.name);
+        if (code == null) return null;
+        return fadeRoute(
+          ResetPasswordScreen(oobCode: code, authService: authService),
+        );
+      },
+      onUnknownRoute: (_) => fadeRoute(LoadingScreen(authService: authService)),
     );
   }
 }

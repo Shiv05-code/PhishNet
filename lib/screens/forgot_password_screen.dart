@@ -3,20 +3,29 @@ import '../services/auth_service.dart';
 import '../theme/auth_theme.dart';
 import '../widgets/auth_widgets.dart';
 import 'login_screen.dart';
+import 'reset_password_screen.dart';
+
+final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
 class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key});
+  final String? initialEmail;
+  final AuthService? authService;
+
+  const ForgotPasswordScreen({super.key, this.initialEmail, this.authService});
 
   @override
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  final _emailController = TextEditingController();
+  late final _emailController = TextEditingController(
+    text: widget.initialEmail,
+  );
   final _formKey = GlobalKey<FormState>();
-  final _authService = AuthService();
+  late final _authService = widget.authService ?? AuthService();
   bool _isSubmitting = false;
-  bool _emailSent = false;
+  String? _sentTo;
+  String? _error;
 
   @override
   void dispose() {
@@ -27,97 +36,123 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Enter your email.';
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      return 'Enter a valid email address.';
-    }
+    if (!_emailPattern.hasMatch(email)) return 'Enter a valid email address.';
     return null;
   }
 
   Future<void> _sendResetEmail() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isSubmitting = true);
+    final email = _emailController.text.trim();
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
     try {
-      await _authService.sendPasswordResetEmail(_emailController.text.trim());
-      if (mounted) setState(() => _emailSent = true);
+      await _authService.sendPasswordResetEmail(email);
+      if (mounted) setState(() => _sentTo = email);
     } catch (error) {
-      if (mounted) _showMessage(AuthService.messageFor(error));
+      if (mounted) setState(() => _error = AuthService.messageFor(error));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+  void _backToLogin() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      navigator.pushReplacement(
+        fadeRoute(LoginScreen(authService: widget.authService)),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return AuthPage(
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Forgot Password',
-              textAlign: TextAlign.center,
-              style: AuthTheme.heading,
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              'Enter the email associated with your account',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'SFProText',
-                fontSize: 10,
-                color: AuthTheme.secondaryText,
-              ),
-            ),
-            const SizedBox(height: 22),
-            AuthField(
-              label: 'Email Address',
-              hint: 'Enter your email',
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              validator: _validateEmail,
-            ),
-            const SizedBox(height: 18),
-            if (_emailSent)
-              const Text(
-                'If an account exists for this email, a password reset link '
-                'has been sent. Check your inbox and spam folder.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'SFProText',
-                  fontSize: 11,
-                  color: AuthTheme.secondaryText,
-                ),
-              )
-            else
-              Align(
-                alignment: Alignment.center,
-                child: AuthArrowButton(
-                  semanticLabel: 'Send reset email',
-                  onPressed: _isSubmitting ? null : _sendResetEmail,
-                ),
-              ),
-            const SizedBox(height: 170),
-            Center(
-              child: AuthLink(
-                label: 'Back to Login',
-                onTap: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  );
-                },
-              ),
-            ),
-          ],
+      child: AuthCard(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: _sentTo == null ? _buildForm() : _buildConfirmation(),
         ),
       ),
+    );
+  }
+
+  Widget _buildForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        key: const ValueKey('form'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const AuthHeader(
+            icon: Icons.lock_reset,
+            title: 'Forgot Password',
+            subtitle:
+                "Enter the email you signed up with and we'll send you a "
+                'link to reset your password.',
+          ),
+          AuthField(
+            label: 'Email Address',
+            hint: 'Enter your email',
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.email],
+            validator: _validateEmail,
+          ),
+          const SizedBox(height: 18),
+          if (_error != null) ...[
+            AuthStatusBanner(status: AuthStatus.error, message: _error!),
+            const SizedBox(height: 12),
+          ],
+          AuthPrimaryButton(
+            label: 'Send Reset Link',
+            isLoading: _isSubmitting,
+            onPressed: _sendResetEmail,
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: AuthLink(label: 'Back to Login', onTap: _backToLogin),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConfirmation() {
+    return Column(
+      key: const ValueKey('sent'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AuthHeader(
+          icon: Icons.mark_email_read_outlined,
+          iconColor: AuthTheme.success,
+          title: 'Check Your Email',
+          subtitle:
+              "If an account exists for $_sentTo, you'll get a reset link "
+              "shortly. Not in your inbox? Check spam.",
+        ),
+        AuthPrimaryButton(label: 'Back to Login', onPressed: _backToLogin),
+        const SizedBox(height: 14),
+        Center(
+          child: AuthLink(
+            label: 'I have a reset link',
+            onTap: () => Navigator.of(context).push(
+              fadeRoute(ResetPasswordScreen(authService: widget.authService)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Center(
+          child: AuthLink(
+            label: 'Try a different email',
+            onTap: () => setState(() => _sentTo = null),
+          ),
+        ),
+      ],
     );
   }
 }
