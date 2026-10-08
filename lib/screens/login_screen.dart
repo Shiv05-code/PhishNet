@@ -53,9 +53,14 @@ class _LoginScreenState extends State<LoginScreen> {
       await _authService.signIn(email: email, password: password);
       if (!mounted) return;
       if (_authService.hasUnverifiedSession) {
-        Navigator.of(
-          context,
-        ).pushReplacement(fadeRoute(EmailVerificationScreen(email: email)));
+        Navigator.of(context).pushReplacement(
+          fadeRoute(
+            EmailVerificationScreen(
+              email: email,
+              authService: widget.authService,
+            ),
+          ),
+        );
         return;
       }
       Navigator.of(context).pushAndRemoveUntil(
