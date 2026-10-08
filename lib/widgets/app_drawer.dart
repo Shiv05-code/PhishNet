@@ -8,6 +8,7 @@ import '../screens/family_social_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/history_screen.dart';
 import '../screens/login_screen.dart';
+import '../services/auth_service.dart';
 import 'auth_widgets.dart';
 import 'figma_gradient_background.dart';
 
@@ -17,8 +18,14 @@ import 'figma_gradient_background.dart';
 class AppDrawer extends StatelessWidget {
   final String currentPage;
   final bool isGuest;
+  final AuthService? authService;
 
-  const AppDrawer({super.key, required this.currentPage, this.isGuest = false});
+  const AppDrawer({
+    super.key,
+    required this.currentPage,
+    this.isGuest = false,
+    this.authService,
+  });
 
   void _navigate(BuildContext context, String label, Widget screen) {
     Navigator.of(context).pop();
@@ -26,11 +33,16 @@ class AppDrawer extends StatelessWidget {
     Navigator.of(context).pushReplacement(fadeRoute(screen));
   }
 
-  void _openLogin(BuildContext context) {
-    Navigator.of(context).pop();
-    Navigator.of(
-      context,
-    ).pushAndRemoveUntil(instantRoute(const LoginScreen()), (_) => false);
+  /// Logout (or Login for guests). Signed-in users are signed out of
+  /// Firebase so the next launch shows Login instead of restoring them.
+  Future<void> _openLogin(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    if (!isGuest) await (authService ?? AuthService()).signOut();
+    navigator.pushAndRemoveUntil(
+      instantRoute(const LoginScreen()),
+      (_) => false,
+    );
   }
 
   Widget _menuItem(
