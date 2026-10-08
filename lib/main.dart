@@ -1,8 +1,15 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'firebase_options.dart';
 import 'screens/loading_screen.dart';
 import 'theme/app_colors.dart';
+
+const _appSystemOverlayStyle = SystemUiOverlayStyle(
+  statusBarColor: Colors.transparent,
+  statusBarIconBrightness: Brightness.dark,
+  statusBarBrightness: Brightness.light,
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +25,10 @@ class PhishNetApp extends StatelessWidget {
     return MaterialApp(
       title: 'PhishNet',
       debugShowCheckedModeBanner: false,
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: _appSystemOverlayStyle,
+        child: child ?? const SizedBox.shrink(),
+      ),
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: AppColors.background,
@@ -31,6 +42,7 @@ class PhishNetApp extends StatelessWidget {
           backgroundColor: AppColors.background,
           foregroundColor: AppColors.text,
           elevation: 0,
+          systemOverlayStyle: _appSystemOverlayStyle,
         ),
         textTheme: const TextTheme().apply(
           bodyColor: AppColors.black,
