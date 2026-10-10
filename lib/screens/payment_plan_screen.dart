@@ -1,9 +1,11 @@
+import '../services/subscription_service.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import '../services/purchase_service.dart';
 import 'package:flutter/material.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import 'app_colors.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PaymentPlanScreen extends StatefulWidget {
   const PaymentPlanScreen({super.key});
@@ -24,22 +26,50 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   void initState() {
     super.initState();
     _initializePurchases();
+    _testFirestoreSubscription();
+  }
+
+  Future<void> _testFirestoreSubscription() async {
+    debugPrint('FIRESTORE USER UID: ${FirebaseAuth.instance.currentUser?.uid}');
+    try {
+      final subscription = await SubscriptionService.instance.getSubscription();
+
+      debugPrint('FIRESTORE TEST: $subscription');
+    } catch (e) {
+      debugPrint('FIRESTORE ERROR: $e');
+    }
   }
 
   Future<void> _initializePurchases() async {
-    await _purchaseService.initialize(
-      onChanged: () {
-        if (mounted) {
-          setState(() {});
-        }
-      },
-      onVerifiedPurchase: _handleVerifiedPurchase,
-    );
+    try {
+      await _purchaseService
+          .initialize(
+            onChanged: () {
+              if (mounted) {
+                setState(() {});
+              }
+            },
+            onVerifiedPurchase: _handleVerifiedPurchase,
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('STOREKIT DEBUG: Initialization failed: $e');
 
-    if (mounted) {
-      setState(() {
-        _loadingStore = false;
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to connect to the App Store. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingStore = false;
+        });
+      }
     }
   }
 

@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 class PurchaseService {
@@ -10,10 +10,7 @@ class PurchaseService {
   static const String monthlyProductId = 'com.phishnet.plus.monthly';
   static const String yearlyProductId = 'com.phishnet.plus.yearly';
 
-  static const Set<String> productIds = {
-    monthlyProductId,
-    yearlyProductId,
-  };
+  static const Set<String> productIds = {monthlyProductId, yearlyProductId};
 
   final InAppPurchase _iap = InAppPurchase.instance;
 
@@ -27,10 +24,15 @@ class PurchaseService {
 
   Future<void> initialize({
     required void Function() onChanged,
-    required Future<void> Function(PurchaseDetails purchase)
-        onVerifiedPurchase,
+    required Future<void> Function(PurchaseDetails purchase) onVerifiedPurchase,
   }) async {
-    storeAvailable = await _iap.isAvailable();
+    try {
+      storeAvailable = await _iap.isAvailable();
+      print('STOREKIT DEBUG: Available = $storeAvailable');
+    } catch (e) {
+      print('STOREKIT DEBUG: Availability error = $e');
+      storeAvailable = false;
+    }
 
     if (!storeAvailable) {
       errorMessage = 'The App Store is currently unavailable.';
@@ -62,6 +64,10 @@ class PurchaseService {
   Future<void> loadProducts() async {
     final response = await _iap.queryProductDetails(productIds);
 
+    print('STOREKIT DEBUG: Products found = ${response.productDetails.length}');
+    print('STOREKIT DEBUG: Missing IDs = ${response.notFoundIDs}');
+    print('STOREKIT DEBUG: Error = ${response.error}');
+
     if (response.error != null) {
       errorMessage = response.error!.message;
       return;
@@ -88,13 +94,9 @@ class PurchaseService {
   Future<void> purchase(ProductDetails product) async {
     errorMessage = null;
 
-    final purchaseParam = PurchaseParam(
-      productDetails: product,
-    );
+    final purchaseParam = PurchaseParam(productDetails: product);
 
-    await _iap.buyNonConsumable(
-      purchaseParam: purchaseParam,
-    );
+    await _iap.buyNonConsumable(purchaseParam: purchaseParam);
   }
 
   Future<void> restorePurchases() async {
@@ -105,8 +107,7 @@ class PurchaseService {
   Future<void> _handlePurchase(
     PurchaseDetails purchase, {
     required void Function() onChanged,
-    required Future<void> Function(PurchaseDetails purchase)
-        onVerifiedPurchase,
+    required Future<void> Function(PurchaseDetails purchase) onVerifiedPurchase,
   }) async {
     switch (purchase.status) {
       case PurchaseStatus.pending:
@@ -115,8 +116,7 @@ class PurchaseService {
 
       case PurchaseStatus.error:
         purchasePending = false;
-        errorMessage =
-            purchase.error?.message ?? 'Purchase failed.';
+        errorMessage = purchase.error?.message ?? 'Purchase failed.';
         break;
 
       case PurchaseStatus.purchased:
@@ -131,9 +131,25 @@ class PurchaseService {
         purchasePending = false;
         break;
     }
-
+    debugPrint('STOREKIT PURCHASE: ${purchase.productID}');
+    debugPrint('STOREKIT STATUS: ${purchase.status}');
+    debugPrint('STOREKIT TRANSACTION ID: ${purchase.purchaseID}');
+    debugPrint('STOREKIT PURCHASE TYPE: ${purchase.runtimeType}');
+    debugPrint(
+      'STOREKIT PENDING COMPLETION: ${purchase.pendingCompletePurchase}',
+    );
     if (purchase.pendingCompletePurchase) {
-      await _iap.completePurchase(purchase);
+      try {
+        await _iap.completePurchase(purchase);
+
+        debugPrint('STOREKIT: Transaction completed successfully');
+      } catch (e, stackTrace) {
+        debugPrint('STOREKIT: Transaction completion failed: $e');
+        debugPrintStack(stackTrace: stackTrace);
+
+        errorMessage =
+            'Purchase processing could not be completed. Please try again.';
+      }
     }
 
     onChanged();
