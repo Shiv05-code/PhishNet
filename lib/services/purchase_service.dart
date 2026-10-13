@@ -28,9 +28,7 @@ class PurchaseService {
   }) async {
     try {
       storeAvailable = await _iap.isAvailable();
-      print('STOREKIT DEBUG: Available = $storeAvailable');
     } catch (e) {
-      print('STOREKIT DEBUG: Availability error = $e');
       storeAvailable = false;
     }
 
@@ -63,10 +61,6 @@ class PurchaseService {
 
   Future<void> loadProducts() async {
     final response = await _iap.queryProductDetails(productIds);
-
-    print('STOREKIT DEBUG: Products found = ${response.productDetails.length}');
-    print('STOREKIT DEBUG: Missing IDs = ${response.notFoundIDs}');
-    print('STOREKIT DEBUG: Error = ${response.error}');
 
     if (response.error != null) {
       errorMessage = response.error!.message;
@@ -130,30 +124,21 @@ class PurchaseService {
       case PurchaseStatus.canceled:
         purchasePending = false;
         break;
-    }
-    debugPrint('STOREKIT PURCHASE: ${purchase.productID}');
-    debugPrint('STOREKIT STATUS: ${purchase.status}');
-    debugPrint('STOREKIT TRANSACTION ID: ${purchase.purchaseID}');
-    debugPrint('STOREKIT PURCHASE TYPE: ${purchase.runtimeType}');
-    debugPrint(
-      'STOREKIT PENDING COMPLETION: ${purchase.pendingCompletePurchase}',
-    );
+    } // Closes the switch statement
+
     if (purchase.pendingCompletePurchase) {
       try {
         await _iap.completePurchase(purchase);
-
-        debugPrint('STOREKIT: Transaction completed successfully');
       } catch (e, stackTrace) {
-        debugPrint('STOREKIT: Transaction completion failed: $e');
         debugPrintStack(stackTrace: stackTrace);
 
         errorMessage =
             'Purchase processing could not be completed. Please try again.';
       }
-    }
+    } // Closes the if statement
 
     onChanged();
-  }
+  } // Closes _handlePurchase
 
   Future<void> dispose() async {
     await _purchaseSubscription?.cancel();
