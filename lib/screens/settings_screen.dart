@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
@@ -14,8 +15,9 @@ import 'terms_conditions_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   final bool isGuest;
+  final AuthService? authService;
 
-  const SettingsScreen({super.key, this.isGuest = false});
+  const SettingsScreen({super.key, this.isGuest = false, this.authService});
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +36,7 @@ class SettingsScreen extends StatelessWidget {
                   const SizedBox(height: 26),
                   _settingButton(
                     context,
-                    'Delete My Data',
+                    'Delete My Account',
                     onPressed: () => Navigator.of(context).pushAndRemoveUntil(
                       fadeRoute(const SignupScreen()),
                       (_) => false,
@@ -76,10 +78,18 @@ class SettingsScreen extends StatelessWidget {
                     width: 170,
                     height: 54,
                     semanticLabel: isGuest ? 'Login' : 'Log out',
-                    onPressed: () => Navigator.of(context).pushAndRemoveUntil(
-                      instantRoute(const LoginScreen()),
-                      (_) => false,
-                    ),
+                    onPressed: () async {
+                      final navigator = Navigator.of(context);
+                      // End the Firebase session so the next launch shows
+                      // Login instead of restoring this user.
+                      if (!isGuest) {
+                        await (authService ?? AuthService()).signOut();
+                      }
+                      navigator.pushAndRemoveUntil(
+                        instantRoute(const LoginScreen()),
+                        (_) => false,
+                      );
+                    },
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

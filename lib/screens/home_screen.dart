@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import '../screens/app_colors.dart';
+import '../services/auth_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final AuthService? authService;
+
+  const HomeScreen({super.key, this.authService});
 
   @override
   Widget build(BuildContext context) {
+    final firstName = (authService ?? AuthService()).firstName;
     return Scaffold(
       backgroundColor: AppColors.screenBackground,
       appBar: const FigmaAppBar(title: 'Home'),
@@ -17,12 +21,13 @@ class HomeScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
           children: [
-            const Text(
-              'Hello',
-              style: TextStyle(
-                fontFamily: 'SFProText',
-                fontSize: 16,
-                color: AppColors.muted,
+            Text(
+              firstName == null ? 'Hello there' : 'Hello, $firstName',
+              style: const TextStyle(
+                fontFamily: 'SFProDisplay',
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
               ),
             ),
             const SizedBox(height: 4),

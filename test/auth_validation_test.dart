@@ -46,4 +46,10 @@ void main() {
     );
     expect(validateConfirmPassword('PhishNet!26', 'PhishNet!26'), isNull);
   });
+
+  test('signup name is required and bounded', () {
+    expect(validateSignupName('  '), 'Enter your name.');
+    expect(validateSignupName('a' * 51), isNotNull);
+    expect(validateSignupName('Ada Lovelace'), isNull);
+  });
 }
