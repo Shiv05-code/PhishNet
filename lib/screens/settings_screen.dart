@@ -10,7 +10,6 @@ import 'forgot_password_screen.dart';
 import 'login_screen.dart';
 import 'payment_plan_screen.dart';
 import 'privacy_policy_screen.dart';
-import 'signup_screen.dart';
 import 'terms_conditions_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -35,13 +34,33 @@ class SettingsScreen extends StatelessWidget {
                   const _ProfileAvatar(),
                   const SizedBox(height: 26),
                   _settingButton(
-                    context,
-                    'Delete My Account',
-                    onPressed: () => Navigator.of(context).pushAndRemoveUntil(
-                      fadeRoute(const SignupScreen()),
-                      (_) => false,
-                    ),
-                  ),
+  context,
+  'Delete My Account',
+  onPressed: () async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete your data?'),
+          content: const Text(
+            'This will permanently delete your account and saved data. '
+            'This action cannot be undone. Are you sure you want to proceed with this command?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Yes, Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  },
+),
                   _settingButton(
                     context,
                     'Terms & Conditions',
