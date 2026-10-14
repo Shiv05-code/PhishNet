@@ -104,3 +104,58 @@ export const initializeSubscription = onCall(
     return {success: true};
   }
 );
+// DEVELOPMENT ONLY: Simulates a Plus subscription upgrade.
+// Never deploy this function to production.
+if (process.env.FUNCTIONS_EMULATOR === "true") {
+  exports.demoUpgradeSubscription = onCall(
+    {region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+          "unauthenticated",
+          "You must be logged in."
+        );
+      }
+
+      const productId = request.data?.productId;
+
+      if (typeof productId !== "string" ||
+          !ALLOWED_PRODUCTS.has(productId)) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Invalid subscription product."
+        );
+      }
+
+      const isYearly = productId === "com.phishnet.plus.yearly";
+      const durationDays = isYearly ? 365 : 30;
+
+      const expiresAt = new Date(
+        Date.now() + durationDays * 24 * 60 * 60 * 1000
+      );
+
+      const uid = request.auth.uid;
+
+      await getFirestore()
+        .collection("users")
+        .doc(uid)
+        .collection("subscriptions")
+        .doc("current")
+        .set({
+          plan: "plus",
+          status: "active",
+          productId,
+          environment: "local_test",
+          expiresAt,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+
+      return {
+        success: true,
+        plan: "plus",
+        status: "active",
+        productId,
+      };
+    }
+  );
+}

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import 'app_colors.dart';
+import 'package:flutter/foundation.dart';
 
 class PaymentPlanScreen extends StatefulWidget {
   const PaymentPlanScreen({super.key});
@@ -96,6 +97,17 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
       debugPrint('BACKEND TEST: $result');
     } catch (e) {
       debugPrint('BACKEND ERROR: $e');
+    }
+  }
+
+  Future<void> _testDemoUpgrade() async {
+    try {
+      final result = await PaymentBackendService.instance
+          .demoUpgradeSubscription('com.phishnet.plus.monthly');
+
+      debugPrint('DEMO UPGRADE RESULT: $result');
+    } catch (e) {
+      debugPrint('DEMO UPGRADE ERROR: $e');
     }
   }
 
@@ -193,7 +205,15 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                   child: const Text('Restore Purchases'),
                 ),
               ],
-
+              if (kDebugMode &&
+                  const bool.fromEnvironment('USE_FIREBASE_EMULATORS'))
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: ElevatedButton(
+                    onPressed: _testDemoUpgrade,
+                    child: const Text('TEST: Upgrade to Plus'),
+                  ),
+                ),
               if (_purchaseMessage != null) ...[
                 const SizedBox(height: 12),
                 Text(
