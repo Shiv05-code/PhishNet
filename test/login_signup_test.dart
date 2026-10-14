@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:phishnet_app/screens/email_verification_screen.dart';
 import 'package:phishnet_app/screens/home_screen.dart';
 import 'package:phishnet_app/screens/login_screen.dart';
+import 'package:phishnet_app/screens/privacy_policy_screen.dart';
 import 'package:phishnet_app/screens/signup_screen.dart';
+import 'package:phishnet_app/screens/terms_conditions_screen.dart';
 import 'package:phishnet_app/services/auth_service.dart';
 import 'package:phishnet_app/theme/auth_theme.dart';
 import 'package:phishnet_app/widgets/auth_widgets.dart';
@@ -21,6 +23,21 @@ void main() {
       expect(find.text('Login'), findsOneWidget); // heading only
       expect(find.byType(AuthArrowButton), findsOneWidget);
       expect(find.text('Sign Up'), findsOneWidget);
+    });
+
+    testWidgets('shows legal notice and navigates to both policy screens', (
+      tester,
+    ) async {
+      await pumpScreen(tester, LoginScreen(authService: FakeAuthService()));
+      expect(find.text('By using PhishNet, you agree to our'), findsOneWidget);
+
+      await tapOn(tester, find.text('Terms & Conditions'));
+      expect(find.byType(TermsConditionsScreen), findsOneWidget);
+      Navigator.of(tester.element(find.byType(TermsConditionsScreen))).pop();
+      await tester.pumpAndSettle();
+
+      await tapOn(tester, find.text('Privacy Policy'));
+      expect(find.byType(PrivacyPolicyScreen), findsOneWidget);
     });
 
     testWidgets('empty fields validate inline without calling auth', (

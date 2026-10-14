@@ -253,7 +253,7 @@ class _SignupScreenState extends State<SignupScreen> {
             spacing: 3,
             runSpacing: 4,
             children: [
-              const Text('By signing up, you agree to our', style: footerStyle),
+              const Text('By using PhishNet, you agree to our', style: footerStyle),
               AuthLink(
                 label: 'Terms & Conditions',
                 legal: true,
