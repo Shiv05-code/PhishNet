@@ -18,8 +18,9 @@ class PaymentBackendService {
 
     return result.data;
   }
-Future<void> initializeSubscription() async {
-  final callable = _functions.httpsCallable('initializeSubscription');
-  await callable.call();
-}
+
+  Future<void> initializeSubscription() async {
+    final callable = _functions.httpsCallable('initializeSubscription');
+    await callable.call();
+  }
 }
