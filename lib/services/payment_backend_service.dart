@@ -24,28 +24,25 @@ class PaymentBackendService {
     final callable = _functions.httpsCallable('initializeSubscription');
     await callable.call();
   }
-Future<Map<String, dynamic>> demoUpgradeSubscription(
-  String productId,
-) async {
-  const useEmulators = bool.fromEnvironment(
-    'USE_FIREBASE_EMULATORS',
-    defaultValue: false,
-  );
 
-  if (!kDebugMode || !useEmulators) {
-    throw StateError(
-      'Demo upgrades are only available in local emulator mode.',
+  Future<Map<String, dynamic>> demoUpgradeSubscription(String productId) async {
+    const useEmulators = bool.fromEnvironment(
+      'USE_FIREBASE_EMULATORS',
+      defaultValue: false,
     );
+
+    if (!kDebugMode || !useEmulators) {
+      throw StateError(
+        'Demo upgrades are only available in local emulator mode.',
+      );
+    }
+
+    final callable = _functions.httpsCallable('demoUpgradeSubscription');
+
+    final result = await callable.call<Map<String, dynamic>>({
+      'productId': productId,
+    });
+
+    return result.data;
   }
-
-  final callable = _functions.httpsCallable(
-    'demoUpgradeSubscription',
-  );
-
-  final result = await callable.call<Map<String, dynamic>>({
-    'productId': productId,
-  });
-
-  return result.data;
-}
 }
