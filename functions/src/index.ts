@@ -1,15 +1,17 @@
+import {initializeApp} from "firebase-admin/app";
+import {getFirestore, FieldValue} from "firebase-admin/firestore";
 /**
  * Import function triggers from their respective submodules:
  *
  * import {onCall} from "firebase-functions/v2/https";
  * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
 import {setGlobalOptions} from "firebase-functions";
 // import {onRequest} from "firebase-functions/https";
 // import * as logger from "firebase-functions/logger";
+initializeApp();
 
 // Start writing functions
 // https://firebase.google.com/docs/functions/typescript
@@ -65,5 +67,40 @@ export const verifySubscription = onCall(
       productId,
       message: "Apple transaction verification is not configured yet.",
     };
+  }
+);
+export const initializeSubscription = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "You must be logged in."
+      );
+    }
+
+    const uid = request.auth.uid;
+
+    const subscriptionRef = getFirestore()
+      .collection("users")
+      .doc(uid)
+      .collection("subscriptions")
+      .doc("current");
+
+    await subscriptionRef.create({
+      plan: "free",
+      status: "inactive",
+      productId: "none",
+      environment: "none",
+      expiresAt: null,
+      createdAt: FieldValue.serverTimestamp(),
+    }).catch((error: unknown) => {
+      const code = (error as {code?: number | string}).code;
+      if (code !== 6 && code !== "already-exists") {
+        throw error;
+      }
+    });
+
+    return {success: true};
   }
 );
