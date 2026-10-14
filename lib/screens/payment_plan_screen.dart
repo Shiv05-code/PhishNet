@@ -9,6 +9,9 @@ import 'package:flutter/foundation.dart';
 import '../services/subscription_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_typography.dart';
+import 'login_screen.dart';
+
+enum PlanState { freeNoAccount, freeWithAccount, plus }
 
 class PaymentPlanScreen extends StatefulWidget {
   const PaymentPlanScreen({super.key});
@@ -19,7 +22,7 @@ class PaymentPlanScreen extends StatefulWidget {
 
 class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   bool _yearly = false;
-  bool _plusSelected = true;
+  final bool _plusSelected = true;
   final PurchaseService _purchaseService = PurchaseService.instance;
 
   bool _loadingStore = true;
@@ -101,6 +104,39 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
     }
   }
 
+  PlanState _mockPlan = PlanState.freeNoAccount;
+
+  bool get _isLoggedIn => _mockPlan != PlanState.freeNoAccount;
+  bool get _onFreeNoAccount => _mockPlan == PlanState.freeNoAccount;
+  bool get _onFreeWithAccount => _mockPlan == PlanState.freeWithAccount;
+  bool get _onPlus => _mockPlan == PlanState.plus;
+
+  Future<void> _goToLogin() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder : (_) => const LoginScreen()),
+    );
+  }
+
+  String get _plusActionLabel {
+    if (_onPlus) return 'Manage Subscription';
+    if (!_isLoggedIn) return 'Create an Account to Upgrade';
+    return 'Upgrade';
+  }
+  
+  void _onPlusPressed() {
+    setState(() {
+      if (_onPlus) {
+        _mockPlan = PlanState.freeWithAccount;
+      }
+      else if (!_isLoggedIn) {
+        _mockPlan = PlanState.freeWithAccount;
+      }
+      else {
+        _mockPlan = PlanState.plus;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -122,12 +158,9 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Get the protection you need.',
-                style: TextStyle(
-                  fontSize: AppTypography.body,
-                  color: AppColors.text,
-                ),
+              Text(
+                _isLoggedIn ? 'Get the protection you need.' : "You're browsing as a guest. Create a free account to unlock more.",
+                style: TextStyle(fontSize: 15, color: AppColors.text),
               ),
               const SizedBox(height: 18),
               StreamBuilder<Map<String, dynamic>?>(
@@ -205,18 +238,37 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 onChanged: (value) => setState(() => _yearly = value),
               ),
               const SizedBox(height: 14),
-              _PlanCard(
-                name: 'Free',
+              if (!_isLoggedIn) ...[
+                _PlanCard(
+                name: 'Free: No Account',
                 price: '\$0/month',
-                selected: !_plusSelected,
-                features: const ['Manual Scans', 'Basic Results'],
-                onTap: () => setState(() => _plusSelected = false),
+                isCurrent: _onFreeNoAccount,
+                features: const [
+                  'Manual Scans',
+                  'Basic Results',
+                ],
+              ),
+              ],
+              const SizedBox(height: 14),
+              _PlanCard(
+                name: 'Free: With Account',
+                price: '\$0/month',
+                isCurrent: _onFreeWithAccount,
+                features: const [
+                  'Everything in Free: No Account', 
+                  'Limited AI Chat Access',
+                  'Priority Support',
+                ],
+                actionLabel: _isLoggedIn ? null : 'Log In or Sign Up',
+                onAction: _isLoggedIn ? null : _goToLogin,
               ),
               const SizedBox(height: 14),
               _PlanCard(
                 name: 'Plus',
                 price: _plusPrice,
-                selected: _plusSelected,
+                // isCurrent: _plusSelected,
+                // price: _yearly ? '\$49.99/year' : '\$4.99/month',
+                isCurrent: _onPlus,
                 features: const [
                   'Everything in Free',
                   'Live Email Monitoring',
@@ -224,7 +276,8 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                   'Family/Social Features',
                   'Priority Support',
                 ],
-                onTap: () => setState(() => _plusSelected = true),
+                actionLabel: _plusActionLabel,
+                onAction: _onPlusPressed,
               ),
               const SizedBox(height: 20),
 
@@ -386,7 +439,7 @@ class _BillingToggle extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Text(
-              'Save 20%',
+              'Save 16%',
               style: TextStyle(
                 fontSize: AppTypography.caption,
                 fontWeight: FontWeight.w700,
@@ -445,102 +498,117 @@ class _ToggleOption extends StatelessWidget {
 class _PlanCard extends StatelessWidget {
   final String name;
   final String price;
-  final bool selected;
+  final bool isCurrent;
+  final bool highlighted;
   final List<String> features;
-  final VoidCallback onTap;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   const _PlanCard({
     required this.name,
     required this.price,
-    required this.selected,
+    required this.isCurrent,
     required this.features,
-    required this.onTap,
+    this.highlighted = false,
+    this.actionLabel,
+    this.onAction,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 14, 16),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xBFE0F6FC) : const Color(0xD9FDFCF9),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white70, width: 1.2),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x300B718E),
-              blurRadius: 10,
-              offset: Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    '$name\n$price',
-                    style: const TextStyle(
-                      fontSize: AppTypography.title,
-                      height: 1.05,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.text,
-                    ),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 14, 16),
+      decoration: BoxDecoration(
+        color: isCurrent || highlighted ? const Color(0xBFE0F6FC) : const Color(0xD9FDFCF9),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: isCurrent ? AppColors.primaryBlue : Colors.white70, width: isCurrent ? 2 : 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x300B718E),
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  '$name\n$price',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    height: 1.05,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.text,
                   ),
                 ),
-                _SelectionCircle(selected: selected),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ...features.map(
-              (feature) => Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check,
-                      size: 21,
-                      color: AppColors.accentGreen,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        feature,
-                        style: const TextStyle(
-                          fontSize: AppTypography.body,
-                          color: AppColors.text,
-                        ),
+              ),
+              if (isCurrent) const _CurrentPlanChip(),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...features.map(
+            (feature) => Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check,
+                    size: 21,
+                    color: AppColors.accentGreen,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      feature,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: AppColors.text,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onAction,
+                child: Text(actionLabel!),
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
-class _SelectionCircle extends StatelessWidget {
-  final bool selected;
-
-  const _SelectionCircle({required this.selected});
+class _CurrentPlanChip extends StatelessWidget {
+  const _CurrentPlanChip();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 26,
-      height: 26,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: selected ? AppColors.primaryBlue : Colors.transparent,
-        border: Border.all(color: AppColors.text, width: 2),
+        color: AppColors.primaryBlue,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'Current Plan',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
       ),
     );
   }
