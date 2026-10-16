@@ -6,6 +6,8 @@ import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import 'app_colors.dart';
 import 'package:flutter/foundation.dart';
+import '../services/subscription_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PaymentPlanScreen extends StatefulWidget {
   const PaymentPlanScreen({super.key});
@@ -137,6 +139,76 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 style: TextStyle(fontSize: 15, color: AppColors.text),
               ),
               const SizedBox(height: 18),
+              StreamBuilder<Map<String, dynamic>?>(
+                stream: SubscriptionService.instance.watchSubscription(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Text('Unable to load subscription status.');
+                  }
+
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  final subscription = snapshot.data;
+
+                  final plan = subscription?['plan'] ?? 'free';
+                  final status = subscription?['status'] ?? 'inactive';
+                  final environment = subscription?['environment'] ?? 'none';
+                  final expiresAt = subscription?['expiresAt'];
+
+                  final isExpired =
+                      expiresAt is Timestamp &&
+                      !expiresAt.toDate().isAfter(DateTime.now());
+
+                  final isDemo = environment == 'local_test';
+
+                  final isActivePlus =
+                      plan == 'plus' &&
+                      status == 'active' &&
+                      !isExpired &&
+                      expiresAt is Timestamp &&
+                      (environment == 'production' ||
+                          (kDebugMode &&
+                              const bool.fromEnvironment(
+                                'USE_FIREBASE_EMULATORS',
+                              ) &&
+                              isDemo));
+
+                  final displayPlan = isActivePlus ? 'Plus' : 'Free';
+
+                  final displayStatus = isExpired
+                      ? 'Expired'
+                      : isActivePlus
+                      ? 'Active'
+                      : 'Inactive';
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Current Plan: $displayPlan'
+                          '${isActivePlus && isDemo ? ' (Demo)' : ''}',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Status: $displayStatus',
+                          style: const TextStyle(fontSize: 15),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
               _BillingToggle(
                 yearly: _yearly,
                 onChanged: (value) => setState(() => _yearly = value),

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class SubscriptionService {
   SubscriptionService._();
@@ -44,7 +45,17 @@ class SubscriptionService {
 
     final isPlus = subscription['plan'] == 'plus';
     final isActive = subscription['status'] == 'active';
-    final isProduction = subscription['environment'] == 'production';
+
+    const useEmulators = bool.fromEnvironment(
+      'USE_FIREBASE_EMULATORS',
+      defaultValue: false,
+    );
+
+    final environment = subscription['environment'];
+
+    final validEnvironment =
+        environment == 'production' ||
+        (kDebugMode && useEmulators && environment == 'local_test');
 
     final expiresAt = subscription['expiresAt'];
 
@@ -52,6 +63,6 @@ class SubscriptionService {
 
     final notExpired = expiresAt.toDate().isAfter(DateTime.now());
 
-    return isPlus && isActive && isProduction && notExpired;
+    return isPlus && isActive && validEnvironment && notExpired;
   }
 }
