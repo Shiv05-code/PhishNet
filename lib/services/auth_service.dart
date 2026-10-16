@@ -1,4 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'payment_backend_service.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthService {
   AuthService({this._auth});
@@ -38,7 +40,14 @@ class AuthService {
     await credential.user?.updateDisplayName(
       '${firstName.trim()} ${lastName.trim()}'.trim(),
     );
-    await credential.user?.reload(); // so currentUser has the new name
+
+    await credential.user?.reload();
+
+    try {
+      await PaymentBackendService.instance.initializeSubscription();
+    } catch (error) {
+      debugPrint('Subscription initialization deferred: $error');
+    }
   }
 
   /// Re-checks a restored session with Firebase. Signs out if the account
