@@ -61,9 +61,9 @@ class AppDrawer extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 34,
+              fontWeight: FontWeight.w700,
               color: enabled ? AppColors.primary : AppColors.muted,
-              fontFamily: 'monospace',
               shadows: enabled
                   ? const [
                       Shadow(
@@ -143,6 +143,7 @@ class AppDrawer extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.settings,
+                          size: 42,
                           color: AppColors.primary,
                           shadows: [
                             Shadow(
@@ -156,7 +157,8 @@ class AppDrawer extends StatelessWidget {
                         Text(
                           'Settings',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 34,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.primary,
                             shadows: [
                               Shadow(
@@ -179,6 +181,7 @@ class AppDrawer extends StatelessWidget {
                       children: [
                         Icon(
                           isGuest ? Icons.login : Icons.logout,
+                           size: 42,
                           color: AppColors.primary,
                           shadows: [
                             Shadow(
@@ -192,7 +195,8 @@ class AppDrawer extends StatelessWidget {
                         Text(
                           isGuest ? 'Login' : 'Logout',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 34,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.primary,
                             shadows: [
                               Shadow(
