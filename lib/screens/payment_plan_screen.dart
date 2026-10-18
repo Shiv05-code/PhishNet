@@ -11,6 +11,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_typography.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 enum PlanState { freeNoAccount, freeWithAccount, plus }
 
@@ -107,10 +108,10 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
 
   PlanState _mockPlan = PlanState.freeNoAccount;
 
-  bool get _isLoggedIn => _mockPlan != PlanState.freeNoAccount;
-  bool get _onFreeNoAccount => _mockPlan == PlanState.freeNoAccount;
-  bool get _onFreeWithAccount => _mockPlan == PlanState.freeWithAccount;
+  bool get _isLoggedIn => FirebaseAuth.instance.currentUser != null;
   bool get _onPlus => _mockPlan == PlanState.plus;
+  bool get _onFreeNoAccount => !_isLoggedIn;
+  bool get _onFreeWithAccount => _isLoggedIn && !_onPlus;
 
   Future<void> _goToLogin() async {
     await Navigator.of(context).push(
@@ -280,7 +281,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                   'Priority Support',
                 ],
                 actionLabel: _plusActionLabel,
-                onAction: _isLoggedIn ? null : _goToSignup,
+                onAction: _isLoggedIn ? _onPlusPressed : _goToSignup,
               ),
               const SizedBox(height: 20),
 
