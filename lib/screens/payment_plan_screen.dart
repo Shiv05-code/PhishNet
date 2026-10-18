@@ -10,6 +10,7 @@ import '../services/subscription_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_typography.dart';
 import 'login_screen.dart';
+import 'signup_screen.dart';
 
 enum PlanState { freeNoAccount, freeWithAccount, plus }
 
@@ -117,6 +118,12 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
     );
   }
 
+  Future<void> _goToSignup() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder : (_) => const SignupScreen()),
+    );
+  }
+
   String get _plusActionLabel {
     if (_onPlus) return 'Manage Subscription';
     if (!_isLoggedIn) return 'Create an Account to Upgrade';
@@ -124,16 +131,12 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   }
   
   void _onPlusPressed() {
+    if (!_isLoggedIn) {
+      _goToSignup();
+      return;
+    }
     setState(() {
-      if (_onPlus) {
-        _mockPlan = PlanState.freeWithAccount;
-      }
-      else if (!_isLoggedIn) {
-        _mockPlan = PlanState.freeWithAccount;
-      }
-      else {
-        _mockPlan = PlanState.plus;
-      }
+      _mockPlan = _onPlus ? PlanState.freeWithAccount : PlanState.plus;
     });
   }
 
@@ -277,7 +280,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                   'Priority Support',
                 ],
                 actionLabel: _plusActionLabel,
-                onAction: _onPlusPressed,
+                onAction: _isLoggedIn ? null : _goToSignup,
               ),
               const SizedBox(height: 20),
 
@@ -509,10 +512,9 @@ class _PlanCard extends StatelessWidget {
     required this.price,
     required this.isCurrent,
     required this.features,
-    this.highlighted = false,
     this.actionLabel,
     this.onAction,
-  });
+  }) : highlighted = false;
 
   @override
   Widget build(BuildContext context) {
