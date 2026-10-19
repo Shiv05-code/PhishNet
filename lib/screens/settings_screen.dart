@@ -94,8 +94,8 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   FigmaGlassButton(
-                    width: 170,
-                    height: 54,
+                    width: 210,
+                    height: 64,
                     semanticLabel: isGuest ? 'Login' : 'Log out',
                     onPressed: () async {
                       final navigator = Navigator.of(context);
@@ -114,15 +114,15 @@ class SettingsScreen extends StatelessWidget {
                       children: [
                         Icon(
                           isGuest ? Icons.login : Icons.logout,
-                          size: 28,
+                          size: 36,
                           color: AppColors.primaryBlue,
                         ),
                         SizedBox(width: 10),
                         Text(
                           isGuest ? 'Login' : 'Log Out',
                           style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.primaryBlue,
                           ),
                         ),
@@ -151,15 +151,15 @@ class SettingsScreen extends StatelessWidget {
         child: Opacity(
           opacity: enabled ? 1 : 0.55,
           child: FigmaGlassButton(
-            width: 250,
-            height: 54,
+            width: 290,
+            height: 64,
             semanticLabel: label,
             onPressed: onPressed ?? () {},
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+                fontSize: 21,
+                fontWeight: FontWeight.w700,
                 color: enabled ? AppColors.primaryBlue : AppColors.muted,
               ),
             ),
@@ -176,8 +176,8 @@ class _ProfileAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 136,
-      height: 136,
+      width: 170,
+      height: 170,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: const Color(0xBDE6F6FC),
@@ -190,7 +190,7 @@ class _ProfileAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(Icons.person, size: 92, color: Color(0xFFFDFCF9)),
+      child: const Icon(Icons.person, size: 112, color: Color(0xFFFDFCF9)),
     );
   }
 }
