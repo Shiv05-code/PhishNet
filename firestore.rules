@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can read their own scan results.
+    // Only trusted backend code can write scan results.
+    match /users/{uid}/scans/{scanId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Users can read their own subscription information.
+    // Only trusted backend code can modify subscriptions.
+    match /users/{uid}/subscriptions/{subscriptionId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == uid;
+      allow write: if false;
+    }
+  }
+}

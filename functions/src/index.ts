@@ -1,0 +1,161 @@
+import {initializeApp} from "firebase-admin/app";
+import {getFirestore, FieldValue} from "firebase-admin/firestore";
+/**
+ * Import function triggers from their respective submodules:
+ *
+ * import {onCall} from "firebase-functions/v2/https";
+ * import {onDocumentWritten} from "firebase-functions/v2/firestore";
+ * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ */
+
+import {setGlobalOptions} from "firebase-functions";
+// import {onRequest} from "firebase-functions/https";
+// import * as logger from "firebase-functions/logger";
+initializeApp();
+
+// Start writing functions
+// https://firebase.google.com/docs/functions/typescript
+
+// For cost control, you can set the maximum number of containers that can be
+// running at the same time. This helps mitigate the impact of unexpected
+// traffic spikes by instead downgrading performance. This limit is a
+// per-function limit. You can override the limit for each function using the
+// `maxInstances` option in the function's options, e.g.
+// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
+// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
+// functions should each use functions.runWith({ maxInstances: 10 }) instead.
+// In the v1 API, each function can only serve one request per container, so
+// this will be the maximum concurrent request count.
+setGlobalOptions({maxInstances: 10});
+
+// export const helloWorld = onRequest((request, response) => {
+//   logger.info("Hello logs!", {structuredData: true});
+//   response.send("Hello from Firebase!");
+// });
+import {onCall, HttpsError} from "firebase-functions/v2/https";
+
+const ALLOWED_PRODUCTS = new Set([
+  "com.phishnet.plus.monthly",
+  "com.phishnet.plus.yearly",
+]);
+
+export const verifySubscription = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    // Require a signed-in Firebase user.
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "You must be logged in to verify a subscription."
+      );
+    }
+
+    const productId = request.data?.productId;
+
+    if (typeof productId !== "string" ||
+        !ALLOWED_PRODUCTS.has(productId)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Invalid subscription product."
+      );
+    }
+
+    // No purchase verification is performed yet.
+    // Never grant premium access from this response.
+    return {
+      verified: false,
+      productId,
+      message: "Apple transaction verification is not configured yet.",
+    };
+  }
+);
+export const initializeSubscription = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "You must be logged in."
+      );
+    }
+
+    const uid = request.auth.uid;
+
+    const subscriptionRef = getFirestore()
+      .collection("users")
+      .doc(uid)
+      .collection("subscriptions")
+      .doc("current");
+
+    await subscriptionRef.create({
+      plan: "free",
+      status: "inactive",
+      productId: "none",
+      environment: "none",
+      expiresAt: null,
+      createdAt: FieldValue.serverTimestamp(),
+    }).catch((error: unknown) => {
+      const code = (error as {code?: number | string}).code;
+      if (code !== 6 && code !== "already-exists") {
+        throw error;
+      }
+    });
+
+    return {success: true};
+  }
+);
+// DEVELOPMENT ONLY: Simulates a Plus subscription upgrade.
+// Never deploy this function to production.
+if (process.env.FUNCTIONS_EMULATOR === "true") {
+  exports.demoUpgradeSubscription = onCall(
+    {region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+          "unauthenticated",
+          "You must be logged in."
+        );
+      }
+
+      const productId = request.data?.productId;
+
+      if (typeof productId !== "string" ||
+          !ALLOWED_PRODUCTS.has(productId)) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Invalid subscription product."
+        );
+      }
+
+      const isYearly = productId === "com.phishnet.plus.yearly";
+      const durationDays = isYearly ? 365 : 30;
+
+      const expiresAt = new Date(
+        Date.now() + durationDays * 24 * 60 * 60 * 1000
+      );
+
+      const uid = request.auth.uid;
+
+      await getFirestore()
+        .collection("users")
+        .doc(uid)
+        .collection("subscriptions")
+        .doc("current")
+        .set({
+          plan: "plus",
+          status: "active",
+          productId,
+          environment: "local_test",
+          expiresAt,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+
+      return {
+        success: true,
+        plan: "plus",
+        status: "active",
+        productId,
+      };
+    }
+  );
+}
