@@ -181,7 +181,7 @@ class AppDrawer extends StatelessWidget {
                       children: [
                         Icon(
                           isGuest ? Icons.login : Icons.logout,
-                           size: 42,
+                          size: 42,
                           color: AppColors.primary,
                           shadows: [
                             Shadow(
