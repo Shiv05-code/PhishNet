@@ -154,19 +154,21 @@ class AppDrawer extends StatelessWidget {
                           ],
                         ),
                         SizedBox(width: 10),
-                        Text(
-                          'Settings',
-                          style: TextStyle(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                            shadows: [
-                              Shadow(
-                                color: Color(0x30000000),
-                                blurRadius: 2,
-                                offset: Offset(0, 1),
-                              ),
-                            ],
+                        Expanded(
+                          child: Text(
+                            'Settings',
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x30000000),
+                                  blurRadius: 2,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -192,19 +194,21 @@ class AppDrawer extends StatelessWidget {
                           ],
                         ),
                         SizedBox(width: 10),
-                        Text(
-                          isGuest ? 'Login' : 'Logout',
-                          style: TextStyle(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                            shadows: [
-                              Shadow(
-                                color: Color(0x30000000),
-                                blurRadius: 2,
-                                offset: Offset(0, 1),
-                              ),
-                            ],
+                        Expanded(
+                          child: Text(
+                            isGuest ? 'Login' : 'Logout',
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x30000000),
+                                  blurRadius: 2,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
