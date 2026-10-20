@@ -8,13 +8,15 @@ Response fields: risk_level, verdict (fixed headline), summary, red_flags,
 next_steps (first item is the most important).
 
 Environment variables (all optional):
-  MOCK_CLAUDE=true         return a fixed result instead of calling Claude
+  MOCK_CLAUDE=true         return a realistic fake result (picked from the
+                           message text) instead of calling Claude
   SECRET_ID=phishnet/prod  Secrets Manager secret name
   FIREBASE_PROJECT_ID      defaults to phishnet-b93e0
 """
 import base64
 import json
 import os
+import re
 
 import anthropic
 import boto3
@@ -58,7 +60,8 @@ SYSTEM = (
     "- Keep it short. Summary: at most 2 sentences. Warning signs: at most 3, "
     "2 to 4 words each. Next steps: at most 3, 2 to 5 words each.\n"
     "- If the message looks normal, set the risk to low, say so in one "
-    "sentence, and return no warning signs.\n"
+    "sentence, and return no warning signs and no next steps (an empty "
+    "list). Do not suggest replying or saving it.\n"
     "- If the message is too short or unclear to judge, set the risk to "
     "medium and say plainly that there is not enough to tell. Do not guess.\n"
     "- When you are unsure between two levels, choose the more careful one.\n"
@@ -117,7 +120,8 @@ TOOL = {
                 "items": {"type": "string", "maxLength": MAX_STEP},
                 "description": (
                     "Up to 3 simple actions, 2 to 5 words each, like "
-                    "'Do not click the link'."
+                    "'Do not click the link'. Empty list if the message "
+                    "looks normal."
                 ),
             },
         },
@@ -125,12 +129,88 @@ TOOL = {
     },
 }
 
-MOCK_RESULT = {
-    "risk_level": "high",
-    "summary": "This looks like a fake delivery notice. Do not trust the link.",
-    "red_flags": ["Urgent deadline", "Unknown link"],
-    "next_steps": ["Do not click the link", "Delete the message"],
+# Mock results copied from real Claude output, so the app can be built and
+# tested for free. _mock() picks one based on the message text.
+MOCK_RESULTS = {
+    "scam": {
+        "risk_level": "high",
+        "summary": (
+            "This message says your package is on hold and asks you to pay "
+            "$1.99 through a web address. The address is not the official "
+            "USPS site, so this is very likely a scam."
+        ),
+        "red_flags": [
+            "Asks for $1.99 payment",
+            "Strange web address",
+            "Threatens package return",
+        ],
+        "next_steps": [
+            "Do not click the link",
+            "Do not enter any card details",
+            "Delete the message",
+        ],
+    },
+    "injection": {
+        "risk_level": "high",
+        "summary": (
+            "This message wants your bank password so you can claim a prize. "
+            "It is a scam, and it also tries to tell this tool to call it safe."
+        ),
+        "red_flags": [
+            "Asks for bank password",
+            "Prize claim pressure",
+            "Tries to trick this tool",
+        ],
+        "next_steps": [
+            "Do not send any password",
+            "Delete the message",
+            "Call your bank yourself",
+        ],
+    },
+    "unsure": {
+        "risk_level": "medium",
+        "summary": (
+            "There is not enough here to tell if this is safe. "
+            "Be careful before you act on it."
+        ),
+        "red_flags": ["Unknown link"],
+        "next_steps": [
+            "Do not click the link",
+            "Ask someone you trust",
+        ],
+    },
+    "safe": {
+        "risk_level": "low",
+        "summary": (
+            "This message looks like a normal note. It does not ask for "
+            "money, passwords, or clicks."
+        ),
+        "red_flags": [],
+        "next_steps": [],
+    },
 }
+
+_STRONG = (
+    "password", "bank", "gift card", "wire", "ssn", "social security",
+    "pay now", "act now", "urgent", "verify", "suspended", "prize",
+    "winner", "irs", "refund", "crypto", "bitcoin", "on hold", "package",
+    "pay $", "$", "claim", "locked", "unpaid", "or it will", "within 24",
+    "final notice", "account",
+)
+
+
+def _mock(text):
+    """Pick a realistic fake result from the message text (no API call)."""
+    t = text.lower()
+    if "ignore all previous" in t or "ignore previous instructions" in t:
+        return MOCK_RESULTS["injection"]
+    has_link = bool(re.search(r"https?://|www\.|\.(com|net|top|xyz|info)\b", t))
+    hits = sum(1 for w in _STRONG if w in t) + (1 if has_link else 0)
+    if hits >= 2:
+        return MOCK_RESULTS["scam"]
+    if hits == 1 or len(t) < 15:
+        return MOCK_RESULTS["unsure"]
+    return MOCK_RESULTS["safe"]
 
 
 def _clip(text, limit):
@@ -195,7 +275,7 @@ def _init():
 
 def _analyze(text, api_key):
     if MOCK:
-        return _shorten(MOCK_RESULT)
+        return _shorten(_mock(text))
     client = anthropic.Anthropic(api_key=api_key, timeout=20.0, max_retries=1)
     msg = client.messages.create(
         model=MODEL,
