@@ -47,68 +47,12 @@ TOOL = {
     },
 }
 
-MOCK_BANK = {
+MOCK_RESULT = {
     "risk_level": "high",
-    "summary": "This looks like a bank scam. Banks do not ask you to verify by link.",
-    "red_flags": [
-        "Threatens to lock your account",
-        "Asks you to verify with a link",
-        "Pushes you to act right away",
-    ],
-    "next_steps": [
-        "Do not click the link or enter your details",
-        "Call your bank using the number on your card",
-        "Delete the message",
-    ],
+    "summary": "This looks like a fake delivery notice (mock result).",
+    "red_flags": ["Urgent deadline", "Link from an unknown sender"],
+    "next_steps": ["Do not click the link", "Delete the message"],
 }
-
-MOCK_DELIVERY = {
-    "risk_level": "high",
-    "summary": "This looks like a fake delivery notice. Carriers do not ask for fees by text link.",
-    "red_flags": [
-        "Says your package is held",
-        "Asks you to pay a small fee",
-        "Link from an unknown sender",
-    ],
-    "next_steps": [
-        "Do not click the link or pay",
-        "Check delivery status in the carrier's official app or website",
-        "Block or report the sender",
-    ],
-}
-
-MOCK_PERSONAL = {
-    "risk_level": "low",
-    "summary": "This looks like a normal personal message. No scam signs found.",
-    "red_flags": [],
-    "next_steps": ["No action needed", "If unsure, call the sender on a number you already know"],
-}
-
-# Used when mock mode gets a message it has no fixture for. Stays cautious
-# and never claims the message is safe.
-MOCK_UNKNOWN = {
-    "risk_level": "medium",
-    "summary": "We could not check this message. Be careful before you act on it.",
-    "red_flags": ["Not enough details to confirm it is safe"],
-    "next_steps": [
-        "Do not click links or send money or codes",
-        "Ask a trusted family member or friend",
-    ],
-}
-
-
-def _mock_result(text):
-    """Pick a fixed result by keyword. Bank is checked first, then delivery."""
-    t = text.lower()
-    if "bank" in t and ("locked" in t or "verify" in t):
-        return dict(MOCK_BANK)
-    if ("package" in t or "delivery" in t or "parcel" in t) and (
-        "held" in t or "fee" in t or "pay" in t or "http" in t
-    ):
-        return dict(MOCK_DELIVERY)
-    if "dinner" in t and "http" not in t:
-        return dict(MOCK_PERSONAL)
-    return dict(MOCK_UNKNOWN)
 
 
 def _resp(code, body):
@@ -148,7 +92,7 @@ def _init():
 
 def _analyze(text, api_key):
     if MOCK:
-        return _mock_result(text)
+        return dict(MOCK_RESULT)
     client = anthropic.Anthropic(api_key=api_key, timeout=20.0, max_retries=1)
     msg = client.messages.create(
         model=MODEL,
