@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
+import '../theme/app_typography.dart';
 
 class HomeScreen extends StatelessWidget {
   final AuthService? authService;
@@ -25,8 +26,8 @@ class HomeScreen extends StatelessWidget {
               firstName == null ? 'Hello there' : 'Hello, $firstName',
               style: const TextStyle(
                 fontFamily: 'SFProDisplay',
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
+                fontSize: AppTypography.title,
+                fontWeight: FontWeight.w700,
                 color: AppColors.text,
               ),
             ),
@@ -35,8 +36,8 @@ class HomeScreen extends StatelessWidget {
               'Stay protected from scams.',
               style: TextStyle(
                 fontFamily: 'SFProDisplay',
-                fontSize: 25,
-                fontWeight: FontWeight.w700,
+                fontSize: AppTypography.heading,
+                fontWeight: FontWeight.w400,
                 color: AppColors.text,
               ),
             ),
@@ -54,7 +55,7 @@ class HomeScreen extends StatelessWidget {
                   'Use Capture to check a suspicious message, link, or email.',
                   style: TextStyle(
                     fontFamily: 'SFProText',
-                    fontSize: 15,
+                    fontSize: AppTypography.body,
                     height: 1.4,
                     color: AppColors.text,
                   ),

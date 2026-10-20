@@ -5,6 +5,7 @@ import '../theme/auth_theme.dart';
 import '../widgets/auth_widgets.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
+import '../theme/app_typography.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final String email;
@@ -166,7 +167,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         child: Text(
           widget.email,
           textAlign: TextAlign.center,
-          style: AuthTheme.label.copyWith(fontSize: 17),
+          style: AuthTheme.label.copyWith(fontSize: AppTypography.emphasis),
         ),
       ),
       const _Step(number: 1, text: 'Open the email from PhishNet.'),
@@ -186,7 +187,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 'Didn\'t get it? Check spam, or resend in ${_cooldown}s',
                 textAlign: TextAlign.center,
                 style: AuthTheme.body.copyWith(
-                  fontSize: 14,
+                  fontSize: AppTypography.label,
                   color: AuthTheme.muted,
                 ),
               )
@@ -221,7 +222,7 @@ class _Step extends StatelessWidget {
             child: Text(
               '$number',
               style: AuthTheme.label.copyWith(
-                fontSize: 14,
+                fontSize: AppTypography.label,
                 color: AuthTheme.secondaryText,
               ),
             ),
@@ -275,7 +276,7 @@ class _VerificationProgress extends StatelessWidget {
                     stages[i],
                     style: TextStyle(
                       fontFamily: 'SFProText',
-                      fontSize: 13,
+                      fontSize: AppTypography.caption,
                       fontWeight: i == current
                           ? FontWeight.w700
                           : FontWeight.w500,

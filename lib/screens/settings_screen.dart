@@ -11,6 +11,7 @@ import 'login_screen.dart';
 import 'payment_plan_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_conditions_screen.dart';
+import '../theme/app_typography.dart';
 
 class SettingsScreen extends StatelessWidget {
   final bool isGuest;
@@ -123,7 +124,7 @@ class SettingsScreen extends StatelessWidget {
                         Text(
                           isGuest ? 'Login' : 'Log Out',
                           style: TextStyle(
-                            fontSize: 22,
+                            fontSize: AppTypography.title,
                             fontWeight: FontWeight.w700,
                             color: AppColors.primaryBlue,
                           ),
@@ -160,7 +161,7 @@ class SettingsScreen extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 21,
+                fontSize: AppTypography.title,
                 fontWeight: FontWeight.w700,
                 color: enabled ? AppColors.primaryBlue : AppColors.muted,
               ),

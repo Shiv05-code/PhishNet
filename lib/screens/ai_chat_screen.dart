@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
+import '../theme/app_typography.dart';
 
 class AiChatScreen extends StatelessWidget {
   const AiChatScreen({super.key});
@@ -12,8 +13,9 @@ class AiChatScreen extends StatelessWidget {
       appBar: const FigmaAppBar(title: 'AI Chat'),
       drawer: const AppDrawer(currentPage: 'AI Chat'),
       body: FigmaGradientBackground(
-        child: const Center(
+        child: Center(
           child: Text(
+            style: TextStyle(fontSize: AppTypography.emphasis),
             'AI Chat screen — placeholder.\nChat UI goes here.',
             textAlign: TextAlign.center,
           ),

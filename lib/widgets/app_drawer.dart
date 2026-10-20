@@ -11,6 +11,7 @@ import '../screens/login_screen.dart';
 import '../services/auth_service.dart';
 import 'auth_widgets.dart';
 import 'figma_gradient_background.dart';
+import '../theme/app_typography.dart';
 
 /// Drawer matching the mockup — light-blue background, plain-text menu
 /// items (no icons except Settings/Logout), hamburger toggle inside the
@@ -50,6 +51,7 @@ class AppDrawer extends StatelessWidget {
     String label,
     Widget screen, {
     bool enabled = true,
+    double fontSize = AppTypography.heading,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -61,7 +63,7 @@ class AppDrawer extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 34,
+              fontSize: fontSize,
               fontWeight: FontWeight.w700,
               color: enabled ? AppColors.primary : AppColors.muted,
               shadows: enabled
@@ -96,8 +98,8 @@ class AppDrawer extends StatelessWidget {
                   alignment: Alignment.topRight,
                   child: IconButton(
                     icon: const SizedBox(
-                      width: 46,
-                      height: 38,
+                      width: 53,
+                      height: 44,
                       child: CustomPaint(painter: _FigmaMenuPainter()),
                     ),
                     onPressed: () => Navigator.of(context).pop(),
@@ -143,7 +145,7 @@ class AppDrawer extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.settings,
-                          size: 42,
+                          size: 28,
                           color: AppColors.primary,
                           shadows: [
                             Shadow(
@@ -158,7 +160,7 @@ class AppDrawer extends StatelessWidget {
                           child: Text(
                             'Settings',
                             style: TextStyle(
-                              fontSize: 34,
+                              fontSize: AppTypography.heading,
                               fontWeight: FontWeight.w700,
                               color: AppColors.primary,
                               shadows: [
@@ -183,7 +185,7 @@ class AppDrawer extends StatelessWidget {
                       children: [
                         Icon(
                           isGuest ? Icons.login : Icons.logout,
-                          size: 42,
+                          size: 28,
                           color: AppColors.primary,
                           shadows: [
                             Shadow(
@@ -198,7 +200,7 @@ class AppDrawer extends StatelessWidget {
                           child: Text(
                             isGuest ? 'Login' : 'Logout',
                             style: TextStyle(
-                              fontSize: 34,
+                              fontSize: AppTypography.heading,
                               fontWeight: FontWeight.w700,
                               color: AppColors.primary,
                               shadows: [
@@ -230,6 +232,12 @@ class _FigmaMenuPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Draw in the 46x38 design space and scale uniformly, so the bars keep their
+    // spacing and stroke weight when the icon box is enlarged.
+    final k = size.height / 38;
+    final w = size.width / k;
+    canvas.save();
+    canvas.scale(k);
     final paint = Paint()
       ..color = AppColors.primary
       ..style = PaintingStyle.stroke
@@ -241,13 +249,10 @@ class _FigmaMenuPainter extends CustomPainter {
       ..strokeWidth = 7
       ..strokeCap = StrokeCap.round;
     for (final y in [6.0, 19.0, 32.0]) {
-      canvas.drawLine(
-        Offset(3, y + 2),
-        Offset(size.width - 2, y + 2),
-        shadowPaint,
-      );
-      canvas.drawLine(Offset(3, y), Offset(size.width - 2, y), paint);
+      canvas.drawLine(Offset(3, y + 2), Offset(w - 2, y + 2), shadowPaint);
+      canvas.drawLine(Offset(3, y), Offset(w - 2, y), paint);
     }
+    canvas.restore();
   }
 
   @override
