@@ -9,6 +9,7 @@ import 'signup_screen.dart';
 import 'email_verification_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_conditions_screen.dart';
+import '../theme/app_typography.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? initialEmail;
@@ -87,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     const footerStyle = TextStyle(
       fontFamily: 'SFProText',
-      fontSize: 14,
+      fontSize: AppTypography.label,
       fontWeight: FontWeight.w600,
       color: AuthTheme.text,
     );
@@ -187,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           'New here? ',
                           style: TextStyle(
                             fontFamily: 'SFProText',
-                            fontSize: 15,
+                            fontSize: AppTypography.label,
                           ),
                         ),
                         AuthLink(

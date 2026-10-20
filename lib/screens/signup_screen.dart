@@ -9,6 +9,7 @@ import 'email_verification_screen.dart';
 import 'login_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_conditions_screen.dart';
+import '../theme/app_typography.dart';
 
 class SignupScreen extends StatefulWidget {
   final AuthService? authService;
@@ -99,7 +100,7 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget build(BuildContext context) {
     const footerStyle = TextStyle(
       fontFamily: 'SFProText',
-      fontSize: 14,
+      fontSize: AppTypography.label,
       fontWeight: FontWeight.w600,
       color: AuthTheme.text,
     );
@@ -182,7 +183,9 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'At least 8 characters with a letter, number, and symbol.',
-                    style: AuthTheme.body.copyWith(fontSize: 14),
+                    style: AuthTheme.body.copyWith(
+                      fontSize: AppTypography.caption,
+                    ),
                   ),
                   const SizedBox(height: _gap),
                   AuthField(
@@ -241,7 +244,10 @@ class _SignupScreenState extends State<SignupScreen> {
             children: [
               const Text(
                 'Already have an account? ',
-                style: TextStyle(fontFamily: 'SFProText', fontSize: 15),
+                style: TextStyle(
+                  fontFamily: 'SFProText',
+                  fontSize: AppTypography.label,
+                ),
               ),
               AuthLink(label: 'Login', onTap: _goToLogin),
             ],

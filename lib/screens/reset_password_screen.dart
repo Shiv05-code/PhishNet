@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/auth_theme.dart';
 import '../widgets/auth_widgets.dart';
 import 'login_screen.dart';
+import '../theme/app_typography.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -40,7 +41,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'SFProText',
-              fontSize: 10,
+              fontSize: AppTypography.emphasis,
               color: AuthTheme.secondaryText,
             ),
           ),
