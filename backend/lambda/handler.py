@@ -208,6 +208,48 @@ def _analyze(text, api_key):
     return _shorten(next(b.input for b in msg.content if b.type == "tool_use"))
 
 
+def _anonymize_and_delete_user_data(uid):
+    """Move a user's scans to anonymous storage, then delete their account data."""
+    db = firestore.client()
+    user_ref = db.collection("users").document(uid)
+    scans_ref = user_ref.collection("scans")
+    anonymous_ref = db.collection("anonymized_training_scans")
+
+    batch = db.batch()
+    pending_operations = 0
+
+    for scan in scans_ref.stream():
+        scan_data = scan.to_dict() or {}
+
+        # Keep only analysis fields. Do not copy uid, email, or profile details.
+        anonymous_scan = {
+            "risk_level": scan_data.get("risk_level"),
+            "summary": scan_data.get("summary"),
+            "red_flags": scan_data.get("red_flags", []),
+            "next_steps": scan_data.get("next_steps", []),
+        }
+
+        # Create a new random document with no connection to the user.
+        new_scan_ref = anonymous_ref.document()
+
+        # Copy the cleaned scan and delete the user-linked original.
+        batch.set(new_scan_ref, anonymous_scan)
+        batch.delete(scan.reference)
+        pending_operations += 2
+
+        # Firestore allows a maximum of 500 operations per batch.
+        if pending_operations >= 250:
+            batch.commit()
+            batch = db.batch()
+            pending_operations = 0
+
+    if pending_operations:
+        batch.commit()
+
+    # Delete the user's profile document.
+    user_ref.delete()
+
+
 def handler(event, context):
     try:
         secrets = _init()
@@ -224,7 +266,24 @@ def handler(event, context):
         body = event.get("body") or "{}"
         if event.get("isBase64Encoded"):
             body = base64.b64decode(body).decode("utf-8")
-        text = (json.loads(body).get("text") or "").strip()[:8000]
+        payload = json.loads(body)
+
+        if payload.get("action") == "delete_account":
+            if not _db_ready:
+                return _resp(
+                    503, {"error": "deletion_unavailable", "retryable": True}
+                )
+            try:
+                _anonymize_and_delete_user_data(uid)
+                auth.delete_user(uid)
+            except Exception as e:
+                print(f"account deletion failed: {type(e).__name__}")
+                return _resp(
+                    500, {"error": "account_deletion_failed", "retryable": True}
+                )
+            return _resp(200, {"deleted": True})
+
+        text = (payload.get("text") or "").strip()[:8000]
         if not text:
             return _resp(400, {"error": "empty_message"})
 
