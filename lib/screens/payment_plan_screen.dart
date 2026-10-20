@@ -1,7 +1,13 @@
+import '../services/payment_backend_service.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
+import '../services/purchase_service.dart';
 import 'package:flutter/material.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import 'app_colors.dart';
+import 'package:flutter/foundation.dart';
+import '../services/subscription_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PaymentPlanScreen extends StatefulWidget {
   const PaymentPlanScreen({super.key});
@@ -13,6 +19,99 @@ class PaymentPlanScreen extends StatefulWidget {
 class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   bool _yearly = false;
   bool _plusSelected = true;
+  final PurchaseService _purchaseService = PurchaseService.instance;
+
+  bool _loadingStore = true;
+  String? _purchaseMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializePurchases();
+    _testPaymentBackend();
+  }
+
+  Future<void> _initializePurchases() async {
+    try {
+      await _purchaseService
+          .initialize(
+            onChanged: () {
+              if (mounted) {
+                setState(() {});
+              }
+            },
+            onVerifiedPurchase: _handleVerifiedPurchase,
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('STOREKIT DEBUG: Initialization failed: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to connect to the App Store. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingStore = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleVerifiedPurchase(PurchaseDetails purchase) async {
+    if (!mounted) return;
+
+    setState(() {
+      _purchaseMessage = 'Test purchase completed successfully!';
+    });
+  }
+
+  ProductDetails? get _selectedProduct {
+    final productId = _yearly
+        ? PurchaseService.yearlyProductId
+        : PurchaseService.monthlyProductId;
+
+    return _purchaseService.productFor(productId);
+  }
+
+  String get _plusPrice {
+    final product = _selectedProduct;
+
+    if (product == null) {
+      return _yearly ? 'Yearly' : 'Monthly';
+    }
+
+    return _yearly ? '${product.price}/year' : '${product.price}/month';
+  }
+
+  Future<void> _testPaymentBackend() async {
+    try {
+      final result = await PaymentBackendService.instance.verifySubscription(
+        'com.phishnet.plus.monthly',
+      );
+
+      debugPrint('BACKEND TEST: $result');
+    } catch (e) {
+      debugPrint('BACKEND ERROR: $e');
+    }
+  }
+
+  Future<void> _testDemoUpgrade() async {
+    try {
+      final result = await PaymentBackendService.instance
+          .demoUpgradeSubscription('com.phishnet.plus.monthly');
+
+      debugPrint('DEMO UPGRADE RESULT: $result');
+    } catch (e) {
+      debugPrint('DEMO UPGRADE ERROR: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +139,76 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 style: TextStyle(fontSize: 15, color: AppColors.text),
               ),
               const SizedBox(height: 18),
+              StreamBuilder<Map<String, dynamic>?>(
+                stream: SubscriptionService.instance.watchSubscription(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Text('Unable to load subscription status.');
+                  }
+
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  final subscription = snapshot.data;
+
+                  final plan = subscription?['plan'] ?? 'free';
+                  final status = subscription?['status'] ?? 'inactive';
+                  final environment = subscription?['environment'] ?? 'none';
+                  final expiresAt = subscription?['expiresAt'];
+
+                  final isExpired =
+                      expiresAt is Timestamp &&
+                      !expiresAt.toDate().isAfter(DateTime.now());
+
+                  final isDemo = environment == 'local_test';
+
+                  final isActivePlus =
+                      plan == 'plus' &&
+                      status == 'active' &&
+                      !isExpired &&
+                      expiresAt is Timestamp &&
+                      (environment == 'production' ||
+                          (kDebugMode &&
+                              const bool.fromEnvironment(
+                                'USE_FIREBASE_EMULATORS',
+                              ) &&
+                              isDemo));
+
+                  final displayPlan = isActivePlus ? 'Plus' : 'Free';
+
+                  final displayStatus = isExpired
+                      ? 'Expired'
+                      : isActivePlus
+                      ? 'Active'
+                      : 'Inactive';
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Current Plan: $displayPlan'
+                          '${isActivePlus && isDemo ? ' (Demo)' : ''}',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Status: $displayStatus',
+                          style: const TextStyle(fontSize: 15),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
               _BillingToggle(
                 yearly: _yearly,
                 onChanged: (value) => setState(() => _yearly = value),
@@ -55,7 +224,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
               const SizedBox(height: 14),
               _PlanCard(
                 name: 'Plus',
-                price: _yearly ? '\$49.99/year' : '\$4.99/month',
+                price: _plusPrice,
                 selected: _plusSelected,
                 features: const [
                   'Everything in Free',
@@ -66,6 +235,72 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 ],
                 onTap: () => setState(() => _plusSelected = true),
               ),
+              const SizedBox(height: 20),
+
+              if (_loadingStore)
+                const Center(child: CircularProgressIndicator())
+              else if (_plusSelected) ...[
+                SizedBox(
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed:
+                        null, // Temporarily disabled until AWS verification is ready.
+                    child: _purchaseService.purchasePending
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _yearly
+                                ? 'Start Plus Yearly'
+                                : 'Start Plus Monthly',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                TextButton(
+                  onPressed: () async {
+                    await _purchaseService.restorePurchases();
+                  },
+                  child: const Text('Restore Purchases'),
+                ),
+              ],
+              if (kDebugMode &&
+                  const bool.fromEnvironment('USE_FIREBASE_EMULATORS'))
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: ElevatedButton(
+                    onPressed: _testDemoUpgrade,
+                    child: const Text('TEST: Upgrade to Plus'),
+                  ),
+                ),
+              if (_purchaseMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _purchaseMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+
+              if (_purchaseService.errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _purchaseService.errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red, fontSize: 14),
+                ),
+              ],
             ],
           ),
         ),
