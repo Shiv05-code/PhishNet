@@ -8,6 +8,7 @@ import 'app_colors.dart';
 import 'package:flutter/foundation.dart';
 import '../services/subscription_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../theme/app_typography.dart';
 
 class PaymentPlanScreen extends StatefulWidget {
   const PaymentPlanScreen({super.key});
@@ -128,7 +129,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
               const Text(
                 'Choose a Plan',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: AppTypography.title,
                   fontWeight: FontWeight.w700,
                   color: AppColors.text,
                 ),
@@ -136,7 +137,10 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
               const SizedBox(height: 4),
               const Text(
                 'Get the protection you need.',
-                style: TextStyle(fontSize: 15, color: AppColors.text),
+                style: TextStyle(
+                  fontSize: AppTypography.body,
+                  color: AppColors.text,
+                ),
               ),
               const SizedBox(height: 18),
               StreamBuilder<Map<String, dynamic>?>(
@@ -195,14 +199,14 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                           'Current Plan: $displayPlan'
                           '${isActivePlus && isDemo ? ' (Demo)' : ''}',
                           style: const TextStyle(
-                            fontSize: 17,
+                            fontSize: AppTypography.body,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Status: $displayStatus',
-                          style: const TextStyle(fontSize: 15),
+                          style: const TextStyle(fontSize: AppTypography.label),
                         ),
                       ],
                     ),
@@ -261,7 +265,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                                 ? 'Start Plus Yearly'
                                 : 'Start Plus Monthly',
                             style: const TextStyle(
-                              fontSize: 18,
+                              fontSize: AppTypography.emphasis,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -292,7 +296,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                   _purchaseMessage!,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: AppTypography.label,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -303,7 +307,10 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 Text(
                   _purchaseService.errorMessage!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red, fontSize: 14),
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: AppTypography.caption,
+                  ),
                 ),
               ],
             ],
@@ -346,7 +353,7 @@ class _PlanIdentity extends StatelessWidget {
         const Text(
           'Your Shield\nAgainst Scams',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: AppTypography.label,
             fontWeight: FontWeight.w700,
             color: AppColors.primaryBlue,
             height: 1.05,
@@ -393,7 +400,10 @@ class _BillingToggle extends StatelessWidget {
             ),
             child: const Text(
               'Save 20%',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: AppTypography.caption,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -435,7 +445,10 @@ class _ToggleOption extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: AppTypography.caption,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
@@ -485,7 +498,7 @@ class _PlanCard extends StatelessWidget {
                   child: Text(
                     '$name\n$price',
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: AppTypography.title,
                       height: 1.05,
                       fontWeight: FontWeight.w700,
                       color: AppColors.text,
@@ -511,7 +524,7 @@ class _PlanCard extends StatelessWidget {
                       child: Text(
                         feature,
                         style: const TextStyle(
-                          fontSize: 15,
+                          fontSize: AppTypography.body,
                           color: AppColors.text,
                         ),
                       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/auth_theme.dart';
 import 'figma_gradient_background.dart';
+import '../theme/app_typography.dart';
 
 Route<T> fadeRoute<T>(Widget page) {
   return PageRouteBuilder<T>(
@@ -107,7 +108,7 @@ class AuthBrandHeader extends StatelessWidget {
             'PhishNet',
             style: TextStyle(
               fontFamily: 'SFProDisplay',
-              fontSize: 24,
+              fontSize: AppTypography.heading,
               fontWeight: FontWeight.w700,
               color: AuthTheme.text,
             ),
@@ -229,7 +230,7 @@ class AuthField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(label, style: AuthTheme.label),
+        Text(label, style: AuthTheme.fieldLabel),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
@@ -268,7 +269,10 @@ class AuthField extends StatelessWidget {
             errorBorder: _border(color: AuthTheme.error),
             focusedErrorBorder: _border(color: AuthTheme.error, width: 2.5),
             errorText: errorText,
-            errorStyle: const TextStyle(fontSize: 14, color: AuthTheme.error),
+            errorStyle: const TextStyle(
+              fontSize: AppTypography.caption,
+              color: AuthTheme.error,
+            ),
             errorMaxLines: 3,
           ),
         ),
@@ -316,7 +320,7 @@ class AuthPrimaryButton extends StatelessWidget {
           ),
           textStyle: const TextStyle(
             fontFamily: 'SFProText',
-            fontSize: 18,
+            fontSize: AppTypography.emphasis,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -390,7 +394,7 @@ class AuthStatusBanner extends StatelessWidget {
                     message,
                     style: TextStyle(
                       fontFamily: 'SFProText',
-                      fontSize: 15,
+                      fontSize: AppTypography.label,
                       height: 1.35,
                       color: color,
                       fontWeight: FontWeight.w600,
@@ -530,4 +534,20 @@ class AuthArrowButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Horizontal slide used for in-app navigation (Capture → Results).
+Route<T> slideRoute<T>(Widget page) {
+  return PageRouteBuilder<T>(
+    pageBuilder: (_, _, _) => page,
+    transitionDuration: const Duration(milliseconds: 320),
+    reverseTransitionDuration: const Duration(milliseconds: 280),
+    transitionsBuilder: (_, animation, _, child) {
+      final incoming = Tween<Offset>(
+        begin: const Offset(1, 0),
+        end: Offset.zero,
+      ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(animation);
+      return SlideTransition(position: incoming, child: child);
+    },
+  );
 }
