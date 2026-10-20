@@ -58,3 +58,18 @@ aws/subscriptions/.aws-sam/
 *.p8
 *service-account*.json
 *service_account*.json
+# Node.js dependencies
+**/node_modules/
+
+# Generated Firebase Functions output
+functions/lib/
+
+# Local development tools
+.agents/
+.claude/
+.vscode/
+agent/
+skills-lock.json
+
+# Local Firebase configuration
+.firebaserc
