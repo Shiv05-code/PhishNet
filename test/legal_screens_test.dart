@@ -52,12 +52,17 @@ void main() {
       expect(bullets, contains('the scan records linked to your account'));
       expect(
         bullets,
-        contains('Copies of each scan\'s derived assessment remain after deletion'),
+        contains(
+          'Copies of each scan\'s derived assessment remain after deletion',
+        ),
       );
       expect(bullets, contains('may still contain identifying information'));
       expect(bullets, contains('The full message text is not stored'));
       expect(bullets, contains('Model training is not currently implemented'));
-      expect(bullets, isNot(contains('permanently delete your stored results')));
+      expect(
+        bullets,
+        isNot(contains('permanently delete your stored results')),
+      );
       expect(bullets, isNot(contains('Delete My Data')));
       expect(bullets, isNot(contains('Delete my Data')));
     });
