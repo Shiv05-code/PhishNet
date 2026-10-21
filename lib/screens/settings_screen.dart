@@ -6,6 +6,7 @@ import '../widgets/figma_gradient_background.dart';
 import '../widgets/figma_glass_button.dart';
 import '../widgets/auth_widgets.dart';
 import 'app_colors.dart';
+import '../theme/app_colors.dart' as theme_colors;
 import 'forgot_password_screen.dart';
 import 'login_screen.dart';
 import 'payment_plan_screen.dart';
@@ -22,19 +23,48 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = (authService ?? AuthService()).currentUser;
+    final fullName = user?.displayName?.trim();
+    final email = user?.email?.trim();
+
     return Scaffold(
       appBar: const FigmaAppBar(title: 'Settings'),
       drawer: AppDrawer(currentPage: 'Settings', isGuest: isGuest),
       body: FigmaGradientBackground(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
               child: Column(
                 children: [
                   const _ProfileAvatar(),
-                  const SizedBox(height: 26),
+                  if (fullName != null && fullName.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Text(
+                        fullName,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: AppTypography.title,
+                          fontWeight: FontWeight.w700,
+                          color: theme_colors.AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  if (email != null && email.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        email,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: AppTypography.body,
+                          color: theme_colors.AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 38),
                   _settingButton(
                     context,
                     'Delete My Account',
