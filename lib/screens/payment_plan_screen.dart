@@ -12,8 +12,7 @@ import '../theme/app_typography.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
-enum PlanState { freeNoAccount, freeWithAccount, plus }
+import 'dart:async';
 
 class PaymentPlanScreen extends StatefulWidget {
   const PaymentPlanScreen({super.key});
@@ -24,10 +23,10 @@ class PaymentPlanScreen extends StatefulWidget {
 
 class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   bool _yearly = false;
-  final bool _plusSelected = true;
+  bool _hasPlus = false;
+  StreamSubscription<Map<String, dynamic>?>? _plusListener;
   final PurchaseService _purchaseService = PurchaseService.instance;
 
-  bool _loadingStore = true;
   String? _purchaseMessage;
 
   @override
@@ -35,9 +34,23 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
     super.initState();
     if (_isLoggedIn) {
       _initializePurchases();
-    } else {
-      _loadingStore = false;
+      _listenForPlus();
     }
+  }
+
+  @override
+  void dispose() {
+    _plusListener?.cancel();
+    super.dispose();
+  }
+
+  void _listenForPlus() {
+    _plusListener = SubscriptionService.instance.watchSubscription().listen((
+      _,
+    ) async {
+      final hasPlus = await SubscriptionService.instance.hasPlusAccess();
+      if (mounted) setState(() => _hasPlus = hasPlus);
+    });
   }
 
   Future<void> _initializePurchases() async {
@@ -63,12 +76,6 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
             ),
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingStore = false;
-        });
       }
     }
   }
@@ -110,10 +117,8 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
     }
   }
 
-  PlanState _mockPlan = PlanState.freeNoAccount;
-
   bool get _isLoggedIn => FirebaseAuth.instance.currentUser != null;
-  bool get _onPlus => _mockPlan == PlanState.plus;
+  bool get _onPlus => _hasPlus;
   bool get _onFreeNoAccount => !_isLoggedIn;
   bool get _onFreeWithAccount => _isLoggedIn && !_onPlus;
 
