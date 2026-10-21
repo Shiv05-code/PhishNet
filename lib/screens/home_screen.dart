@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/app_colors.dart';
+import '../theme/app_colors.dart' as theme_colors;
 import '../services/auth_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
@@ -28,7 +29,7 @@ class HomeScreen extends StatelessWidget {
                 fontFamily: 'SFProDisplay',
                 fontSize: AppTypography.title,
                 fontWeight: FontWeight.w700,
-                color: AppColors.text,
+                color: theme_colors.AppColors.primary,
               ),
             ),
             const SizedBox(height: 4),

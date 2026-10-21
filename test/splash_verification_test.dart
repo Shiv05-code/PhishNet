@@ -89,6 +89,23 @@ void main() {
     expect(find.byType(LoginScreen), findsOneWidget);
   });
 
+  testWidgets('Settings displays the signed-in user full name', (tester) async {
+    await pumpScreen(
+      tester,
+      SettingsScreen(
+        authService: FakeAuthService(
+          signedIn: true,
+          verified: true,
+          displayName: 'Jordan Lee',
+          email: 'jordan.lee@example.com',
+        ),
+      ),
+    );
+
+    expect(find.text('Jordan Lee'), findsOneWidget);
+    expect(find.text('jordan.lee@example.com'), findsOneWidget);
+  });
+
   testWidgets('Menu Logout signs out of Firebase and opens Login', (
     tester,
   ) async {
