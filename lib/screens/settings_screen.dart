@@ -68,55 +68,58 @@ class SettingsScreen extends StatelessWidget {
                   _settingButton(
                     context,
                     'Delete My Account',
-                    onPressed: () async {
-                      await showDialog<void>(
-                        context: context,
-                        builder: (dialogContext) {
-                          return AlertDialog(
-                            title: const Text('Delete your data?'),
-                            content: const Text(
-                              'This will permanently delete your account and saved data. '
-                              'This action cannot be undone. Are you sure you want to proceed?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () =>
-                                    Navigator.of(dialogContext).pop(),
-                                child: const Text('Cancel'),
+                    enabled: !isGuest,
+                    onPressed: isGuest 
+                      ? null
+                      : () async {
+                        await showDialog<void>(
+                          context: context,
+                          builder: (dialogContext) {
+                            return AlertDialog(
+                              title: const Text('Delete your data?'),
+                              content: const Text(
+                                'This will permanently delete your account and saved data. '
+                                'This action cannot be undone. Are you sure you want to proceed?',
                               ),
-                              TextButton(
-                                onPressed: () async {
-                                  Navigator.of(dialogContext).pop();
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(dialogContext).pop(),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    Navigator.of(dialogContext).pop();
 
-                                  try {
-                                    await (authService ?? AuthService())
-                                        .deleteAccountAndData();
+                                    try {
+                                      await (authService ?? AuthService())
+                                          .deleteAccountAndData();
 
-                                    if (!context.mounted) return;
+                                      if (!context.mounted) return;
 
-                                    Navigator.of(context).pushAndRemoveUntil(
-                                      instantRoute(const SignupScreen()),
-                                      (_) => false,
-                                    );
-                                  } catch (_) {
-                                    if (!context.mounted) return;
+                                      Navigator.of(context).pushAndRemoveUntil(
+                                        instantRoute(const SignupScreen()),
+                                        (_) => false,
+                                      );
+                                    } catch (_) {
+                                      if (!context.mounted) return;
 
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'The account could not be deleted. Please try again.',
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'The account could not be deleted. Please try again.',
+                                          ),
                                         ),
-                                      ),
-                                    );
-                                  }
-                                },
-                                child: const Text('Yes, Delete'),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                    },
+                                      );
+                                    }
+                                  },
+                                  child: const Text('Yes, Delete'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
                   ),
                   _settingButton(
                     context,
