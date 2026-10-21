@@ -29,7 +29,6 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   void initState() {
     super.initState();
     _initializePurchases();
-    _testPaymentBackend();
   }
 
   Future<void> _initializePurchases() async {
@@ -89,18 +88,6 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
     }
 
     return _yearly ? '${product.price}/year' : '${product.price}/month';
-  }
-
-  Future<void> _testPaymentBackend() async {
-    try {
-      final result = await PaymentBackendService.instance.verifySubscription(
-        'com.phishnet.plus.monthly',
-      );
-
-      debugPrint('BACKEND TEST: $result');
-    } catch (e) {
-      debugPrint('BACKEND ERROR: $e');
-    }
   }
 
   Future<void> _testDemoUpgrade() async {
