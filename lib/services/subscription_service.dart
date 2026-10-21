@@ -28,12 +28,14 @@ class SubscriptionService {
 
   // Retrieve the current subscription.
   Future<Map<String, dynamic>?> getSubscription() async {
+    if (_auth.currentUser == null) return null;
     final snapshot = await _subscriptionRef.get();
     return snapshot.data();
   }
 
   // Listen for subscription changes in real time.
   Stream<Map<String, dynamic>?> watchSubscription() {
+    if(_auth.currentUser == null) return Stream.value(null);
     return _subscriptionRef.snapshots().map((snapshot) => snapshot.data());
   }
 
