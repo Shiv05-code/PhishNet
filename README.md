@@ -149,7 +149,7 @@ below is planned.**
 
 ```mermaid
 flowchart LR
-    App["📱 PhishNet app<br/>Flutter · iOS<br/>ML Kit OCR"]
+    App["📱 PhishNet app<br/>Flutter · iOS<br/>ML Kit OCR (planned)"]
     Auth["🔐 Firebase<br/>Authentication"]
     Lambda["⚙️ AWS Lambda"]
     Haiku["🤖 Claude Haiku<br/>classification"]
@@ -177,7 +177,7 @@ flowchart LR
 | --- | --- |
 | **Flutter and Dart** | The iOS-focused mobile app |
 | **Xcode and iOS Simulator** | iOS development and visual testing |
-| **Google ML Kit** | On-device text recognition, so screenshots are read without being uploaded |
+| **Google ML Kit** | Planned: on-device text recognition for screenshots (not yet in the app) |
 | **iOS Share Sheet** | Family and social sharing |
 | **Figma, SF Symbols, Google Fonts** | Design, icons, and typography |
 | **Apple Developer Account** | TestFlight and App Store distribution |
@@ -189,7 +189,7 @@ flowchart LR
 | **Firebase Authentication** | Integrated | Account sign-in and registration |
 | **Cloud Firestore** | Planned | Single database for scan history, chat records, monitoring settings, and restricted Yahoo authorization data |
 | **Firebase Cloud Messaging** | Planned | Phishing alerts on iPhone, delivered through Apple Push Notification service (APNs) |
-| **AWS Lambda** | Planned | Secure app requests: verifies the user's Firebase sign-in before calling Claude |
+| **AWS Lambda** | Planned | Secure app requests: verifies the user's Firebase sign-in before calling Claude. Handler code exists in `backend/lambda/`; deployment and app wiring are not yet verified |
 | **Amazon EventBridge** | Planned | Scheduled Yahoo inbox checks (planned every 1–2 minutes, subject to Yahoo access and rate limits) |
 | **Claude Haiku** | Planned | Fast, routine message and email classification |
 | **Claude Sonnet** | Planned | AI Chat and more detailed explanations |
@@ -197,7 +197,8 @@ flowchart LR
 
 ### Privacy by design
 
-- **Screenshots stay on the phone.** Text recognition runs on the device, so images do not need to be stored or uploaded.
+- **Planned: screenshots stay on the phone.** Text recognition is planned to run on the device, so images would not need to be uploaded. No image or OCR code exists in the app yet.
+- **Verified in code (`backend/lambda/handler.py`):** the scan endpoint does not store message text or log it. It saves only the analysis result (risk level, summary, red flags, next steps) and a timestamp to the user's scans, and it does not run unless deployed and configured. Account deletion removes the account-linked scan records and profile, but copies each scan's analysis fields to `anonymized_training_scans` without user IDs. Those unlinked assessments remain and may contain personal details from messages. No model training code exists in this repository. The app does not yet call this endpoint or the deletion action.
 - **Users stay in control.** Yahoo inbox access requires explicit authorization and can be disconnected at any time.
 - **Credentials stay out of the app.** Claude and Firebase service credentials are planned to live in KMS-encrypted Lambda environment variables, never in the app or repository.
 - **Restricted data.** Yahoo authorization data is planned to be accessible only to trusted backend services, not to other app users.
