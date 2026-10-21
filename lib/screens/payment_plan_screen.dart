@@ -33,7 +33,12 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   @override
   void initState() {
     super.initState();
+    if (_isLoggedIn) {
     _initializePurchases();
+    }
+    else {
+      _loadingStore = false;
+    }
   }
 
   Future<void> _initializePurchases() async {
@@ -124,21 +129,26 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
       MaterialPageRoute(builder : (_) => const SignupScreen()),
     );
   }
-
   String get _plusActionLabel {
-    if (_onPlus) return 'Manage Subscription';
-    if (!_isLoggedIn) return 'Create an Account to Upgrade';
-    return 'Upgrade';
+    if(!_isLoggedIn) return 'Create an Account to Upgrade';
+    return _yearly ? 'Start Plus Yearly' : 'Start Plus Monthly';
   }
-  
-  void _onPlusPressed() {
+
+  Future<void> _onPlusPressed() async {
     if (!_isLoggedIn) {
       _goToSignup();
       return;
     }
-    setState(() {
-      _mockPlan = _onPlus ? PlanState.freeWithAccount : PlanState.plus;
-    });
+  
+    final product = _selectedProduct;
+    if (product == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Plans are still loading. Try again.')),
+      );
+      return;
+    }
+    if (_purchaseService.purchasePending) return;
+    await _purchaseService.purchase(product);
   }
 
   @override
@@ -167,76 +177,77 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 style: TextStyle(fontSize: 15, color: AppColors.text),
               ),
               const SizedBox(height: 18),
-              StreamBuilder<Map<String, dynamic>?>(
-                stream: SubscriptionService.instance.watchSubscription(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return const Text('Unable to load subscription status.');
-                  }
+              if (_isLoggedIn)
+                StreamBuilder<Map<String, dynamic>?>(
+                  stream: SubscriptionService.instance.watchSubscription(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return const Text('Unable to load subscription status.');
+                    }
 
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.only(bottom: 16),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.only(bottom: 16),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
 
-                  final subscription = snapshot.data;
+                    final subscription = snapshot.data;
 
-                  final plan = subscription?['plan'] ?? 'free';
-                  final status = subscription?['status'] ?? 'inactive';
-                  final environment = subscription?['environment'] ?? 'none';
-                  final expiresAt = subscription?['expiresAt'];
+                    final plan = subscription?['plan'] ?? 'free';
+                    final status = subscription?['status'] ?? 'inactive';
+                    final environment = subscription?['environment'] ?? 'none';
+                    final expiresAt = subscription?['expiresAt'];
 
-                  final isExpired =
-                      expiresAt is Timestamp &&
-                      !expiresAt.toDate().isAfter(DateTime.now());
+                    final isExpired =
+                        expiresAt is Timestamp &&
+                        !expiresAt.toDate().isAfter(DateTime.now());
 
-                  final isDemo = environment == 'local_test';
+                    final isDemo = environment == 'local_test';
 
-                  final isActivePlus =
-                      plan == 'plus' &&
-                      status == 'active' &&
-                      !isExpired &&
-                      expiresAt is Timestamp &&
-                      (environment == 'production' ||
-                          (kDebugMode &&
-                              const bool.fromEnvironment(
-                                'USE_FIREBASE_EMULATORS',
-                              ) &&
-                              isDemo));
+                    final isActivePlus =
+                        plan == 'plus' &&
+                        status == 'active' &&
+                        !isExpired &&
+                        expiresAt is Timestamp &&
+                        (environment == 'production' ||
+                            (kDebugMode &&
+                                const bool.fromEnvironment(
+                                  'USE_FIREBASE_EMULATORS',
+                                ) &&
+                                isDemo));
 
-                  final displayPlan = isActivePlus ? 'Plus' : 'Free';
+                    final displayPlan = isActivePlus ? 'Plus' : 'Free';
 
-                  final displayStatus = isExpired
-                      ? 'Expired'
-                      : isActivePlus
-                      ? 'Active'
-                      : 'Inactive';
+                    final displayStatus = isExpired
+                        ? 'Expired'
+                        : isActivePlus
+                        ? 'Active'
+                        : 'Inactive';
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Current Plan: $displayPlan'
-                          '${isActivePlus && isDemo ? ' (Demo)' : ''}',
-                          style: const TextStyle(
-                            fontSize: AppTypography.body,
-                            fontWeight: FontWeight.bold,
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Current Plan: $displayPlan'
+                            '${isActivePlus && isDemo ? ' (Demo)' : ''}',
+                            style: const TextStyle(
+                              fontSize: AppTypography.body,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Status: $displayStatus',
-                          style: const TextStyle(fontSize: AppTypography.label),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Status: $displayStatus',
+                            style: const TextStyle(fontSize: AppTypography.label),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               _BillingToggle(
                 yearly: _yearly,
                 onChanged: (value) => setState(() => _yearly = value),
@@ -270,8 +281,6 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
               _PlanCard(
                 name: 'Plus',
                 price: _plusPrice,
-                // isCurrent: _plusSelected,
-                // price: _yearly ? '\$49.99/year' : '\$4.99/month',
                 isCurrent: _onPlus,
                 features: const [
                   'Everything in Free',
@@ -280,52 +289,22 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                   'Family/Social Features',
                   'Priority Support',
                 ],
-                actionLabel: _plusActionLabel,
-                onAction: _isLoggedIn ? _onPlusPressed : _goToSignup,
+                actionLabel: _onPlus ? null : _plusActionLabel,
+                onAction: _onPlus ? null : _onPlusPressed,
               ),
               const SizedBox(height: 20),
 
-              if (_loadingStore)
-                const Center(child: CircularProgressIndicator())
-              else if (_plusSelected) ...[
-                SizedBox(
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed:
-                        _purchaseService.purchasePending ||
-                            _selectedProduct == null
-                        ? null
-                        : () async {
-                            await _purchaseService.purchase(_selectedProduct!);
-                          },
-                    child: _purchaseService.purchasePending
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            _yearly
-                                ? 'Start Plus Yearly'
-                                : 'Start Plus Monthly',
-                            style: const TextStyle(
-                              fontSize: AppTypography.emphasis,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+              if (_isLoggedIn)
+                Center(
+                  child: TextButton(
+                    onPressed: () async {
+                      await _purchaseService.restorePurchases();
+                    },
+                    child: const Text('Restore Purchases')
                   ),
                 ),
-
-                const SizedBox(height: 8),
-
-                TextButton(
-                  onPressed: () async {
-                    await _purchaseService.restorePurchases();
-                  },
-                  child: const Text('Restore Purchases'),
-                ),
-              ],
-              if (kDebugMode &&
+                
+              if (_isLoggedIn && kDebugMode &&
                   const bool.fromEnvironment('USE_FIREBASE_EMULATORS'))
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
