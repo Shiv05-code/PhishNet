@@ -303,7 +303,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                     child: const Text('Restore Purchases')
                   ),
                 ),
-                
+
               if (_isLoggedIn && kDebugMode &&
                   const bool.fromEnvironment('USE_FIREBASE_EMULATORS'))
                 Padding(
