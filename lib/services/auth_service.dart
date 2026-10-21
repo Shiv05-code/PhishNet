@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'payment_backend_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
   AuthService({this._auth});
@@ -111,6 +112,33 @@ class AuthService {
     if (user == null) return false;
     await user.reload();
     return _firebaseAuth.currentUser?.emailVerified ?? false;
+  }
+
+  Future<void> deleteAccountAndData() async {
+    final user = _firebaseAuth.currentUser;
+
+    if (user == null) {
+      throw StateError('No signed-in user is available.');
+    }
+
+    final db = FirebaseFirestore.instance;
+    final userRef = db.collection('users').doc(user.uid);
+    final batch = db.batch();
+
+    for (final collectionName in ['scans', 'subscriptions']) {
+      final documents = await userRef.collection(collectionName).get();
+
+      for (final document in documents.docs) {
+        batch.delete(document.reference);
+      }
+    }
+
+    batch.delete(userRef);
+
+    await batch.commit();
+
+    // Firebase may require the user to have signed in recently.
+    await user.delete();
   }
 
   Future<void> signOut() => _firebaseAuth.signOut();

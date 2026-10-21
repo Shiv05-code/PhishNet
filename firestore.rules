@@ -3,20 +3,26 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can read their own scan results.
-    // Only trusted backend code can write scan results.
-    match /users/{uid}/scans/{scanId} {
-      allow read: if request.auth != null
-                  && request.auth.uid == uid;
-      allow write: if false;
+    function isOwner(uid) {
+      return request.auth != null
+             && request.auth.uid == uid;
     }
 
-    // Users can read their own subscription information.
-    // Only trusted backend code can modify subscriptions.
-    match /users/{uid}/subscriptions/{subscriptionId} {
-      allow read: if request.auth != null
-                  && request.auth.uid == uid;
-      allow write: if false;
+    match /users/{uid} {
+      // Allow a signed-in user to delete only their own profile document.
+      allow delete: if isOwner(uid);
+
+      match /scans/{scanId} {
+        allow read: if isOwner(uid);
+        allow delete: if isOwner(uid);
+        allow create, update: if false;
+      }
+
+      match /subscriptions/{subscriptionId} {
+        allow read: if isOwner(uid);
+        allow delete: if isOwner(uid);
+        allow create, update: if false;
+      }
     }
   }
 }

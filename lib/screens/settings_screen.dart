@@ -11,6 +11,7 @@ import 'login_screen.dart';
 import 'payment_plan_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_conditions_screen.dart';
+import 'signup_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   final bool isGuest;
@@ -44,7 +45,7 @@ class SettingsScreen extends StatelessWidget {
                             title: const Text('Delete your data?'),
                             content: const Text(
                               'This will permanently delete your account and saved data. '
-                              'This action cannot be undone. Are you sure you want to proceed with this command?',
+                              'This action cannot be undone. Are you sure you want to proceed?',
                             ),
                             actions: [
                               TextButton(
@@ -53,8 +54,31 @@ class SettingsScreen extends StatelessWidget {
                                 child: const Text('Cancel'),
                               ),
                               TextButton(
-                                onPressed: () =>
-                                    Navigator.of(dialogContext).pop(),
+                                onPressed: () async {
+                                  Navigator.of(dialogContext).pop();
+
+                                  try {
+                                    await (authService ?? AuthService())
+                                        .deleteAccountAndData();
+
+                                    if (!context.mounted) return;
+
+                                    Navigator.of(context).pushAndRemoveUntil(
+                                      instantRoute(const SignupScreen()),
+                                      (_) => false,
+                                    );
+                                  } catch (_) {
+                                    if (!context.mounted) return;
+
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'The account could not be deleted. Please try again.',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
                                 child: const Text('Yes, Delete'),
                               ),
                             ],
