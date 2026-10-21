@@ -35,7 +35,7 @@ class SubscriptionService {
 
   // Listen for subscription changes in real time.
   Stream<Map<String, dynamic>?> watchSubscription() {
-    if(_auth.currentUser == null) return Stream.value(null);
+    if (_auth.currentUser == null) return Stream.value(null);
     return _subscriptionRef.snapshots().map((snapshot) => snapshot.data());
   }
 

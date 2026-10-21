@@ -34,9 +34,8 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   void initState() {
     super.initState();
     if (_isLoggedIn) {
-    _initializePurchases();
-    }
-    else {
+      _initializePurchases();
+    } else {
       _loadingStore = false;
     }
   }
@@ -119,18 +118,19 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   bool get _onFreeWithAccount => _isLoggedIn && !_onPlus;
 
   Future<void> _goToLogin() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder : (_) => const LoginScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   Future<void> _goToSignup() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder : (_) => const SignupScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SignupScreen()));
   }
+
   String get _plusActionLabel {
-    if(!_isLoggedIn) return 'Create an Account to Upgrade';
+    if (!_isLoggedIn) return 'Create an Account to Upgrade';
     return _yearly ? 'Start Plus Yearly' : 'Start Plus Monthly';
   }
 
@@ -139,7 +139,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
       _goToSignup();
       return;
     }
-  
+
     final product = _selectedProduct;
     if (product == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -173,7 +173,9 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                _isLoggedIn ? 'Get the protection you need.' : "You're browsing as a guest. Create a free account to unlock more.",
+                _isLoggedIn
+                    ? 'Get the protection you need.'
+                    : "You're browsing as a guest. Create a free account to unlock more.",
                 style: TextStyle(fontSize: 15, color: AppColors.text),
               ),
               const SizedBox(height: 18),
@@ -241,7 +243,9 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                           const SizedBox(height: 4),
                           Text(
                             'Status: $displayStatus',
-                            style: const TextStyle(fontSize: AppTypography.label),
+                            style: const TextStyle(
+                              fontSize: AppTypography.label,
+                            ),
                           ),
                         ],
                       ),
@@ -255,14 +259,11 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
               const SizedBox(height: 14),
               if (!_isLoggedIn) ...[
                 _PlanCard(
-                name: 'Free: No Account',
-                price: '\$0/month',
-                isCurrent: _onFreeNoAccount,
-                features: const [
-                  'Manual Scans',
-                  'Basic Results',
-                ],
-              ),
+                  name: 'Free: No Account',
+                  price: '\$0/month',
+                  isCurrent: _onFreeNoAccount,
+                  features: const ['Manual Scans', 'Basic Results'],
+                ),
               ],
               const SizedBox(height: 14),
               _PlanCard(
@@ -270,7 +271,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 price: '\$0/month',
                 isCurrent: _onFreeWithAccount,
                 features: const [
-                  'Everything in Free: No Account', 
+                  'Everything in Free: No Account',
                   'Limited AI Chat Access',
                   'Priority Support',
                 ],
@@ -300,11 +301,12 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                     onPressed: () async {
                       await _purchaseService.restorePurchases();
                     },
-                    child: const Text('Restore Purchases')
+                    child: const Text('Restore Purchases'),
                   ),
                 ),
 
-              if (_isLoggedIn && kDebugMode &&
+              if (_isLoggedIn &&
+                  kDebugMode &&
                   const bool.fromEnvironment('USE_FIREBASE_EMULATORS'))
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
@@ -501,9 +503,14 @@ class _PlanCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 14, 16),
       decoration: BoxDecoration(
-        color: isCurrent || highlighted ? const Color(0xBFE0F6FC) : const Color(0xD9FDFCF9),
+        color: isCurrent || highlighted
+            ? const Color(0xBFE0F6FC)
+            : const Color(0xD9FDFCF9),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: isCurrent ? AppColors.primaryBlue : Colors.white70, width: isCurrent ? 2 : 1.2),
+        border: Border.all(
+          color: isCurrent ? AppColors.primaryBlue : Colors.white70,
+          width: isCurrent ? 2 : 1.2,
+        ),
         boxShadow: const [
           BoxShadow(
             color: Color(0x300B718E),
