@@ -63,7 +63,7 @@ respectful, never rushed or condescending.
 
 | Step | What you do | What PhishNet gives you |
 | --- | --- | --- |
-| **1. Share** | Paste a message, or select a screenshot, on the **Capture** screen. | Text is read from screenshots right on your phone, so the image never needs to be uploaded. |
+| **1. Share** | Enter a suspicious message on the **Capture** screen. | Sprint 2 adds photo capture and on-device text recognition, so screenshot images do not need to be uploaded. |
 | **2. Understand** | Read the **Results** screen. | A plain-language breakdown of the warning signs, with no technical terms. |
 | **3. Decide** | Ask a follow-up in **AI Chat** if you are unsure. | Clear, practical next steps, plus detailed explanations on request. |
 
@@ -87,7 +87,7 @@ milestones, not features that are available today.
 | Firebase Email/Password authentication | Capture and Results screens connected to Claude scam analysis |
 | Signup validation for Gmail and Yahoo addresses | AI Chat for follow-up questions |
 | Email verification and verified-account login checks | History of saved scans and a Home dashboard |
-| Password reset by email | On-device screenshot text recognition |
+| Password reset by email | Capture and Results connected to Claude, including photo capture and on-device screenshot text recognition |
 | Guest access to the capture flow | Yahoo inbox monitoring and push alerts |
 | Screen foundations: capture, results, AI chat, family/social, history, settings, and payment plans | Family/Social sharing and scam-pattern insights |
 | Shared, accessible styling across the app | Payment-plan backend |
@@ -105,8 +105,8 @@ windows and scheduled demos, and may change as work progresses.
 | Sprint | Window | Demo | Goal |
 | --- | --- | --- | --- |
 | **1 · Foundations** | Sep 30 – Oct 14, 2026 | Oct 21 | Accessible sign-in and account management, navigation and Settings, Payment Plans experience, Firebase and Claude prepared |
-| **2 · Message checking** | Oct 15 – Oct 28, 2026 | Nov 4 | Capture and Results screens connected to Claude scam analysis, AI Chat, Yahoo monitoring setup begins |
-| **3 · Monitoring and history** | Oct 29 – Nov 11, 2026 | Nov 18 | History and Home dashboard, Yahoo monitoring with alerts, screenshot text recognition |
+| **2 · Message checking** | Oct 15 – Oct 28, 2026 | Nov 4 | Capture and Results connected to Claude scam analysis, photo capture and on-device OCR, AI Chat, Firestore scan storage, Yahoo monitoring setup begins |
+| **3 · Monitoring and history** | Oct 29 – Nov 11, 2026 | Nov 18 | History and Home dashboard, Yahoo monitoring with alerts |
 | **4 · Sharing and polish** | Nov 12 – Nov 25, 2026 | Dec 2 (final demo) | Family/Social sharing, saved AI Chat conversations, scam-pattern insights, Payment Plans improvements |
 
 <details>
@@ -121,7 +121,9 @@ windows and scheduled demos, and may change as work progresses.
 - Payment Plans interface and supporting setup
 
 **Sprint 2 — Message checking**
-- Capture screen and Results screen connected to Claude-powered scam analysis
+- Capture supports text entry and photo capture, with on-device OCR for screenshots
+- Capture and Results connected to Claude-powered scam analysis
+- Scan assessments saved to Firestore
 - Claude integrated into the AI Chat experience
 - AWS setup begins for Yahoo email monitoring
 
@@ -129,7 +131,6 @@ windows and scheduled demos, and may change as work progresses.
 - History screen with saved scans and recent detections
 - Home dashboard with analytics
 - Yahoo authorization and scheduled inbox monitoring, with notifications for flagged messages
-- On-device OCR on the Capture screen so users can check text in screenshots
 
 **Sprint 4 — Sharing and polish**
 - Family/Social screen with sharing through the iOS Share Sheet
@@ -148,7 +149,7 @@ below is planned.**
 
 ```mermaid
 flowchart LR
-    App["📱 PhishNet app<br/>Flutter · iOS<br/>ML Kit OCR"]
+    App["📱 PhishNet app<br/>Flutter · iOS<br/>ML Kit OCR (planned)"]
     Auth["🔐 Firebase<br/>Authentication"]
     Lambda["⚙️ AWS Lambda"]
     Haiku["🤖 Claude Haiku<br/>classification"]
@@ -176,7 +177,7 @@ flowchart LR
 | --- | --- |
 | **Flutter and Dart** | The iOS-focused mobile app |
 | **Xcode and iOS Simulator** | iOS development and visual testing |
-| **Google ML Kit** | On-device text recognition, so screenshots are read without being uploaded |
+| **Google ML Kit** | Planned: on-device text recognition for screenshots (not yet in the app) |
 | **iOS Share Sheet** | Family and social sharing |
 | **Figma, SF Symbols, Google Fonts** | Design, icons, and typography |
 | **Apple Developer Account** | TestFlight and App Store distribution |
@@ -188,7 +189,7 @@ flowchart LR
 | **Firebase Authentication** | Integrated | Account sign-in and registration |
 | **Cloud Firestore** | Planned | Single database for scan history, chat records, monitoring settings, and restricted Yahoo authorization data |
 | **Firebase Cloud Messaging** | Planned | Phishing alerts on iPhone, delivered through Apple Push Notification service (APNs) |
-| **AWS Lambda** | Planned | Secure app requests: verifies the user's Firebase sign-in before calling Claude |
+| **AWS Lambda** | Planned | Secure app requests: verifies the user's Firebase sign-in before calling Claude. Handler code exists in `backend/lambda/`; deployment and app wiring are not yet verified |
 | **Amazon EventBridge** | Planned | Scheduled Yahoo inbox checks (planned every 1–2 minutes, subject to Yahoo access and rate limits) |
 | **Claude Haiku** | Planned | Fast, routine message and email classification |
 | **Claude Sonnet** | Planned | AI Chat and more detailed explanations |
@@ -196,7 +197,8 @@ flowchart LR
 
 ### Privacy by design
 
-- **Screenshots stay on the phone.** Text recognition runs on the device, so images do not need to be stored or uploaded.
+- **Planned: screenshots stay on the phone.** Text recognition is planned to run on the device, so images would not need to be uploaded. No image or OCR code exists in the app yet.
+- **Verified in code (`backend/lambda/handler.py`):** the scan endpoint does not store message text or log it. It saves only the analysis result (risk level, summary, red flags, next steps) and a timestamp to the user's scans, and it does not run unless deployed and configured. Account deletion removes the account-linked scan records and profile, but copies each scan's analysis fields to `anonymized_training_scans` without user IDs. Those unlinked assessments remain and may contain personal details from messages. No model training code exists in this repository. The app does not yet call this endpoint or the deletion action.
 - **Users stay in control.** Yahoo inbox access requires explicit authorization and can be disconnected at any time.
 - **Credentials stay out of the app.** Claude and Firebase service credentials are planned to live in KMS-encrypted Lambda environment variables, never in the app or repository.
 - **Restricted data.** Yahoo authorization data is planned to be accessible only to trusted backend services, not to other app users.

@@ -3,8 +3,10 @@ import 'app_colors.dart';
 import '../widgets/app_drawer.dart';
 import 'results_screen.dart';
 import '../widgets/figma_app_bar.dart';
+import '../widgets/auth_widgets.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../widgets/figma_glass_button.dart';
+import '../theme/app_typography.dart';
 
 class CaptureScreen extends StatelessWidget {
   final bool isGuest;
@@ -47,7 +49,7 @@ class CaptureScreen extends StatelessWidget {
                     'Tap to Upload',
                     style: TextStyle(
                       fontFamily: 'SFProText',
-                      fontSize: 20,
+                      fontSize: AppTypography.heading,
                       fontWeight: FontWeight.w600,
                       color: AppColors.primaryBlue,
                     ),
@@ -66,7 +68,7 @@ class CaptureScreen extends StatelessWidget {
                       'Scan',
                       style: TextStyle(
                         fontFamily: 'SFProText',
-                        fontSize: 22,
+                        fontSize: AppTypography.heading,
                         fontWeight: FontWeight.w600,
                         color: AppColors.primaryBlue,
                       ),
@@ -82,7 +84,7 @@ class CaptureScreen extends StatelessWidget {
                       'Insert Text',
                       style: TextStyle(
                         fontFamily: 'SFProText',
-                        fontSize: 22,
+                        fontSize: AppTypography.heading,
                         fontWeight: FontWeight.w600,
                         color: AppColors.primaryBlue,
                       ),
@@ -98,8 +100,6 @@ class CaptureScreen extends StatelessWidget {
   }
 
   void _openResults(BuildContext context) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => ResultsScreen(isGuest: isGuest)));
+    Navigator.of(context).push(slideRoute(ResultsScreen(isGuest: isGuest)));
   }
 }

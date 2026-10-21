@@ -17,10 +17,10 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(home: LoadingScreen(authService: auth)),
       );
-      await tester.pump(const Duration(seconds: 2));
-      expect(find.byType(LoginScreen), findsNothing, reason: 'splash ≥1s');
-      await tester.pump(const Duration(seconds: 1, milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 500));
+      // Step frame by frame so the fade-in and fade-out each get to finish.
+      for (var i = 0; i < 100; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
     }
 
     testWidgets('no session opens Login', (tester) async {

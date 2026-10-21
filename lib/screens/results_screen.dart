@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
+import '../theme/app_typography.dart';
 
 class ResultsScreen extends StatelessWidget {
   final bool isGuest;
@@ -21,46 +22,79 @@ class ResultsScreen extends StatelessWidget {
               color: Colors.red.shade50,
               child: const ListTile(
                 leading: Icon(Icons.cancel, color: Colors.red),
-                title: Text('Scam Detected'),
-                subtitle: Text('85% confidence'),
+                title: Text(
+                  'Scam Detected',
+                  style: TextStyle(fontSize: AppTypography.emphasis),
+                ),
+                subtitle: Text(
+                  '85% confidence',
+                  style: TextStyle(fontSize: AppTypography.body),
+                ),
               ),
             ),
             const SizedBox(height: 16),
             const Text(
               'Why this might be a scam',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: AppTypography.title,
+              ),
             ),
             const SizedBox(height: 8),
             const Wrap(
               spacing: 8,
               children: [
-                Chip(label: Text('Unknown Sender')),
-                Chip(label: Text('Urgent Language')),
+                Chip(
+                  labelStyle: TextStyle(fontSize: AppTypography.label),
+                  label: Text('Unknown Sender'),
+                ),
+                Chip(
+                  labelStyle: TextStyle(fontSize: AppTypography.label),
+                  label: Text('Urgent Language'),
+                ),
               ],
             ),
             const SizedBox(height: 16),
             const Text(
               'What should you do?',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: AppTypography.title,
+              ),
             ),
             const SizedBox(height: 8),
             const Wrap(
               spacing: 8,
               children: [
-                Chip(label: Text('Do Not Click Links')),
-                Chip(label: Text('Block Sender')),
-                Chip(label: Text('Report Message')),
+                Chip(
+                  labelStyle: TextStyle(fontSize: AppTypography.label),
+                  label: Text('Do Not Click Links'),
+                ),
+                Chip(
+                  labelStyle: TextStyle(fontSize: AppTypography.label),
+                  label: Text('Block Sender'),
+                ),
+                Chip(
+                  labelStyle: TextStyle(fontSize: AppTypography.label),
+                  label: Text('Report Message'),
+                ),
               ],
             ),
             const SizedBox(height: 16),
             const Text(
               'Still unsure?',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: AppTypography.title,
+              ),
             ),
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: () {},
-              child: const Text('Get a second opinion'),
+              child: const Text(
+                'Get a second opinion',
+                style: TextStyle(fontSize: AppTypography.emphasis),
+              ),
             ),
           ],
         ),
