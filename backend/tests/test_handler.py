@@ -247,11 +247,58 @@ class InvalidResponseTests(HandlerTestCase):
         )
         self.assert_retryable_failure(self.call(text="hello"))
 
-    def test_overlong_assessment_field_is_retryable_error(self):
+    def test_far_overlong_assessment_field_is_retryable_error(self):
         self.client.messages.create.return_value = _tool_response(
-            {**VALID, "summary": "word " * 31}
+            {**VALID, "summary": "word " * (30 * handler.WORD_SLACK + 1)}
         )
         self.assert_retryable_failure(self.call(text="hello"))
+
+    def test_slightly_overlong_fields_are_accepted(self):
+        long = {
+            **VALID,
+            "brief_description": "word " * 20,
+            "summary": "word " * 40,
+            "red_flags": [{"category": "money_request", "description": "word " * 15}],
+            "next_steps": ["word " * 15],
+        }
+        self.client.messages.create.return_value = _tool_response(long)
+        resp = self.call(text="hello")
+        self.assertEqual(resp["statusCode"], 200)
+
+    def test_invalid_output_is_retried_once_then_succeeds(self):
+        bad = {**VALID, "next_steps": []}
+        self.client.messages.create.side_effect = [
+            _tool_response(bad),
+            _tool_response(dict(VALID)),
+        ]
+        resp = self.call(text="hello")
+        self.assertEqual(resp["statusCode"], 200)
+        self.assertEqual(self.client.messages.create.call_count, 2)
+
+    def test_invalid_output_twice_is_retryable_error_after_two_attempts(self):
+        bad = {**VALID, "next_steps": []}
+        self.client.messages.create.side_effect = [
+            _tool_response(bad),
+            _tool_response(bad),
+        ]
+        self.assert_retryable_failure(self.call(text="hello"))
+        self.assertEqual(self.client.messages.create.call_count, 2)
+
+    def test_provider_error_is_not_retried(self):
+        self.client.messages.create.side_effect = handler.anthropic.APIError(
+            "boom", request=None, body=None
+        )
+        self.assert_retryable_failure(self.call(text="hello"))
+        self.assertEqual(self.client.messages.create.call_count, 1)
+
+    def test_validation_reason_is_logged_without_message_text(self):
+        self.client.messages.create.return_value = _tool_response({**VALID, "next_steps": []})
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.call(text="very private message 12345")
+        self.assertIn("bad list field", buf.getvalue())
+        self.assertNotIn("very private", buf.getvalue())
+        self.assertNotIn("12345", buf.getvalue())
 
     def test_missing_tool_output_is_retryable_error(self):
         self.client.messages.create.return_value = SimpleNamespace(
