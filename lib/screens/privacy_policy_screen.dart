@@ -105,7 +105,7 @@ const privacyPolicyDocument = LegalDocument(
         ),
         LegalSubheading('Stored results:'),
         LegalBullet(
-          'The analysis result (risk level, summary, red flags, and next steps) and a timestamp are saved to your account so you can view your scan history. The summary may refer to details from the message',
+          'The analysis result (brief description, scam-risk score, risk level, summary, red flags, and next steps) and a timestamp are saved to your account so you can view your scan history. The summary may refer to details from the message',
         ),
         LegalBullet(
           'Stored results are kept while your account exists. We do not delete them automatically for inactivity',
@@ -118,7 +118,7 @@ const privacyPolicyDocument = LegalDocument(
           'Copies of each scan\'s derived assessment remain after deletion, in a separate collection with no user ID, name, or email address. These copies are no longer linked to your account',
         ),
         LegalBullet(
-          'Those copies keep the analysis fields (risk level, summary, red flags, and next steps). A summary or red flags may still contain identifying information from a scanned message, and that information remains in the copy even though it is no longer linked to your account',
+          'Those copies keep the analysis fields (brief description, scam-risk score, risk level, summary, red flags, and next steps). A summary or red flags may still contain identifying information from a scanned message, and that information remains in the copy even though it is no longer linked to your account',
         ),
         LegalBullet(
           'The full message text is not stored, so it is not part of those copies',

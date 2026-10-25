@@ -47,6 +47,7 @@ void main() {
       expect(bullets, contains('does not save the message text'));
       expect(bullets, contains('Stored results:'));
       expect(bullets, contains('timestamp are saved to your account'));
+      expect(bullets, contains('brief description, scam-risk score'));
       expect(bullets, contains('Delete My Account'));
       expect(bullets, contains('your name, email address, and password'));
       expect(bullets, contains('the scan records linked to your account'));
