@@ -194,8 +194,14 @@ def _is_text(value):
     return isinstance(value, str) and value.strip() != ""
 
 
+# The prompt asks Claude for the limits below, but models often run a few words
+# over. Reject only when a field is far over (WORD_SLACK x), so a slightly long
+# answer is returned instead of failing the whole scan.
+WORD_SLACK = 2
+
+
 def _within_word_limit(value, limit):
-    return len(value.split()) <= limit
+    return len(value.split()) <= limit * WORD_SLACK
 
 
 def _is_text_list(value, minimum=0):
@@ -272,9 +278,22 @@ def _validate_assessment(raw):
     }
 
 
+ANALYSIS_ATTEMPTS = 2  # one retry when Claude's output fails validation
+
+
 def _analyze(text, api_key):
     if MOCK:
         return _validate_assessment(MOCK_RESULT)
+    for attempt in range(ANALYSIS_ATTEMPTS):
+        try:
+            return _analyze_once(text, api_key)
+        except AnalysisError as e:
+            if attempt == ANALYSIS_ATTEMPTS - 1:
+                raise
+            print(f"analysis retry: {e}")
+
+
+def _analyze_once(text, api_key):
     client = anthropic.Anthropic(api_key=api_key, timeout=20.0, max_retries=1)
     msg = client.messages.create(
         model=MODEL,
@@ -385,8 +404,10 @@ def handler(event, context):
         try:
             result = _analyze(text, secrets.get("anthropic_api_key"))
         except (anthropic.APIError, AnalysisError) as e:
-            # Never log the message text; log only the error type.
-            print(f"analysis error: {type(e).__name__}")
+            # Never log the message text; log only the error type, plus the
+            # fixed validation reason for AnalysisError (no user text in it).
+            detail = f": {e}" if isinstance(e, AnalysisError) else ""
+            print(f"analysis error: {type(e).__name__}{detail}")
             return _resp(
                 502,
                 {
