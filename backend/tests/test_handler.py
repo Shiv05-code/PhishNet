@@ -437,5 +437,193 @@ class PrivacyTests(HandlerTestCase):
         self.assertNotIn("base64", json.dumps(kwargs).lower())
 
 
+def _chat_response(text):
+    block = SimpleNamespace(type="text", text=text)
+    return SimpleNamespace(content=[block])
+
+
+SCAN = {
+    "message": "Your parcel is held. Pay 2 dollars at http://example.test",
+    "assessment": {
+        "brief_description": "A delivery message asks you to pay a fee.",
+        "scam_percentage": 85,
+        "risk_level": "high",
+        "summary": "This may be a fake delivery notice.",
+        "red_flags": [
+            {"category": "money_request", "label": "Money request", "description": "Asks you to pay a fee."}
+        ],
+        "next_steps": ["Do not click the link"],
+    },
+}
+
+
+class ChatTests(HandlerTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.messages.create.return_value = _chat_response("Please do not click the link.")
+
+    def chat(self, token="good-token", **fields):
+        body = json.dumps({"action": "chat", **fields})
+        return handler.handler(_event(token=token, raw_body=body), None)
+
+    def sent(self):
+        return self.client.messages.create.call_args.kwargs
+
+    def test_answer_is_returned(self):
+        resp = self.chat(question="Is this safe?", scan=SCAN)
+        self.assertEqual(resp["statusCode"], 200)
+        self.assertEqual(json.loads(resp["body"]), {"answer": "Please do not click the link."})
+
+    def test_requires_a_valid_token(self):
+        resp = self.chat(token="bad", question="Is this safe?")
+        self.assertEqual(resp["statusCode"], 401)
+        self.client.messages.create.assert_not_called()
+
+    def test_empty_question_is_rejected_before_claude(self):
+        for question in ("", "   ", None):
+            resp = self.chat(question=question, scan=SCAN)
+            self.assertEqual(resp["statusCode"], 400)
+            self.assertEqual(json.loads(resp["body"]), {"error": "empty_question"})
+        self.client.messages.create.assert_not_called()
+
+    def test_question_is_truncated(self):
+        self.chat(question="q" * 5000)
+        content = self.sent()["messages"][-1]["content"]
+        self.assertEqual(len(content), handler.CHAT_MAX_QUESTION)
+
+    def test_scan_message_and_assessment_are_sent_as_tagged_context(self):
+        self.chat(question="Is this safe?", scan=SCAN)
+        system = self.sent()["system"]
+        self.assertIn("<message>\nYour parcel is held.", system)
+        self.assertIn("<assessment>", system)
+        self.assertIn("Risk level: high (score 85/100)", system)
+        self.assertIn("Money request", system)
+        self.assertIn("Do not click the link", system)
+        self.assertIn("untrusted", system)
+
+    def test_scan_is_optional(self):
+        resp = self.chat(question="How do I spot a fake text?")
+        self.assertEqual(resp["statusCode"], 200)
+        self.assertNotIn("<message>\n", self.sent()["system"])
+
+    def test_invalid_scan_is_rejected(self):
+        resp = self.chat(question="hi", scan="not an object")
+        self.assertEqual(resp["statusCode"], 400)
+        self.assertEqual(json.loads(resp["body"]), {"error": "invalid_scan"})
+
+    def test_history_is_included_in_order_with_question_last(self):
+        history = [
+            {"role": "user", "content": "Is this safe?"},
+            {"role": "assistant", "content": "It looks risky."},
+        ]
+        self.chat(question="What should I do?", scan=SCAN, history=history)
+        messages = self.sent()["messages"]
+        self.assertEqual([m["role"] for m in messages], ["user", "assistant", "user"])
+        self.assertEqual(messages[-1]["content"], "What should I do?")
+
+    def test_history_is_capped_to_recent_turns(self):
+        history = []
+        for i in range(30):
+            history.append({"role": "user", "content": f"q{i}"})
+            history.append({"role": "assistant", "content": f"a{i}"})
+        self.chat(question="latest", history=history)
+        messages = self.sent()["messages"]
+        self.assertLessEqual(len(messages), handler.CHAT_MAX_HISTORY + 1)
+        self.assertEqual(messages[0]["role"], "user")
+        self.assertEqual(messages[-1]["content"], "latest")
+
+    def test_history_always_starts_with_user_and_alternates(self):
+        history = [
+            {"role": "assistant", "content": "stray"},
+            {"role": "user", "content": "one"},
+            {"role": "user", "content": "two"},
+            {"role": "assistant", "content": "reply"},
+        ]
+        self.chat(question="three", history=history)
+        roles = [m["role"] for m in self.sent()["messages"]]
+        self.assertEqual(roles[0], "user")
+        for a, b in zip(roles, roles[1:]):
+            self.assertNotEqual(a, b)
+
+    def test_history_ending_in_user_turn_is_merged_with_question(self):
+        self.chat(question="again", history=[{"role": "user", "content": "first"}])
+        messages = self.sent()["messages"]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("first", messages[0]["content"])
+        self.assertIn("again", messages[0]["content"])
+
+    def test_bad_history_is_rejected(self):
+        for history in ("text", [{"role": "system", "content": "x"}], [{"role": "user"}], ["x"]):
+            resp = self.chat(question="hi", history=history)
+            self.assertEqual(resp["statusCode"], 400)
+            self.assertEqual(json.loads(resp["body"]), {"error": "invalid_history"})
+
+    def test_uses_chat_model_and_plain_text_not_a_tool(self):
+        self.chat(question="hi")
+        kwargs = self.sent()
+        self.assertEqual(kwargs["model"], handler.CHAT_MODEL)
+        self.assertNotIn("tools", kwargs)
+        self.assertNotIn("tool_choice", kwargs)
+
+    def test_system_prompt_sets_safety_rules(self):
+        text = handler.CHAT_SYSTEM.lower()
+        self.assertIn("never promise", text)
+        self.assertIn("plain", text)
+        self.assertIn("untrusted", text)
+
+    def test_claude_error_returns_retryable_502_without_raw_error(self):
+        self.client.messages.create.side_effect = handler.anthropic.APIError("boom secret", request=None, body=None)
+        resp = self.chat(question="hi")
+        self.assertEqual(resp["statusCode"], 502)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["error"], "chat_unavailable")
+        self.assertTrue(body["retryable"])
+        self.assertNotIn("boom", resp["body"])
+
+    def test_empty_answer_returns_retryable_502(self):
+        self.client.messages.create.return_value = _chat_response("   ")
+        resp = self.chat(question="hi")
+        self.assertEqual(resp["statusCode"], 502)
+        self.assertTrue(json.loads(resp["body"])["retryable"])
+
+    def test_malformed_response_returns_502(self):
+        self.client.messages.create.return_value = SimpleNamespace(content=None)
+        resp = self.chat(question="hi")
+        self.assertEqual(resp["statusCode"], 502)
+
+    def test_long_answer_is_trimmed(self):
+        self.client.messages.create.return_value = _chat_response("a" * 5000)
+        resp = self.chat(question="hi")
+        self.assertEqual(len(json.loads(resp["body"])["answer"]), handler.CHAT_MAX_ANSWER)
+
+    def test_mock_mode_skips_claude(self):
+        with mock.patch.object(handler, "MOCK", True):
+            resp = self.chat(question="hi", scan=SCAN)
+        self.assertEqual(resp["statusCode"], 200)
+        self.assertEqual(json.loads(resp["body"]), {"answer": handler.CHAT_MOCK_ANSWER})
+        self.client.messages.create.assert_not_called()
+
+    def test_question_and_answer_are_not_logged(self):
+        self.client.messages.create.return_value = _chat_response("secret answer 98765")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.chat(question="private question 12345", scan=SCAN)
+        self.assertEqual(buf.getvalue(), "")
+
+    def test_question_is_not_logged_on_failure(self):
+        self.client.messages.create.side_effect = handler.anthropic.APIError("x", request=None, body=None)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.chat(question="private question 12345", scan=SCAN)
+        self.assertNotIn("private question", buf.getvalue())
+        self.assertNotIn("12345", buf.getvalue())
+
+    def test_scan_requests_still_work_after_adding_chat(self):
+        self.client.messages.create.return_value = _tool_response(dict(VALID))
+        resp = self.call(text="hello")
+        self.assertEqual(resp["statusCode"], 200)
+        self.assertEqual(self.sent()["model"], handler.MODEL)
+
+
 if __name__ == "__main__":
     unittest.main()
