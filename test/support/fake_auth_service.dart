@@ -7,12 +7,19 @@ class FakeAuthService extends AuthService {
     this.signedIn = false,
     this.verified = false,
     this.displayName,
+    this.email,
   });
 
   String? displayName;
+  String? email;
 
   @override
   String? get firstName => AuthService.firstNameFrom(displayName);
+
+  @override
+  User? get currentUser => displayName == null && email == null
+      ? null
+      : _FakeUser(displayName: displayName, email: email);
 
   bool signedIn;
   bool verified;
@@ -106,4 +113,17 @@ class FakeAuthService extends AuthService {
 
   @override
   Future<void> signOut() async => signedIn = false;
+}
+
+class _FakeUser implements User {
+  _FakeUser({this.displayName, this.email});
+
+  @override
+  final String? displayName;
+
+  @override
+  final String? email;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
