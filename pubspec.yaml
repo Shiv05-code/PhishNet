@@ -40,8 +40,9 @@ dependencies:
   in_app_purchase_storekit: ^0.4.13+1
   cloud_firestore: ^6.10.0
   cloud_functions: ^6.5.0
-  http: ^1.2.2
-
+  image_picker: ^1.2.4
+  google_mlkit_text_recognition: ^0.17.1
+  http: ^1.6.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
