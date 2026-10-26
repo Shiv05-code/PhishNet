@@ -547,6 +547,47 @@ def _anonymize_and_delete_user_data(uid):
     # Delete the user's profile document.
     user_ref.delete()
 
+def _get_scan_history(uid):
+    """Retrieve the authenticated user's 20 most recent scans."""
+    db = firestore.client()
+
+    scans = (
+        db.collection("users")
+        .document(uid)
+        .collection("scans")
+        .order_by(
+            "createdAt",
+            direction=firestore.Query.DESCENDING,
+        )
+        .limit(20)
+        .stream()
+    )
+
+    results = []
+
+    for scan in scans:
+        data = scan.to_dict() or {}
+        created_at = data.get("createdAt")
+
+        results.append({
+            "id": scan.id,
+            "brief_description": data.get("brief_description"),
+            "scam_percentage": data.get("scam_percentage"),
+            "risk_level": data.get("risk_level"),
+            "summary": data.get("summary"),
+            "red_flags": data.get("red_flags", []),
+            "next_steps": data.get("next_steps", []),
+            "createdAt": (
+                created_at.isoformat()
+                if created_at is not None
+                else None
+            ),
+        })
+
+    return results
+
+
+
 def handler(event, context):
     try:
         secrets = _init()
@@ -589,6 +630,29 @@ def handler(event, context):
                 )
 
             return _resp(200, {"deleted": True})
+
+        if payload.get("action") == "scan_history":
+            if not _db_ready:
+                return _resp(
+                    503,
+                    {
+                        "error": "history_unavailable",
+                        "retryable": True,
+                    },
+                )
+
+            try:
+                scans = _get_scan_history(uid)
+                return _resp(200, {"scans": scans})
+            except Exception as e:
+                print(f"scan history error: {type(e).__name__}")
+                return _resp(
+                    503,
+                    {
+                        "error": "history_unavailable",
+                        "retryable": True,
+                    },
+                )
 
         if payload.get("action") == "chat":
             return _handle_chat(payload, secrets)
