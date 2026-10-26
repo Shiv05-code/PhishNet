@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:phishnet_app/widgets/auth_widgets.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../theme/app_typography.dart';
+import 'family_social_screen.dart';
 
 class ResultsScreen extends StatelessWidget {
   final bool isGuest;
@@ -90,7 +92,9 @@ class ResultsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             OutlinedButton(
-              onPressed: () {},
+              onPressed: () => Navigator.of(
+                context,
+                ).push(fadeRoute(const FamilySocialScreen())),
               child: const Text(
                 'Get a second opinion',
                 style: TextStyle(fontSize: AppTypography.emphasis),
