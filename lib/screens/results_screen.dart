@@ -5,6 +5,7 @@ import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../theme/app_typography.dart';
 import 'family_social_screen.dart';
+import 'ai_chat_screen.dart';
 
 class ResultsScreen extends StatelessWidget {
   final bool isGuest;
@@ -33,6 +34,31 @@ class ResultsScreen extends StatelessWidget {
                   style: TextStyle(fontSize: AppTypography.body),
                 ),
               ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(
+                    context,
+                    ).push(fadeRoute(const FamilySocialScreen())),
+                  child: const Text(
+                    'Share with Family',
+                    style: TextStyle(fontSize: AppTypography.emphasis),
+                  ),
+                ),
+                const SizedBox(height: 8, width: 5),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(
+                    context,
+                    ).push(fadeRoute(const AiChatScreen())),
+                  child: const Text(
+                    'Ask PhishNet AI',
+                    style: TextStyle(fontSize: AppTypography.emphasis),
+                  ),
+                ),
+              ]
             ),
             const SizedBox(height: 16),
             const Text(
@@ -91,15 +117,6 @@ class ResultsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () => Navigator.of(
-                context,
-                ).push(fadeRoute(const FamilySocialScreen())),
-              child: const Text(
-                'Get a second opinion',
-                style: TextStyle(fontSize: AppTypography.emphasis),
-              ),
-            ),
           ],
         ),
       ),
