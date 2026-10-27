@@ -35,27 +35,75 @@ class ResultsScreen extends StatelessWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            const Text(
+              'Still unsure?',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: AppTypography.title,
+              ),
+            ),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(
-                    context,
-                    ).push(fadeRoute(const FamilySocialScreen())),
-                  child: const Text(
-                    'Share with Family',
-                    style: TextStyle(fontSize: AppTypography.emphasis),
+                Flexible(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(
+                      context,
+                      ).push(fadeRoute(const FamilySocialScreen())),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 2.0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.share, size: 26),
+                          SizedBox(width: 6),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Share with Family',
+                                style: TextStyle(fontSize: AppTypography.emphasis + 2),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8, width: 5),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(
-                    context,
-                    ).push(fadeRoute(const AiChatScreen())),
-                  child: const Text(
-                    'Ask PhishNet AI',
-                    style: TextStyle(fontSize: AppTypography.emphasis),
+                const SizedBox(width: 16),
+                Flexible(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(
+                      context,
+                      ).push(fadeRoute(const AiChatScreen())),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 2.0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.chat, size: 26),
+                          SizedBox(width: 6),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Ask PhishNet AI',
+                                style: TextStyle(fontSize: AppTypography.emphasis + 2),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ]
@@ -108,15 +156,6 @@ class ResultsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Still unsure?',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: AppTypography.title,
-              ),
-            ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
