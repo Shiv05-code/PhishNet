@@ -30,30 +30,30 @@ class _CaptureScreenState extends State<CaptureScreen>
   bool _isTextMode = false;
 
   @override
-void initState() {
-  super.initState();
-  WidgetsBinding.instance.addObserver(this);
-}
-
-@override
-void didChangeMetrics() {
-  final keyboardHeight = WidgetsBinding
-      .instance
-      .platformDispatcher
-      .views
-      .first
-      .viewInsets
-      .bottom;
-
-  if (keyboardHeight == 0 &&
-      mounted &&
-      !_textFocusNode.hasFocus &&
-      _isTextMode) {
-    setState(() {
-      _isTextMode = false;
-    });
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
   }
-}
+
+  @override
+  void didChangeMetrics() {
+    final keyboardHeight = WidgetsBinding
+        .instance
+        .platformDispatcher
+        .views
+        .first
+        .viewInsets
+        .bottom;
+
+    if (keyboardHeight == 0 &&
+        mounted &&
+        !_textFocusNode.hasFocus &&
+        _isTextMode) {
+      setState(() {
+        _isTextMode = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -87,15 +87,7 @@ void didChangeMetrics() {
         return;
       }
 
-      setState(() {
-        _isTextMode = true;
-        _textController.text = extractedText;
-        _textController.selection = TextSelection.fromPosition(
-          TextPosition(offset: extractedText.length),
-        );
-      });
-
-      _textFocusNode.requestFocus();
+      await _submitText(extractedText);
     } catch (_) {
       if (!mounted) return;
 
@@ -214,7 +206,7 @@ void didChangeMetrics() {
                                 ? FigmaGlassButton(
                                     key: const ValueKey('compact-upload'),
                                     width: double.infinity,
-                                    height: 54,
+                                    height: 76,
                                     semanticLabel: 'Upload image',
                                     onPressed: _isReadingText
                                         ? () {}
@@ -238,13 +230,13 @@ void didChangeMetrics() {
                                   ),
                           ),
 
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 52),
 
                           // Scan comes second.
                           FigmaGlassButton(
                             width: double.infinity,
                             height: 54,
-                            semanticLabel: 'Scan with camera',
+                            semanticLabel: 'Scan',
                             onPressed: _isReadingText
                                 ? () {}
                                 : () => _chooseImage(ImageSource.camera),
@@ -258,7 +250,7 @@ void didChangeMetrics() {
                             ),
                           ),
 
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 34),
 
                           // Insert Text stays third.
                           FigmaGlassButton(
@@ -289,11 +281,11 @@ void didChangeMetrics() {
                               textInputAction: TextInputAction.done,
                               onSubmitted: (_) => _submitTypedText(),
                               onTapOutside: (_) {
-  _textFocusNode.unfocus();
-  setState(() {
-    _isTextMode = false;
-  });
-},
+                                _textFocusNode.unfocus();
+                                setState(() {
+                                  _isTextMode = false;
+                                });
+                              },
                               decoration: const InputDecoration(
                                 hintText: 'Type or paste a suspicious message',
                                 border: OutlineInputBorder(),
