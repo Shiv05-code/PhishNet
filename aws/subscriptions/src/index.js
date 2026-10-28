@@ -142,15 +142,20 @@ if (matchingStatuses.length === 0) {
     error: "No matching subscription status found",
   });
 }
+
 const evaluatedStatuses = matchingStatuses.map((item) => ({
-    transactionId: item.transaction.transactionId,
-    originalTransactionId: item.transaction.originalTransactionId,
-    entitlement: evaluateEntitlement(
-      item.status,
-      item.transaction,
-      item.renewalInfo
-    ),
-  }));
+  transactionId: item.transaction.transactionId,
+  originalTransactionId: item.transaction.originalTransactionId,
+  signedDate: item.transaction.signedDate,
+  verifiedTransaction: item.transaction,
+  appleStatus: item.status,
+  entitlement: evaluateEntitlement(
+    item.status,
+    item.transaction,
+    item.renewalInfo
+  ),
+}));
+
 
   const activeEntitlements = evaluatedStatuses.filter(
     (item) => item.entitlement.hasPlusAccess
