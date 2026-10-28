@@ -9,14 +9,13 @@ import 'app_colors.dart';
 import 'family_social_screen.dart';
 import 'ai_chat_screen.dart';
 
-
 class ResultsScreen extends StatelessWidget {
   final bool isGuest;
   final String message;
   final ScanResult? result;
-  
+
   const ResultsScreen({
-    super.key, 
+    super.key,
     this.isGuest = false,
     this.message = '',
     this.result,
@@ -24,23 +23,41 @@ class ResultsScreen extends StatelessWidget {
 
   static const _sample = ScanResult(
     riskLevel: 'high',
-    summary: 'PhishNet found several red flags in this message. Be very careful.',
+    summary:
+        'PhishNet found several red flags in this message. Be very careful.',
     redFlags: [
       'Uses urgent words to pressure you into taking action.',
-      'The link goes to a domain known for phishing.'
+      'The link goes to a domain known for phishing.',
     ],
+    redFlagLabels: ['Urgent Language', 'Suspicious Link'],
+    redFlagIcons: ['schedule', 'link'],
     nextSteps: ['Do not click any links or reply to this message.'],
   );
 
   ScanResult get _r => result ?? _sample;
 
+  IconData _iconFor(String name) => switch (name) {
+    'payments' => Icons.payments_outlined,
+    'lock' => Icons.lock_outline,
+    'person' => Icons.person_outline,
+    'schedule' => Icons.schedule,
+    'link' => Icons.link,
+    'person_search' => Icons.person_search,
+    'currency_exchange' => Icons.currency_exchange,
+    'attaach_file' => Icons.attach_file,
+    'compare_arrows' => Icons.compare_arrows,
+    _ => Icons.error_outline,
+  };
+
   List<({String title, String details, IconData icon})> _flagViews() {
     return [
       for (var i = 0; i < _r.redFlags.length; i++)
         (
-          title: 'Warning sign ${i + 1}',
+          title: (i < _r.redFlagLabels.length && _r.redFlagLabels[i].isNotEmpty)
+              ? _r.redFlagLabels[i]
+              : 'Warning sign ${i + 1}',
           details: _r.redFlags[i],
-          icon: Icons.error_outline,
+          icon: _iconFor(i < _r.redFlagIcons.length ? _r.redFlagIcons[i] : ''),
         ),
     ];
   }
@@ -87,12 +104,17 @@ class ResultsScreen extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: AppTypography.title,
                             color: AppColors.primaryBlue,
-                            height:  1.15,
+                            height: 1.15,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      _ScoreBadge(score: 85, color: riskColor),
+                      if (_r.scamPercentage != null || result == null) ...[
+                        const SizedBox(width: 12),
+                        _ScoreBadge(
+                          score: _r.scamPercentage ?? 0,
+                          color: riskColor,
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -134,9 +156,12 @@ class ResultsScreen extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: () => Navigator.of(
                       context,
-                      ).push(fadeRoute(const FamilySocialScreen())),
+                    ).push(fadeRoute(const FamilySocialScreen())),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                     child: const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 2.0),
@@ -150,7 +175,9 @@ class ResultsScreen extends StatelessWidget {
                               fit: BoxFit.scaleDown,
                               child: Text(
                                 'Share with Family',
-                                style: TextStyle(fontSize: AppTypography.emphasis + 2),
+                                style: TextStyle(
+                                  fontSize: AppTypography.emphasis + 2,
+                                ),
                               ),
                             ),
                           ),
@@ -164,9 +191,12 @@ class ResultsScreen extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: () => Navigator.of(
                       context,
-                      ).push(fadeRoute(const AiChatScreen())),
+                    ).push(fadeRoute(const AiChatScreen())),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                     child: const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 2.0),
@@ -180,7 +210,9 @@ class ResultsScreen extends StatelessWidget {
                               fit: BoxFit.scaleDown,
                               child: Text(
                                 'Ask PhishNet AI',
-                                style: TextStyle(fontSize: AppTypography.emphasis + 2),
+                                style: TextStyle(
+                                  fontSize: AppTypography.emphasis + 2,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -190,15 +222,18 @@ class ResultsScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              ]
+              ],
             ),
             const SizedBox(height: 18),
             _SoftCard(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.shield_outlined,
-                      size: 44, color: AppColors.primaryBlue),
+                  Icon(
+                    Icons.shield_outlined,
+                    size: 44,
+                    color: AppColors.primaryBlue,
+                  ),
                   SizedBox(width: 14),
                   Expanded(
                     child: Column(
