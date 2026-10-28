@@ -98,9 +98,7 @@ class _SessionTimeoutGuardState extends State<SessionTimeoutGuard>
     if (navigator == null) return;
     navigator.pushAndRemoveUntil(
       instantRoute(
-        LoginScreen(
-          notice: 'You were signed out after 1 hour of inactivity.',
-        ),
+        LoginScreen(notice: 'You were signed out after 1 hour of inactivity.'),
       ),
       (_) => false,
     );
