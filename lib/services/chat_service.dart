@@ -43,7 +43,13 @@ class ChatService extends ChangeNotifier {
     this.timeout = const Duration(seconds: 35),
   }) : _client = client ?? http.Client(),
        _idToken = idToken ?? _firebaseIdToken,
-       _endpoint = endpoint ?? const String.fromEnvironment('SCAN_API_URL');
+       _endpoint =
+           endpoint ??
+           const String.fromEnvironment(
+             'SCAN_API_URL',
+             defaultValue:
+                 'https://i2wkmhdclm5epiws4k53bcv35e0jcpmb.lambda-url.us-east-2.on.aws/',
+           );
 
   static final ChatService instance = ChatService();
 

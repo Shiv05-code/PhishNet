@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/chat_service.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/chat_welcome.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../theme/app_typography.dart';
@@ -66,6 +67,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
     await _chat.ask(text);
   }
 
+  /// Fills the input with a starter question so the user can read, edit or
+  /// send it. Chips never send on their own, so a mis-tap costs nothing.
+  void _usePrompt(String question) {
+    _controller.value = TextEditingValue(
+      text: question,
+      selection: TextSelection.collapsed(offset: question.length),
+    );
+    setState(() => _hint = null);
+  }
+
   @override
   Widget build(BuildContext context) {
     final messages = _chat.messages;
@@ -78,7 +89,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
             children: [
               Expanded(
                 child: messages.isEmpty && !_chat.sending
-                    ? _EmptyState(hasScan: _chat.scan != null)
+                    ? ChatWelcome(
+                        hasScan: _chat.scan != null,
+                        onPick: _usePrompt,
+                      )
                     : ListView(
                         controller: _scroll,
                         padding: const EdgeInsets.all(16),
@@ -103,30 +117,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
                 },
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.hasScan});
-  final bool hasScan;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          hasScan
-              ? 'Ask me anything about this message.\nFor example: "Is it safe to click?"'
-              : 'Ask me a question about a suspicious message.\nFor example: "What should I do if I already clicked a link?"',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: AppTypography.emphasis,
-            color: AppColors.text,
           ),
         ),
       ),
