@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'firebase_options.dart';
 import 'screens/loading_screen.dart';
+import 'widgets/session_timeout_guard.dart';
 import 'theme/app_colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -44,14 +45,21 @@ Future<void> main() async {
 class PhishNetApp extends StatelessWidget {
   const PhishNetApp({super.key});
 
+  /// Lets the session guard send the user to Login from outside the widget tree.
+  static final _navigatorKey = GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'PhishNet',
+      navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: _appSystemOverlayStyle,
-        child: child ?? const SizedBox.shrink(),
+        child: SessionTimeoutGuard(
+          navigatorKey: _navigatorKey,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
       theme: ThemeData(
         useMaterial3: true,
