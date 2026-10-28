@@ -13,6 +13,7 @@ import 'login_screen.dart';
 import 'signup_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
+import '../services/aws_subscription_service.dart';
 
 class PaymentPlanScreen extends StatefulWidget {
   const PaymentPlanScreen({super.key});
@@ -45,12 +46,53 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   }
 
   void _listenForPlus() {
-    _plusListener = SubscriptionService.instance.watchSubscription().listen((
-      _,
-    ) async {
-      final hasPlus = await SubscriptionService.instance.hasPlusAccess();
-      if (mounted) setState(() => _hasPlus = hasPlus);
-    });
+    _plusListener?.cancel();
+
+    _plusListener = SubscriptionService.instance
+        .watchEffectiveSubscription()
+        .listen(
+          (subscription) {
+            if (!mounted) return;
+
+            final plan = subscription?['plan'];
+            final status = subscription?['status'];
+            final environment = subscription?['environment'];
+            final expiresAt = subscription?['expiresAt'];
+
+            const useEmulators = bool.fromEnvironment(
+              'USE_FIREBASE_EMULATORS',
+              defaultValue: false,
+            );
+
+            final validEnvironment =
+                environment == 'production' ||
+                (kDebugMode && useEmulators && environment == 'local_test') ||
+                (SubscriptionService.allowSandboxSubscriptions &&
+                    environment == 'sandbox');
+
+            final notExpired =
+                expiresAt is Timestamp &&
+                expiresAt.toDate().isAfter(DateTime.now());
+
+            final hasPlus =
+                plan == 'plus' &&
+                status == 'active' &&
+                validEnvironment &&
+                notExpired;
+
+            setState(() {
+              _hasPlus = hasPlus;
+            });
+
+            debugPrint('SUBSCRIPTION UPDATE: Plan = $plan');
+            debugPrint('SUBSCRIPTION UPDATE: Status = $status');
+            debugPrint('SUBSCRIPTION UPDATE: Environment = $environment');
+            debugPrint('SUBSCRIPTION UPDATE: Has Plus = $hasPlus');
+          },
+          onError: (Object error) {
+            debugPrint('SUBSCRIPTION LISTENER ERROR: $error');
+          },
+        );
   }
 
   Future<void> _initializePurchases() async {
@@ -81,11 +123,42 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   }
 
   Future<void> _handleVerifiedPurchase(PurchaseDetails purchase) async {
-    if (!mounted) return;
+    final transactionId = purchase.purchaseID;
 
-    setState(() {
-      _purchaseMessage = 'Test purchase completed successfully!';
-    });
+    if (transactionId == null || transactionId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _purchaseMessage =
+              'Unable to verify this purchase. Missing transaction ID.';
+        });
+      }
+      return;
+    }
+
+    try {
+      final result = await AwsSubscriptionService.instance.verifyPurchase(
+        transactionId,
+      );
+
+      if (!mounted) return;
+
+      final entitlementGranted = result['entitlementGranted'] == true;
+
+      setState(() {
+        _purchaseMessage = entitlementGranted
+            ? 'Subscription verified. Updating your plan...'
+            : 'Purchase received. Subscription activation is pending.';
+      });
+    } catch (e) {
+      debugPrint('AWS SUBSCRIPTION VERIFICATION ERROR: ${e.runtimeType}');
+
+      if (!mounted) return;
+
+      setState(() {
+        _purchaseMessage =
+            'Unable to verify your subscription. Please try again.';
+      });
+    }
   }
 
   ProductDetails? get _selectedProduct {
@@ -186,7 +259,8 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
               const SizedBox(height: 18),
               if (_isLoggedIn)
                 StreamBuilder<Map<String, dynamic>?>(
-                  stream: SubscriptionService.instance.watchSubscription(),
+                  stream: SubscriptionService.instance
+                      .watchEffectiveSubscription(),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
                       return const Text('Unable to load subscription status.');
@@ -210,19 +284,22 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                         expiresAt is Timestamp &&
                         !expiresAt.toDate().isAfter(DateTime.now());
 
-                    final isDemo = environment == 'local_test';
+                    final isDemo =
+                        environment == 'local_test' || environment == 'sandbox';
 
                     final isActivePlus =
                         plan == 'plus' &&
                         status == 'active' &&
-                        !isExpired &&
                         expiresAt is Timestamp &&
+                        !isExpired &&
                         (environment == 'production' ||
                             (kDebugMode &&
                                 const bool.fromEnvironment(
                                   'USE_FIREBASE_EMULATORS',
                                 ) &&
-                                isDemo));
+                                environment == 'local_test') ||
+                            (SubscriptionService.allowSandboxSubscriptions &&
+                                environment == 'sandbox'));
 
                     final displayPlan = isActivePlus ? 'Plus' : 'Free';
 
@@ -239,12 +316,13 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                         children: [
                           Text(
                             'Current Plan: $displayPlan'
-                            '${isActivePlus && isDemo ? ' (Demo)' : ''}',
+                            '${isActivePlus && isDemo ? (environment == "sandbox" ? " (Sandbox)" : " (Demo)") : ""}',
                             style: const TextStyle(
                               fontSize: AppTypography.body,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+
                           const SizedBox(height: 4),
                           Text(
                             'Status: $displayStatus',
