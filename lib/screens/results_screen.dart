@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:phishnet_app/widgets/auth_widgets.dart';
+import '../models/scan_result.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
@@ -11,12 +12,61 @@ import 'ai_chat_screen.dart';
 
 class ResultsScreen extends StatelessWidget {
   final bool isGuest;
+  final String message;
+  final ScanResult? result;
   
-  const ResultsScreen({super.key, this.isGuest = false});
+  const ResultsScreen({
+    super.key, 
+    this.isGuest = false,
+    this.message = '',
+    this.result,
+  });
+
+  static const _sample = ScanResult(
+    riskLevel: 'high',
+    summary: 'PhishNet found several red flags in this message. Be very careful.',
+    redFlags: [
+      'Uses urgent words to pressure you into taking action.',
+      'The link goes to a domain known for phishing.'
+    ],
+    nextSteps: ['Do not click any links or reply to this message.'],
+  );
+
+  ScanResult get _r => result ?? _sample;
+
+  List<({String title, String details, IconData icon})> _flagViews() {
+    return [
+      for (var i = 0; i < _r.redFlags.length; i++)
+        (
+          title: 'Warning sign ${i + 1}',
+          details: _r.redFlags[i],
+          icon: Icons.error_outline,
+        ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
-    const riskColor = Color(0xFFD64545);
+    final String headline;
+    final String riskLabel;
+    final Color riskColor;
+    switch (_r.riskLevel) {
+      case 'high':
+        headline = 'This looks like a phishing attempt';
+        riskLabel = 'High Risk';
+        riskColor = const Color(0xFFD64545);
+      case 'medium':
+        headline = 'This message may be a scam';
+        riskLabel = 'Medium Risk';
+        riskColor = const Color(0xFFE08A1E);
+      default:
+        headline = 'No strong warning signs found';
+        riskLabel = 'Low Risk';
+        riskColor = const Color(0xFF2E9E5B);
+    }
+
+    final flags = _flagViews();
+
     return Scaffold(
       appBar: const FigmaAppBar(title: 'Results'),
       drawer: AppDrawer(currentPage: 'Results', isGuest: isGuest),
@@ -33,7 +83,7 @@ class ResultsScreen extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'This looks like a phishing attempt',
+                          headline,
                           style: const TextStyle(
                             fontSize: AppTypography.title,
                             color: AppColors.primaryBlue,
@@ -47,8 +97,7 @@ class ResultsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'FishNet found several red flags in this message. '
-                    'Be very careful',
+                    _r.summary,
                     style: const TextStyle(
                       fontSize: AppTypography.body,
                       height: 1.35,
@@ -59,7 +108,7 @@ class ResultsScreen extends StatelessWidget {
                   Align(
                     alignment: Alignment.centerRight,
                     child: Text(
-                      'High Risk',
+                      riskLabel,
                       style: TextStyle(
                         fontSize: AppTypography.label,
                         fontWeight: FontWeight.w600,
@@ -147,7 +196,7 @@ class ResultsScreen extends StatelessWidget {
             _SoftCard(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Icon(Icons.shield_outlined,
                       size: 44, color: AppColors.primaryBlue),
                   SizedBox(width: 14),
@@ -163,14 +212,18 @@ class ResultsScreen extends StatelessWidget {
                           ),
                         ),
                         SizedBox(height: 8),
-                        Text(
-                          'Do not click on any links or reply to this message.',
-                          style: TextStyle(
-                            fontSize: AppTypography.body,
-                            height: 1.35,
-                            color: AppColors.text,
+                        for (final step in _r.nextSteps)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              step,
+                              style: const TextStyle(
+                                fontSize: AppTypography.body,
+                                height: 1.35,
+                                color: AppColors.text,
+                              ),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -178,85 +231,28 @@ class ResultsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Why this might be a scam',
+            Text(
+              _r.riskLevel == 'low'
+                  ? 'What we checked'
+                  : 'Why this might be a scam',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: AppTypography.title,
               ),
             ),
             const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _SoftCard(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Icon(Icons.error_outline,
-                        size: 28, color: AppColors.primaryBlue),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Urgent Language',
-                            style: TextStyle(
-                              fontSize: AppTypography.emphasis,
-                              color: AppColors.primaryBlue,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Uses urgent words to pressure you into taking action.',
-                            style: TextStyle(
-                              fontSize: AppTypography.body,
-                              height: 1.35,
-                              color: AppColors.text,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+            if (flags.isEmpty)
+              const Text(
+                'We did not find strong warning signs. Still, only click '
+                'links or share information if you trust the sender.',
+                style: TextStyle(
+                  fontSize: AppTypography.body,
+                  color: AppColors.text,
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _SoftCard(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Icon(Icons.link, size: 28, color: AppColors.primaryBlue),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Suspicious Link',
-                            style: TextStyle(
-                              fontSize: AppTypography.emphasis,
-                              color: AppColors.primaryBlue,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'The link goes to a domain known for phishing.',
-                            style: TextStyle(
-                              fontSize: AppTypography.body,
-                              height: 1.35,
-                              color: AppColors.text,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+              )
+            else
+              for (final f in flags)
+                _RedFlagTile(title: f.title, details: f.details, icon: f.icon),
           ],
         ),
       ),
@@ -316,6 +312,63 @@ class _ScoreBadge extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RedFlagTile extends StatelessWidget {
+  const _RedFlagTile({
+    required this.title,
+    required this.details,
+    required this.icon,
+  });
+
+  final String title;
+  final String details;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xD9FDFCF9),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x300B718E),
+            blurRadius: 12,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: Icon(icon, size: 28, color: AppColors.primaryBlue),
+        iconColor: AppColors.primaryBlue,
+        collapsedIconColor: AppColors.primaryBlue,
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontSize: AppTypography.emphasis,
+            color: AppColors.primaryBlue,
+          ),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            details,
+            style: const TextStyle(
+              fontSize: AppTypography.body,
+              height: 1.35,
+              color: AppColors.text,
+            ),
+          ),
+        ],
       ),
     );
   }
