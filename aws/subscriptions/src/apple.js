@@ -196,13 +196,32 @@ async function verifyAppleTransaction(
   ) {
     throw new Error("Invalid subscription expiration date");
   }
+  if (
+    transaction.purchaseDate != null &&
+    (!Number.isSafeInteger(transaction.purchaseDate) ||
+      transaction.purchaseDate < 0)
+  ) {
+    throw new Error("Invalid Apple purchase date");
+  }
 
+  if (
+    transaction.signedDate != null &&
+    (!Number.isSafeInteger(transaction.signedDate) ||
+      transaction.signedDate < 0)
+  ) {
+    throw new Error("Invalid Apple signed date");
+  }
   return {
     transactionId: transaction.transactionId,
     originalTransactionId: transaction.originalTransactionId,
     productId: transaction.productId,
+
+    purchaseDate: transaction.purchaseDate ?? null,
+    signedDate: transaction.signedDate ?? null,
+
     expiresAt: new Date(transaction.expiresDate),
     revocationDate: transaction.revocationDate ?? null,
+
     environment,
     appAccountToken: transaction.appAccountToken ?? null,
   };

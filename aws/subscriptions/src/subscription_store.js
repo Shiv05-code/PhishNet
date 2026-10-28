@@ -1,12 +1,24 @@
 
 const { getFirestore } = require("./firebase");
-
+const {
+  validatePurchaseOwnership,
+} = require("./ownership");
+const { getReconciliationRef } = require("./reconciliation");
 async function saveVerifiedSubscription({
   uid,
   accountToken,
   verifiedTransaction,
   entitlement,
+  revision,
+  db: providedDb = null,
 }) {
+  const db = providedDb ?? await getFirestore();
+  // Validate the reconciliation revision.
+  if (!Number.isSafeInteger(revision) || revision < 1) {
+    throw new Error("Invalid reconciliation revision");
+  }
+
+  // Validate subscription ownership information.
   if (!uid || !accountToken || !verifiedTransaction) {
     throw new Error("Missing subscription ownership information");
   }
@@ -27,12 +39,23 @@ async function saveVerifiedSubscription({
 
   if (
     typeof entitlement?.hasPlusAccess !== "boolean" ||
-    !["free", "plus"].includes(entitlement.plan)
+    !["free", "plus"].includes(entitlement.plan) ||
+    !["active", "expired", "revoked", "billing_retry", "inactive"]
+      .includes(entitlement.status) ||
+    !(entitlement.expiresAt instanceof Date) ||
+    !Number.isFinite(entitlement.expiresAt.getTime()) ||
+    entitlement.plan !==
+      (entitlement.hasPlusAccess ? "plus" : "free") ||
+    (entitlement.hasPlusAccess && entitlement.status !== "active")
   ) {
     throw new Error("Invalid verified entitlement");
   }
 
-  const db = await getFirestore();
+  const reconciliationRef = getReconciliationRef(
+    db,
+    environment,
+    originalTransactionId
+  );
 
   const ownershipRef = db
     .collection("appleSubscriptionOwnership")
@@ -40,29 +63,72 @@ async function saveVerifiedSubscription({
 
   const userRef = db.collection("users").doc(uid);
 
-  const subscriptionRef = userRef
-    .collection("subscriptions")
-    .doc("current");
+  const subscriptionDocumentId =
+  environment === "Production" ? "current" : "sandbox";
+
+const subscriptionRef = userRef
+  .collection("subscriptions")
+  .doc(subscriptionDocumentId);
 
   return db.runTransaction(async (tx) => {
-    const [ownershipSnapshot, userSnapshot] =
-      await Promise.all([
-        tx.get(ownershipRef),
-        tx.get(userRef),
-      ]);
+    const [
+      ownershipSnapshot,
+      userSnapshot,
+      subscriptionSnapshot,
+      reconciliationSnapshot,
+    ] = await Promise.all([
+      tx.get(ownershipRef),
+      tx.get(userRef),
+      tx.get(subscriptionRef),
+      tx.get(reconciliationRef),
+    ]);
+    const currentRevision = reconciliationSnapshot.get("revision");
 
-    const existingOwner = ownershipSnapshot.get("uid");
+if (currentRevision !== revision) {
+  throw new Error("Stale reconciliation revision");
+}
 
-    if (existingOwner && existingOwner !== uid) {
-      throw new Error(
-        "Apple subscription belongs to another account"
-      );
-    }
+  const existingOwner = ownershipSnapshot.get("uid");
 
-    if (userSnapshot.get("appAccountToken") !== accountToken) {
-      throw new Error("Firebase account token mismatch");
-    }
+  validatePurchaseOwnership({
+    existingOwner,
+    uid,
+    storedAccountToken: userSnapshot.get("appAccountToken"),
+    verifiedAccountToken: verifiedTransaction.appAccountToken,
+  });
+    const existingEnvironment =
+  subscriptionSnapshot.get("environment");
 
+if (
+  subscriptionSnapshot.exists &&
+  existingEnvironment &&
+  existingEnvironment !== environment.toLowerCase()
+) {
+  throw new Error("Subscription environment mismatch");
+}
+const existingOriginalTransactionId =
+  subscriptionSnapshot.get("originalTransactionId");
+
+if (
+  subscriptionSnapshot.exists &&
+  existingOriginalTransactionId &&
+  existingOriginalTransactionId !== originalTransactionId
+) {
+  throw new Error(
+    "Existing subscription requires reconciliation"
+  );
+}
+const existingStatus = subscriptionSnapshot.get("status");
+
+if (
+  subscriptionSnapshot.exists &&
+  existingStatus === "revoked" &&
+  entitlement.hasPlusAccess
+) {
+  throw new Error(
+    "Revoked subscription requires authoritative reconciliation"
+  );
+}
     tx.set(
       ownershipRef,
       {
