@@ -4,16 +4,19 @@ import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../theme/app_typography.dart';
+import 'app_colors.dart';
 import 'family_social_screen.dart';
 import 'ai_chat_screen.dart';
 
+
 class ResultsScreen extends StatelessWidget {
   final bool isGuest;
-
+  
   const ResultsScreen({super.key, this.isGuest = false});
 
   @override
   Widget build(BuildContext context) {
+    const riskColor = Color(0xFFD64545);
     return Scaffold(
       appBar: const FigmaAppBar(title: 'Results'),
       drawer: AppDrawer(currentPage: 'Results', isGuest: isGuest),
@@ -21,18 +24,50 @@ class ResultsScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Card(
-              color: Colors.red.shade50,
-              child: const ListTile(
-                leading: Icon(Icons.cancel, color: Colors.red),
-                title: Text(
-                  'Scam Detected',
-                  style: TextStyle(fontSize: AppTypography.emphasis),
-                ),
-                subtitle: Text(
-                  '85% confidence',
-                  style: TextStyle(fontSize: AppTypography.body),
-                ),
+            _SoftCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'This looks like a phishing attempt',
+                          style: const TextStyle(
+                            fontSize: AppTypography.title,
+                            color: AppColors.primaryBlue,
+                            height:  1.15,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _ScoreBadge(score: 85, color: riskColor),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'FishNet found several red flags in this message. '
+                    'Be very careful',
+                    style: const TextStyle(
+                      fontSize: AppTypography.body,
+                      height: 1.35,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'High Risk',
+                      style: TextStyle(
+                        fontSize: AppTypography.label,
+                        fontWeight: FontWeight.w600,
+                        color: riskColor,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -108,6 +143,40 @@ class ResultsScreen extends StatelessWidget {
                 ),
               ]
             ),
+            const SizedBox(height: 18),
+            _SoftCard(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Icon(Icons.shield_outlined,
+                      size: 44, color: AppColors.primaryBlue),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'What should you do?',
+                          style: TextStyle(
+                            fontSize: AppTypography.title,
+                            color: AppColors.primaryBlue,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Do not click on any links or reply to this message.',
+                          style: TextStyle(
+                            fontSize: AppTypography.body,
+                            height: 1.35,
+                            color: AppColors.text,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             const Text(
               'Why this might be a scam',
@@ -116,47 +185,136 @@ class ResultsScreen extends StatelessWidget {
                 fontSize: AppTypography.title,
               ),
             ),
-            const SizedBox(height: 8),
-            const Wrap(
-              spacing: 8,
-              children: [
-                Chip(
-                  labelStyle: TextStyle(fontSize: AppTypography.label),
-                  label: Text('Unknown Sender'),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _SoftCard(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Icon(Icons.error_outline,
+                        size: 28, color: AppColors.primaryBlue),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Urgent Language',
+                            style: TextStyle(
+                              fontSize: AppTypography.emphasis,
+                              color: AppColors.primaryBlue,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Uses urgent words to pressure you into taking action.',
+                            style: TextStyle(
+                              fontSize: AppTypography.body,
+                              height: 1.35,
+                              color: AppColors.text,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                Chip(
-                  labelStyle: TextStyle(fontSize: AppTypography.label),
-                  label: Text('Urgent Language'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'What should you do?',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: AppTypography.title,
               ),
             ),
-            const SizedBox(height: 8),
-            const Wrap(
-              spacing: 8,
-              children: [
-                Chip(
-                  labelStyle: TextStyle(fontSize: AppTypography.label),
-                  label: Text('Do Not Click Links'),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _SoftCard(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Icon(Icons.link, size: 28, color: AppColors.primaryBlue),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Suspicious Link',
+                            style: TextStyle(
+                              fontSize: AppTypography.emphasis,
+                              color: AppColors.primaryBlue,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'The link goes to a domain known for phishing.',
+                            style: TextStyle(
+                              fontSize: AppTypography.body,
+                              height: 1.35,
+                              color: AppColors.text,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                Chip(
-                  labelStyle: TextStyle(fontSize: AppTypography.label),
-                  label: Text('Block Sender'),
-                ),
-                Chip(
-                  labelStyle: TextStyle(fontSize: AppTypography.label),
-                  label: Text('Report Message'),
-                ),
-              ],
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SoftCard extends StatelessWidget {
+  const _SoftCard({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xD9FDFCF9),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x300B718E),
+            blurRadius: 12,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _ScoreBadge extends StatelessWidget {
+  const _ScoreBadge({required this.score, required this.color});
+  final int score;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Risk score $score out of 100',
+      child: ExcludeSemantics(
+        child: Container(
+          width: 86,
+          height: 86,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: color, width: 7),
+          ),
+          child: Text(
+            '$score/100',
+            style: TextStyle(
+              fontSize: AppTypography.body,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
         ),
       ),
     );
