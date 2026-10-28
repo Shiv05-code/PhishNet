@@ -18,7 +18,13 @@ class ScanService {
   ScanService({http.Client? client, FirebaseAuth? auth, String? endpoint})
     : _client = client ?? http.Client(),
       _auth = auth ?? FirebaseAuth.instance,
-      _endpoint = endpoint ?? const String.fromEnvironment('SCAN_API_URL');
+      _endpoint =
+          endpoint ??
+          const String.fromEnvironment(
+            'SCAN_API_URL',
+            defaultValue:
+                'https://i2wkmhdclm5epiws4k53bcv35e0jcpmb.lambda-url.us-east-2.on.aws/',
+          );
 
   final http.Client _client;
   final FirebaseAuth _auth;
