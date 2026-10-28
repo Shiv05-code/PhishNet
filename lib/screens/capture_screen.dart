@@ -20,7 +20,8 @@ class CaptureScreen extends StatefulWidget {
   State<CaptureScreen> createState() => _CaptureScreenState();
 }
 
-class _CaptureScreenState extends State<CaptureScreen> {
+class _CaptureScreenState extends State<CaptureScreen>
+    with WidgetsBindingObserver {
   final ImagePicker _imagePicker = ImagePicker();
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
@@ -29,7 +30,34 @@ class _CaptureScreenState extends State<CaptureScreen> {
   bool _isTextMode = false;
 
   @override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addObserver(this);
+}
+
+@override
+void didChangeMetrics() {
+  final keyboardHeight = WidgetsBinding
+      .instance
+      .platformDispatcher
+      .views
+      .first
+      .viewInsets
+      .bottom;
+
+  if (keyboardHeight == 0 &&
+      mounted &&
+      !_textFocusNode.hasFocus &&
+      _isTextMode) {
+    setState(() {
+      _isTextMode = false;
+    });
+  }
+}
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     _textFocusNode.dispose();
     super.dispose();
@@ -260,7 +288,12 @@ class _CaptureScreenState extends State<CaptureScreen> {
                               keyboardType: TextInputType.multiline,
                               textInputAction: TextInputAction.done,
                               onSubmitted: (_) => _submitTypedText(),
-                              onTapOutside: (_) => _textFocusNode.unfocus(),
+                              onTapOutside: (_) {
+  _textFocusNode.unfocus();
+  setState(() {
+    _isTextMode = false;
+  });
+},
                               decoration: const InputDecoration(
                                 hintText: 'Type or paste a suspicious message',
                                 border: OutlineInputBorder(),
