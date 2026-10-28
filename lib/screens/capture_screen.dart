@@ -8,8 +8,8 @@ import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../widgets/figma_glass_button.dart';
-import 'results_screen.dart';
 import '../widgets/auth_widgets.dart';
+import 'results_screen.dart';
 
 class CaptureScreen extends StatefulWidget {
   final bool isGuest;
@@ -118,7 +118,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
     Navigator.of(
       context,
-    ).push(slideRoute(ResultsScreen(isGuest: widget.isGuest)));
+    ).push(slideRoute(ResultsScreen(isGuest: widget.isGuest, isLoading: true)));
   }
 
   void _showMessage(String message) {
