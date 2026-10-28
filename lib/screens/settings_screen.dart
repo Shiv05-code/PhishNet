@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
@@ -14,6 +15,7 @@ import 'privacy_policy_screen.dart';
 import 'terms_conditions_screen.dart';
 import 'signup_screen.dart';
 import '../theme/app_typography.dart';
+import '../theme/auth_theme.dart';
 
 class SettingsScreen extends StatelessWidget {
   final bool isGuest;
@@ -75,19 +77,22 @@ class SettingsScreen extends StatelessWidget {
                             await showDialog<void>(
                               context: context,
                               builder: (dialogContext) {
-                                return AlertDialog(
-                                  title: const Text('Delete your data?'),
-                                  content: const Text(
-                                    'This will permanently delete your account and saved data. '
-                                    'This action cannot be undone. Are you sure you want to proceed?',
-                                  ),
+                                return AppDialog(
+                                  icon: Icons.warning_amber_rounded,
+                                  iconColor: AuthTheme.error,
+                                  title: 'Delete your account?',
+                                  message:
+                                      'This will permanently delete your account and saved data. '
+                                      'This action cannot be undone. Are you sure you want to proceed?',
                                   actions: [
-                                    TextButton(
+                                    AppDialogButton(
+                                      label: 'Cancel',
                                       onPressed: () =>
                                           Navigator.of(dialogContext).pop(),
-                                      child: const Text('Cancel'),
                                     ),
-                                    TextButton(
+                                    AppDialogButton(
+                                      label: 'Yes, Delete',
+                                      color: AuthTheme.error,
                                       onPressed: () async {
                                         Navigator.of(dialogContext).pop();
 
@@ -117,7 +122,6 @@ class SettingsScreen extends StatelessWidget {
                                           );
                                         }
                                       },
-                                      child: const Text('Yes, Delete'),
                                     ),
                                   ],
                                 );
