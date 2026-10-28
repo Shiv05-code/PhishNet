@@ -140,10 +140,10 @@ void main() {
       final handle = tester.ensureSemantics();
       final chat = makeService((_) async => answer('Please do not click it.'));
       await pumpScreen(tester, AiChatScreen(scan: scan, service: chat));
-      expect(
-        find.textContaining('Ask me anything about this message'),
-        findsOneWidget,
-      );
+      // Let the greeting finish typing out before checking the copy.
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.text('Ask me about this message.'), findsOneWidget);
+      expect(find.text('Is it safe to click?'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField), 'Is it safe?');
       await tapOn(tester, find.byTooltip('Send question'));
@@ -156,6 +156,26 @@ void main() {
         findsOneWidget,
       );
       handle.dispose();
+    });
+
+    testWidgets('tapping a starter fills the input and does not send', (
+      tester,
+    ) async {
+      var calls = 0;
+      final chat = makeService((_) async {
+        calls++;
+        return answer('x');
+      });
+      await pumpScreen(tester, AiChatScreen(service: chat));
+      await tester.pump(const Duration(seconds: 2));
+      await tapOn(tester, find.text('I clicked a link'));
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(
+        field.controller!.text,
+        'What should I do if I already clicked a link?',
+      );
+      expect(calls, 0);
     });
 
     testWidgets('empty question explains what to do and sends nothing', (
