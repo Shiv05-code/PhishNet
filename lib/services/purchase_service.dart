@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'aws_subscription_service.dart';
 
 class PurchaseService {
   PurchaseService._();
@@ -88,7 +89,14 @@ class PurchaseService {
   Future<void> purchase(ProductDetails product) async {
     errorMessage = null;
 
-    final purchaseParam = PurchaseParam(productDetails: product);
+    // Retrieve the account token from the authenticated AWS backend.
+    final appAccountToken = await AwsSubscriptionService.instance
+        .getAccountToken();
+
+    final purchaseParam = PurchaseParam(
+      productDetails: product,
+      applicationUserName: appAccountToken,
+    );
 
     await _iap.buyNonConsumable(purchaseParam: purchaseParam);
   }
