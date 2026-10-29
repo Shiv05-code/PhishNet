@@ -59,6 +59,63 @@ void main() {
       expect(chat.messages.length, 4);
     });
 
+    test('New chat saves the previous conversation', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"That looks suspicious."}', 200);
+      });
+
+      await chat.ask('Is this email a scam?');
+
+      expect(chat.startNewChat(), isTrue);
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations.length, 1);
+      expect(chat.conversations.first.title, 'Is this email a scam?');
+      expect(chat.conversations.first.messages.length, 2);
+    });
+
+    test('Opening a previous chat restores its messages', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"Be careful with that link."}', 200);
+      });
+
+      await chat.ask('Check this suspicious link');
+
+      chat.startNewChat();
+
+      final savedId = chat.conversations.first.id;
+
+      expect(chat.openConversation(savedId), isTrue);
+
+      expect(chat.messages.length, 2);
+      expect(chat.messages.first.text, 'Check this suspicious link');
+      expect(chat.messages.last.text, 'Be careful with that link.');
+    });
+
+    test('Switching chats keeps conversations separate', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"Analysis complete."}', 200);
+      });
+
+      await chat.ask('First conversation');
+      chat.startNewChat();
+
+      final firstId = chat.conversations.first.id;
+
+      await chat.ask('Second conversation');
+      chat.startNewChat();
+
+      final secondId = chat.conversations.first.id;
+
+      chat.openConversation(firstId);
+      expect(chat.messages.first.text, 'First conversation');
+
+      chat.openConversation(secondId);
+      expect(chat.messages.first.text, 'Second conversation');
+
+      expect(chat.conversations.length, 2);
+    });
+
     test('empty question is not sent', () async {
       var calls = 0;
       final chat = makeService((_) async {

@@ -28,6 +28,24 @@ class ChatScanContext {
   };
 }
 
+class ChatConversation {
+  ChatConversation({
+    required this.id,
+    required this.title,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.messages,
+    this.scan,
+  });
+
+  final String id;
+  String title;
+  final DateTime createdAt;
+  DateTime updatedAt;
+  final List<ChatMessage> messages;
+  final ChatScanContext? scan;
+}
+
 typedef IdTokenProvider = Future<String?> Function();
 
 Future<String?> _firebaseIdToken() async =>
@@ -68,6 +86,14 @@ class ChatService extends ChangeNotifier {
   final Duration timeout;
 
   final List<ChatMessage> _messages = [];
+  final List<ChatConversation> _conversations = [];
+
+  String? _activeConversationId;
+  int _nextConversationId = 0;
+
+  List<ChatConversation> get conversations => List.unmodifiable(_conversations);
+
+  String? get activeConversationId => _activeConversationId;
   ChatScanContext? _scan;
   bool _sending = false;
   String? _error;
@@ -80,6 +106,97 @@ class ChatService extends ChangeNotifier {
   /// Plain-language error for the last failed question, or null.
   String? get error => _error;
   bool get canRetry => _error != null && _pendingQuestion != null;
+  void _saveCurrentConversation() {
+    if (_messages.isEmpty) return;
+
+    final now = DateTime.now();
+
+    if (_activeConversationId != null) {
+      final index = _conversations.indexWhere(
+        (conversation) => conversation.id == _activeConversationId,
+      );
+
+      if (index != -1) {
+        _conversations[index].messages
+          ..clear()
+          ..addAll(_messages);
+
+        _conversations[index].updatedAt = now;
+        return;
+      }
+    }
+
+    final firstQuestion = _messages
+        .where((message) => message.fromUser)
+        .map((message) => message.text)
+        .firstOrNull;
+
+    final title = firstQuestion == null
+        ? 'New Conversation'
+        : firstQuestion.length > 40
+        ? '${firstQuestion.substring(0, 40)}...'
+        : firstQuestion;
+
+    final conversation = ChatConversation(
+      id: 'chat-${++_nextConversationId}',
+      title: title,
+      createdAt: now,
+      updatedAt: now,
+      messages: List.of(_messages),
+      scan: _scan,
+    );
+
+    _conversations.insert(0, conversation);
+    _activeConversationId = conversation.id;
+  }
+
+  bool startNewChat() {
+    if (_sending) return false;
+
+    _saveCurrentConversation();
+
+    _messages.clear();
+    _activeConversationId = null;
+    _scan = null;
+    _error = null;
+    _pendingQuestion = null;
+
+    notifyListeners();
+    return true;
+  }
+
+  bool openConversation(String id) {
+    if (_sending) return false;
+
+    final index = _conversations.indexWhere(
+      (conversation) => conversation.id == id,
+    );
+
+    if (index == -1) return false;
+
+    if (_activeConversationId == id) return true;
+
+    _saveCurrentConversation();
+
+    final conversation = _conversations[index];
+
+    _messages
+      ..clear()
+      ..addAll(conversation.messages);
+
+    _activeConversationId = conversation.id;
+    _scan = conversation.scan;
+    _error = null;
+    _pendingQuestion = null;
+
+    conversation.updatedAt = DateTime.now();
+
+    _conversations.removeAt(index);
+    _conversations.insert(0, conversation);
+
+    notifyListeners();
+    return true;
+  }
 
   /// Call when Chat opens. Opening from a different scan starts a fresh
   /// conversation about it; opening with no scan (e.g. from the menu) keeps
@@ -87,6 +204,10 @@ class ChatService extends ChangeNotifier {
   void openFor(ChatScanContext? scan) {
     if (scan == null) return;
     if (_scan?.message == scan.message) return;
+    if (_sending) return;
+
+    _saveCurrentConversation();
+    _activeConversationId = null;
     _messages.clear();
     _scan = scan;
     _error = null;
