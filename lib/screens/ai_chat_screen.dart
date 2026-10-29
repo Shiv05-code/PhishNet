@@ -1,5 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:pasteboard/pasteboard.dart';
+
 import '../services/chat_service.dart';
+import '../services/image_text_reader.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/chat_welcome.dart';
 import '../widgets/figma_app_bar.dart';
@@ -24,8 +30,12 @@ class AiChatScreen extends StatefulWidget {
 class _AiChatScreenState extends State<AiChatScreen> {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
+  final _picker = ImagePicker();
   late final ChatService _chat = widget.service ?? ChatService.instance;
   String? _hint;
+
+  /// A photo chosen or pasted but not sent yet.
+  String? _pendingImage;
 
   @override
   void initState() {
@@ -58,13 +68,95 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   Future<void> _submit() async {
     final text = _controller.text;
-    if (text.trim().isEmpty) {
+    final image = _pendingImage;
+    if (text.trim().isEmpty && image == null) {
       setState(() => _hint = 'Please type a question first.');
       return;
     }
-    setState(() => _hint = null);
-    _controller.clear();
-    await _chat.ask(text);
+    setState(() {
+      _hint = null;
+      _pendingImage = null;
+    });
+    if (image != null) {
+      await _chat.sendImage(image);
+      if (_chat.error != null) {
+        // Keep the photo and the typed text so the user can try again.
+        if (mounted) setState(() => _pendingImage = image);
+        return;
+      }
+    }
+    if (text.trim().isNotEmpty) {
+      _controller.clear();
+      await _chat.ask(text);
+    }
+  }
+
+  /// The + button: choose where the photo comes from, like Messages.
+  Future<void> _showAttachMenu() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text(
+                'Photo Library',
+                style: TextStyle(fontSize: AppTypography.emphasis),
+              ),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text(
+                'Take Photo',
+                style: TextStyle(fontSize: AppTypography.emphasis),
+              ),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    try {
+      final picked = await _picker.pickImage(source: source);
+      if (picked == null || !mounted) return;
+      setState(() {
+        _pendingImage = picked.path;
+        _hint = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _hint = 'We couldn\'t open your photos. Please try again.',
+      );
+    }
+  }
+
+  /// Reads an image from the clipboard (long-press the input > Paste Image).
+  Future<void> _pasteImage() async {
+    try {
+      final bytes = await Pasteboard.image;
+      if (bytes == null || bytes.isEmpty) {
+        if (!mounted) return;
+        setState(() => _hint = 'There is no image on the clipboard.');
+        return;
+      }
+      final path = await saveTempImage(bytes);
+      if (!mounted) return;
+      setState(() {
+        _pendingImage = path;
+        _hint = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _hint = 'We couldn\'t paste that image. Please try again.',
+      );
+    }
   }
 
   /// Fills the input with a starter question so the user can read, edit or
@@ -111,6 +203,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
                 controller: _controller,
                 hint: _hint,
                 enabled: !_chat.sending,
+                pendingImage: _pendingImage,
+                onAttach: _showAttachMenu,
+                onPasteImage: _pasteImage,
+                onRemoveImage: () => setState(() => _pendingImage = null),
                 onSubmit: _submit,
                 onChanged: () {
                   if (_hint != null) setState(() => _hint = null);
@@ -131,9 +227,12 @@ class _Bubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mine = message.fromUser;
+    final image = message.imagePath;
     return Semantics(
       container: true,
-      label: mine
+      label: image != null
+          ? 'You attached a photo'
+          : mine
           ? 'You asked: ${message.text}'
           : 'PhishNet answered: ${message.text}',
       child: ExcludeSemantics(
@@ -149,14 +248,27 @@ class _Bubble extends StatelessWidget {
               color: mine ? AppColors.primaryBlue : AppColors.cardSurface,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Text(
-              message.text,
-              style: TextStyle(
-                fontSize: AppTypography.body,
-                height: 1.35,
-                color: mine ? Colors.white : AppColors.text,
-              ),
-            ),
+            child: image != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(
+                      File(image),
+                      height: 220,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white,
+                      ),
+                    ),
+                  )
+                : Text(
+                    message.text,
+                    style: TextStyle(
+                      fontSize: AppTypography.body,
+                      height: 1.35,
+                      color: mine ? Colors.white : AppColors.text,
+                    ),
+                  ),
           ),
         ),
       ),
@@ -247,6 +359,10 @@ class _InputBar extends StatelessWidget {
     required this.controller,
     required this.hint,
     required this.enabled,
+    required this.pendingImage,
+    required this.onAttach,
+    required this.onPasteImage,
+    required this.onRemoveImage,
     required this.onSubmit,
     required this.onChanged,
   });
@@ -254,6 +370,10 @@ class _InputBar extends StatelessWidget {
   final TextEditingController controller;
   final String? hint;
   final bool enabled;
+  final String? pendingImage;
+  final VoidCallback onAttach;
+  final VoidCallback onPasteImage;
+  final VoidCallback onRemoveImage;
   final VoidCallback onSubmit;
   final VoidCallback onChanged;
 
@@ -278,12 +398,78 @@ class _InputBar extends StatelessWidget {
                 ),
               ),
             ),
+          if (pendingImage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(
+                      File(pendingImage!),
+                      width: 72,
+                      height: 72,
+                      fit: BoxFit.cover,
+                      semanticLabel: 'Photo ready to send',
+                      errorBuilder: (context, error, stackTrace) =>
+                          const SizedBox(
+                            width: 72,
+                            height: 72,
+                            child: Icon(Icons.broken_image_outlined),
+                          ),
+                    ),
+                  ),
+                  Positioned(
+                    top: -10,
+                    right: -10,
+                    child: IconButton(
+                      tooltip: 'Remove photo',
+                      iconSize: 18,
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.text,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(32, 32),
+                      ),
+                      onPressed: onRemoveImage,
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              IconButton.filled(
+                tooltip: 'Add a photo',
+                iconSize: 28,
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.fieldFill,
+                  foregroundColor: AppColors.primaryBlue,
+                  minimumSize: const Size(56, 56),
+                ),
+                onPressed: enabled ? onAttach : null,
+                icon: const Icon(Icons.add),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: TextField(
                   controller: controller,
+                  contextMenuBuilder: (context, editableTextState) =>
+                      AdaptiveTextSelectionToolbar.buttonItems(
+                        anchors: editableTextState.contextMenuAnchors,
+                        buttonItems: [
+                          ...editableTextState.contextMenuButtonItems,
+                          ContextMenuButtonItem(
+                            label: 'Paste Image',
+                            onPressed: () {
+                              editableTextState.hideToolbar();
+                              onPasteImage();
+                            },
+                          ),
+                        ],
+                      ),
                   enabled: enabled,
                   minLines: 1,
                   maxLines: 4,
