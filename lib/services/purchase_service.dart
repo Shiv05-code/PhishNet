@@ -135,26 +135,17 @@ class PurchaseService {
     } // Closes the switch statement
 
     if (purchase.pendingCompletePurchase) {
-      final purchaseId = purchase.purchaseID;
+      try {
+        await _iap.completePurchase(purchase);
+        debugPrint('STOREKIT: Transaction completion succeeded');
+      } catch (e, stackTrace) {
+        debugPrint('STOREKIT COMPLETE ERROR: $e');
+        debugPrintStack(stackTrace: stackTrace);
 
-      debugPrint('DEMO STOREKIT STATUS: ${purchase.status}');
-      debugPrint('DEMO STOREKIT PRODUCT: ${purchase.productID}');
-      debugPrint('DEMO STOREKIT ID: $purchaseId');
-
-      if (purchaseId == null || purchaseId.isEmpty) {
-        errorMessage = 'Test transaction has no purchase ID. Unable to finish.';
-      } else {
-        try {
-          await _iap.completePurchase(purchase);
-          debugPrint('DEMO STOREKIT: Transaction completion succeeded');
-        } catch (e, stackTrace) {
-          debugPrint('DEMO STOREKIT COMPLETE ERROR: $e');
-          debugPrintStack(stackTrace: stackTrace);
-
-          errorMessage = 'Purchase processing could not be completed.';
-        }
+        errorMessage = 'Purchase processing could not be completed.';
       }
     }
+
     onChanged();
   } // Closes _handlePurchase
 
