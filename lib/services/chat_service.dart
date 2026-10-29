@@ -106,6 +106,7 @@ class ChatService extends ChangeNotifier {
   /// Plain-language error for the last failed question, or null.
   String? get error => _error;
   bool get canRetry => _error != null && _pendingQuestion != null;
+
   void _saveCurrentConversation() {
     if (_messages.isEmpty) return;
 
@@ -117,11 +118,16 @@ class ChatService extends ChangeNotifier {
       );
 
       if (index != -1) {
-        _conversations[index].messages
+        final conversation = _conversations[index];
+
+        conversation.messages
           ..clear()
           ..addAll(_messages);
 
-        _conversations[index].updatedAt = now;
+        conversation.updatedAt = now;
+
+        _conversations.removeAt(index);
+        _conversations.insert(0, conversation);
         return;
       }
     }
@@ -178,7 +184,9 @@ class ChatService extends ChangeNotifier {
 
     _saveCurrentConversation();
 
-    final conversation = _conversations[index];
+    final conversation = _conversations.firstWhere(
+      (conversation) => conversation.id == id,
+    );
 
     _messages
       ..clear()
@@ -191,7 +199,7 @@ class ChatService extends ChangeNotifier {
 
     conversation.updatedAt = DateTime.now();
 
-    _conversations.removeAt(index);
+    _conversations.remove(conversation);
     _conversations.insert(0, conversation);
 
     notifyListeners();
@@ -215,13 +223,17 @@ class ChatService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clears the conversation (e.g. "New chat").
   void reset() {
+    if (_sending) return;
+
+    _saveCurrentConversation();
+
     _messages.clear();
+    _activeConversationId = null;
     _scan = null;
     _error = null;
     _pendingQuestion = null;
-    _sending = false;
+
     notifyListeners();
   }
 
@@ -234,6 +246,7 @@ class ChatService extends ChangeNotifier {
         ? text.substring(0, maxQuestionLength)
         : text;
     _messages.add(ChatMessage(fromUser: true, text: clipped));
+    _saveCurrentConversation();
     await _send(clipped);
     return true;
   }
@@ -254,6 +267,7 @@ class ChatService extends ChangeNotifier {
     try {
       final answer = await _request(question);
       _messages.add(ChatMessage(fromUser: false, text: answer));
+      _saveCurrentConversation();
       _pendingQuestion = null;
     } on _ChatFailure catch (e) {
       _error = e.message;

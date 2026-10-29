@@ -1,13 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:phishnet_app/screens/ai_chat_screen.dart';
 import 'package:phishnet_app/services/chat_service.dart';
-
+import 'dart:async';
 import 'support/test_helpers.dart';
 
 ChatService makeService(
@@ -34,6 +33,30 @@ const scan = ChatScanContext(
 
 void main() {
   group('ChatService', () {
+    test('Cannot switch chats while an AI response is pending', () async {
+      final responseCompleter = Completer<http.Response>();
+
+      final chat = makeService((request) {
+        return responseCompleter.future;
+      });
+
+      final pendingRequest = chat.ask('Analyze this suspicious email');
+
+      expect(chat.sending, isTrue);
+      expect(chat.startNewChat(), isFalse);
+      expect(chat.openConversation('nonexistent'), isFalse);
+
+      responseCompleter.complete(
+        http.Response('{"answer":"This email looks suspicious."}', 200),
+      );
+
+      await pendingRequest;
+
+      expect(chat.sending, isFalse);
+      expect(chat.messages.length, 2);
+      expect(chat.conversations.length, 1);
+    });
+
     test('sends question, scan and history with the sign-in token', () async {
       final sent = <Map<String, dynamic>>[];
       late http.Request seen;
@@ -58,7 +81,32 @@ void main() {
       ]);
       expect(chat.messages.length, 4);
     });
+    test('Active conversation appears in recent chats immediately', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"Stay cautious."}', 200);
+      });
 
+      await chat.ask('Is this email suspicious?');
+
+      expect(chat.conversations.length, 1);
+      expect(chat.activeConversationId, chat.conversations.first.id);
+      expect(chat.conversations.first.messages.length, 2);
+    });
+
+    test('Reset preserves the previous conversation', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"This could be phishing."}', 200);
+      });
+
+      await chat.ask('Check this message');
+
+      chat.reset();
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations.length, 1);
+      expect(chat.conversations.first.messages.length, 2);
+      expect(chat.activeConversationId, isNull);
+    });
     test('New chat saves the previous conversation', () async {
       final chat = makeService((request) async {
         return http.Response('{"answer":"That looks suspicious."}', 200);
