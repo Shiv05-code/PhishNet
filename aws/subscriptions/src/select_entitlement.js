@@ -5,32 +5,24 @@ function selectCurrentEntitlement(evaluatedStatuses) {
       throw new Error("No subscription statuses available");
     }
 
-    for (const item of evaluatedStatuses) {
-      if (!item.entitlement ||
-          typeof item.entitlement.hasPlusAccess !== "boolean") {
-        throw new Error("Invalid subscription entitlement");
-      }
-
-      if (!Number.isSafeInteger(item.signedDate) ||
-          item.signedDate < 0) {
-        throw new Error("Missing authoritative signed date");
-      }
+    if (evaluatedStatuses.length !== 1) {
+      throw new Error(
+        "Multiple subscription statuses require reconciliation"
+      );
     }
 
-    const sorted = [...evaluatedStatuses].sort(
-      (a, b) => b.signedDate - a.signedDate
-    );
+    const selected = evaluatedStatuses[0];
 
     if (
-      sorted.length > 1 &&
-      sorted[0].signedDate === sorted[1].signedDate &&
-      sorted[0].entitlement.hasPlusAccess !==
-        sorted[1].entitlement.hasPlusAccess
+      !selected.entitlement ||
+      typeof selected.entitlement.hasPlusAccess !== "boolean" ||
+      !selected.verifiedTransaction ||
+      !selected.originalTransactionId
     ) {
-      throw new Error("Conflicting subscription statuses");
+      throw new Error("Invalid subscription status");
     }
 
-    return sorted[0];
+    return selected;
   }
 
   module.exports = { selectCurrentEntitlement };

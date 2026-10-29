@@ -26,6 +26,17 @@ const AUTH_ERRORS = new Set([
   "auth/user-disabled",
   "auth/user-not-found",
 ]);
+const {
+  selectCurrentEntitlement,
+} = require("./select_entitlement");
+
+const {
+  beginReconciliation,
+} = require("./reconciliation");
+
+const {
+  saveVerifiedSubscription,
+} = require("./subscription_store");
 
 exports.handler = async (event) => {
   const method =
@@ -157,20 +168,56 @@ const evaluatedStatuses = matchingStatuses.map((item) => ({
 }));
 
 
-  const activeEntitlements = evaluatedStatuses.filter(
-    (item) => item.entitlement.hasPlusAccess
-  );
 
-  const hasActivePlus = activeEntitlements.length > 0;
 
-// Read-only verification stage.
-// No Firestore entitlement updates yet.
-return respond(200, {
+const selected = selectCurrentEntitlement(evaluatedStatuses);
+
+const selectedTransaction = selected.verifiedTransaction;
+const entitlement = selected.entitlement;
+
+if (
+  selectedTransaction.originalTransactionId !==
+    verifiedTransaction.originalTransactionId ||
+  selectedTransaction.appAccountToken !== accountToken ||
+  selectedTransaction.environment !== appleResponse.environment
+) {
+  return respond(403, {
+    verified: false,
+    entitlementGranted: false,
+    error: "Subscription ownership or environment mismatch",
+  });
+}
+
+const revision = await beginReconciliation({
+  environment: selectedTransaction.environment,
+  originalTransactionId: selectedTransaction.originalTransactionId,
+});
+
+const saved = await saveVerifiedSubscription({
+  uid,
+  accountToken,
+  verifiedTransaction: selectedTransaction,
+  entitlement,
+  revision,
+});
+
+if (!saved.success) {
+  return respond(503, {
     verified: true,
     entitlementGranted: false,
-    eligibleForPlus: hasActivePlus,
-    message: "Apple subscription eligibility evaluated",
+    error: "Subscription could not be saved",
   });
+}
+
+return respond(200, {
+  verified: true,
+  entitlementGranted: entitlement.hasPlusAccess,
+  eligibleForPlus: entitlement.hasPlusAccess,
+  plan: saved.plan,
+  status: saved.status,
+});
+
+
   } catch (error) {
     if (AUTH_ERRORS.has(error?.code)) {
       return respond(401, {

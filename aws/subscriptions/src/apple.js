@@ -325,6 +325,7 @@ if (item.signedRenewalInfo) {
 }
 
 matches.push({
+  subscriptionGroupIdentifier: group.subscriptionGroupIdentifier,
   status: item.status,
   transaction,
   renewalInfo,

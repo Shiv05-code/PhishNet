@@ -6,9 +6,14 @@ const {
   selectCurrentEntitlement,
 } = require("../src/select_entitlement");
 
-function makeStatus(signedDate, hasPlusAccess) {
+function makeStatus(hasPlusAccess) {
   return {
-    signedDate,
+    originalTransactionId: "1234567890",
+    verifiedTransaction: {
+      transactionId: "1234567890",
+      originalTransactionId: "1234567890",
+      environment: "Sandbox",
+    },
     entitlement: {
       hasPlusAccess,
       plan: hasPlusAccess ? "plus" : "free",
@@ -16,28 +21,20 @@ function makeStatus(signedDate, hasPlusAccess) {
   };
 }
 
-test("Selects the most recently signed status", () => {
-  const statuses = [
-    makeStatus(1000, true),
-    makeStatus(3000, false),
-    makeStatus(2000, true),
-  ];
-
-  const selected = selectCurrentEntitlement(statuses);
-
-  assert.equal(selected.signedDate, 3000);
-  assert.equal(selected.entitlement.plan, "free");
-});
-
-test("Selects active Plus when it is most recent", () => {
-  const statuses = [
-    makeStatus(1000, false),
-    makeStatus(3000, true),
-  ];
-
-  const selected = selectCurrentEntitlement(statuses);
+test("Accepts a single active Plus subscription", () => {
+  const selected = selectCurrentEntitlement([
+    makeStatus(true),
+  ]);
 
   assert.equal(selected.entitlement.plan, "plus");
+});
+
+test("Accepts a single inactive subscription", () => {
+  const selected = selectCurrentEntitlement([
+    makeStatus(false),
+  ]);
+
+  assert.equal(selected.entitlement.plan, "free");
 });
 
 test("Rejects empty subscription statuses", () => {
@@ -47,30 +44,32 @@ test("Rejects empty subscription statuses", () => {
   );
 });
 
-test("Rejects conflicting statuses with equal dates", () => {
-  const statuses = [
-    makeStatus(3000, true),
-    makeStatus(3000, false),
-  ];
-
+test("Rejects multiple subscription statuses", () => {
   assert.throws(
-    () => selectCurrentEntitlement(statuses),
-    /Conflicting subscription statuses/
+    () => selectCurrentEntitlement([
+      makeStatus(true),
+      makeStatus(false),
+    ]),
+    /Multiple subscription statuses require reconciliation/
   );
 });
 
-test("Rejects missing signed dates", () => {
-  const statuses = [
-    {
-      entitlement: {
-        hasPlusAccess: true,
-        plan: "plus",
-      },
-    },
-  ];
+test("Rejects missing verified transaction", () => {
+  const invalid = makeStatus(true);
+  delete invalid.verifiedTransaction;
 
   assert.throws(
-    () => selectCurrentEntitlement(statuses),
-    /Missing authoritative signed date/
+    () => selectCurrentEntitlement([invalid]),
+    /Invalid subscription status/
+  );
+});
+
+test("Rejects missing entitlement", () => {
+  const invalid = makeStatus(true);
+  delete invalid.entitlement;
+
+  assert.throws(
+    () => selectCurrentEntitlement([invalid]),
+    /Invalid subscription status/
   );
 });
