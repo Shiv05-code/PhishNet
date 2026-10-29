@@ -11,6 +11,7 @@ import '../theme/app_typography.dart';
 import 'app_colors.dart';
 import 'family_social_screen.dart';
 import 'ai_chat_screen.dart';
+import '../services/chat_service.dart';
 
 class ResultsScreen extends StatefulWidget {
   final bool isGuest;
@@ -99,6 +100,34 @@ class _ResultsScreenState extends State<ResultsScreen>
   }
 
   ScanResult get _r => widget.result ?? ResultsScreen._sample;
+
+  /// Opens AI Chat about this scan. Only a real scan is handed to Chat, not
+  /// the sample shown before one exists.
+  void _openChat() {
+    final result = widget.result;
+    final message = widget.message.trim();
+    final scan = result == null || message.isEmpty
+        ? null
+        : ChatScanContext(
+            message: message,
+            assessment: {
+              'risk_level': result.riskLevel,
+              'scam_percentage': result.scamPercentage,
+              'summary': result.summary,
+              'red_flags': [
+                for (var i = 0; i < result.redFlags.length; i++)
+                  {
+                    'label': i < result.redFlagLabels.length
+                        ? result.redFlagLabels[i]
+                        : '',
+                    'description': result.redFlags[i],
+                  },
+              ],
+              'next_steps': result.nextSteps,
+            },
+          );
+    Navigator.of(context).push(fadeRoute(AiChatScreen(scan: scan)));
+  }
 
   /// A light haptic once the score has finished filling, scaled to risk.
   void _hapticWhenScored() {
@@ -302,9 +331,7 @@ class _ResultsScreenState extends State<ResultsScreen>
                       const SizedBox(width: 16),
                       Flexible(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.of(
-                            context,
-                          ).push(fadeRoute(const AiChatScreen())),
+                          onPressed: _openChat,
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
