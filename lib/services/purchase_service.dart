@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'aws_subscription_service.dart';
 
 class PurchaseService {
   PurchaseService._();
@@ -88,7 +89,14 @@ class PurchaseService {
   Future<void> purchase(ProductDetails product) async {
     errorMessage = null;
 
-    final purchaseParam = PurchaseParam(productDetails: product);
+    // Retrieve the account token from the authenticated AWS backend.
+    final appAccountToken = await AwsSubscriptionService.instance
+        .getAccountToken();
+
+    final purchaseParam = PurchaseParam(
+      productDetails: product,
+      applicationUserName: appAccountToken,
+    );
 
     await _iap.buyNonConsumable(purchaseParam: purchaseParam);
   }
@@ -127,26 +135,17 @@ class PurchaseService {
     } // Closes the switch statement
 
     if (purchase.pendingCompletePurchase) {
-      final purchaseId = purchase.purchaseID;
+      try {
+        await _iap.completePurchase(purchase);
+        debugPrint('STOREKIT: Transaction completion succeeded');
+      } catch (e, stackTrace) {
+        debugPrint('STOREKIT COMPLETE ERROR: $e');
+        debugPrintStack(stackTrace: stackTrace);
 
-      debugPrint('DEMO STOREKIT STATUS: ${purchase.status}');
-      debugPrint('DEMO STOREKIT PRODUCT: ${purchase.productID}');
-      debugPrint('DEMO STOREKIT ID: $purchaseId');
-
-      if (purchaseId == null || purchaseId.isEmpty) {
-        errorMessage = 'Test transaction has no purchase ID. Unable to finish.';
-      } else {
-        try {
-          await _iap.completePurchase(purchase);
-          debugPrint('DEMO STOREKIT: Transaction completion succeeded');
-        } catch (e, stackTrace) {
-          debugPrint('DEMO STOREKIT COMPLETE ERROR: $e');
-          debugPrintStack(stackTrace: stackTrace);
-
-          errorMessage = 'Purchase processing could not be completed.';
-        }
+        errorMessage = 'Purchase processing could not be completed.';
       }
     }
+
     onChanged();
   } // Closes _handlePurchase
 

@@ -8,8 +8,10 @@ import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../widgets/figma_glass_button.dart';
-import '../widgets/auth_widgets.dart';
 import 'results_screen.dart';
+import '../widgets/auth_widgets.dart';
+import '../models/scan_result.dart';
+import '../services/scan_service.dart';
 
 class CaptureScreen extends StatefulWidget {
   final bool isGuest;
@@ -20,44 +22,19 @@ class CaptureScreen extends StatefulWidget {
   State<CaptureScreen> createState() => _CaptureScreenState();
 }
 
-class _CaptureScreenState extends State<CaptureScreen>
-    with WidgetsBindingObserver {
+class _CaptureScreenState extends State<CaptureScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
+  final ScanService _scanService = ScanService();
 
   bool _isReadingText = false;
   bool _isTextMode = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didChangeMetrics() {
-    final keyboardHeight = WidgetsBinding
-        .instance
-        .platformDispatcher
-        .views
-        .first
-        .viewInsets
-        .bottom;
-
-    if (keyboardHeight == 0 &&
-        mounted &&
-        !_textFocusNode.hasFocus &&
-        _isTextMode) {
-      setState(() {
-        _isTextMode = false;
-      });
-    }
-  }
+  bool _isScanning = false;
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    _scanService.dispose();
     _textController.dispose();
     _textFocusNode.dispose();
     super.dispose();
@@ -87,7 +64,15 @@ class _CaptureScreenState extends State<CaptureScreen>
         return;
       }
 
-      await _submitText(extractedText);
+      setState(() {
+        _isTextMode = true;
+        _textController.text = extractedText;
+        _textController.selection = TextSelection.fromPosition(
+          TextPosition(offset: extractedText.length),
+        );
+      });
+
+      _textFocusNode.requestFocus();
     } catch (_) {
       if (!mounted) return;
 
@@ -136,9 +121,20 @@ class _CaptureScreenState extends State<CaptureScreen>
 
     if (!mounted) return;
 
-    Navigator.of(
-      context,
-    ).push(slideRoute(ResultsScreen(isGuest: widget.isGuest, isLoading: true)));
+    setState(() => _isScanning = true);
+    try {
+      final ScanResult result = await _scanService.analyzeMessage(text);
+      if (!mounted) return;
+      Navigator.of(context).push(
+        slideRoute(
+          ResultsScreen(isGuest: widget.isGuest, message: text, result: result),
+        ),
+      );
+    } on ScanException catch (e) {
+      if (mounted) _showMessage(e.message);
+    } finally {
+      if (mounted) setState(() => _isScanning = false);
+    }
   }
 
   void _showMessage(String message) {
@@ -206,7 +202,7 @@ class _CaptureScreenState extends State<CaptureScreen>
                                 ? FigmaGlassButton(
                                     key: const ValueKey('compact-upload'),
                                     width: double.infinity,
-                                    height: 76,
+                                    height: 54,
                                     semanticLabel: 'Upload image',
                                     onPressed: _isReadingText
                                         ? () {}
@@ -230,13 +226,13 @@ class _CaptureScreenState extends State<CaptureScreen>
                                   ),
                           ),
 
-                          const SizedBox(height: 52),
+                          const SizedBox(height: 18),
 
                           // Scan comes second.
                           FigmaGlassButton(
                             width: double.infinity,
                             height: 54,
-                            semanticLabel: 'Scan',
+                            semanticLabel: 'Scan with camera',
                             onPressed: _isReadingText
                                 ? () {}
                                 : () => _chooseImage(ImageSource.camera),
@@ -250,7 +246,7 @@ class _CaptureScreenState extends State<CaptureScreen>
                             ),
                           ),
 
-                          const SizedBox(height: 34),
+                          const SizedBox(height: 14),
 
                           // Insert Text stays third.
                           FigmaGlassButton(
@@ -280,17 +276,27 @@ class _CaptureScreenState extends State<CaptureScreen>
                               keyboardType: TextInputType.multiline,
                               textInputAction: TextInputAction.done,
                               onSubmitted: (_) => _submitTypedText(),
-                              onTapOutside: (_) {
-                                _textFocusNode.unfocus();
-                                setState(() {
-                                  _isTextMode = false;
-                                });
-                              },
+                              onTapOutside: (_) => _textFocusNode.unfocus(),
                               decoration: const InputDecoration(
                                 hintText: 'Type or paste a suspicious message',
                                 border: OutlineInputBorder(),
                                 filled: true,
                                 fillColor: Colors.white70,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            FigmaGlassButton(
+                              width: double.infinity,
+                              height: 54,
+                              semanticLabel: 'Check message',
+                              onPressed: _isScanning ? () {} : _submitTypedText,
+                              child: const Text(
+                                'Check Message',
+                                style: TextStyle(
+                                  fontFamily: 'SFProText',
+                                  fontSize: AppTypography.heading,
+                                  color: AppColors.primaryBlue,
+                                ),
                               ),
                             ),
                           ],
@@ -300,6 +306,13 @@ class _CaptureScreenState extends State<CaptureScreen>
                             const CircularProgressIndicator(),
                             const SizedBox(height: 8),
                             const Text('Reading text from image...'),
+                          ],
+
+                          if (_isScanning) ...[
+                            const SizedBox(height: 16),
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 8),
+                            const Text('Checking message...'),
                           ],
                         ],
                       ),

@@ -47,3 +47,29 @@ app.*.map.json
 
 backend/lambda/package/
 backend/lambda/*.zip
+# AWS Lambda subscription backend
+aws/subscriptions/node_modules/
+aws/subscriptions/*.zip
+aws/subscriptions/.env
+aws/subscriptions/.env.*
+aws/subscriptions/.aws-sam/
+
+# Private Apple signing keys and Firebase credentials
+*.p8
+*service-account*.json
+*service_account*.json
+# Node.js dependencies
+**/node_modules/
+
+# Generated Firebase Functions output
+functions/lib/
+
+# Local development tools
+.agents/
+.claude/
+.vscode/
+agent/
+skills-lock.json
+
+# Local Firebase configuration
+.firebaserc
