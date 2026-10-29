@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'aws_subscription_service.dart';
 
 class PurchaseService {
   PurchaseService._();
@@ -85,11 +86,12 @@ class PurchaseService {
     return null;
   }
 
-  Future<void> purchase(
-    ProductDetails product, {
-    required String appAccountToken,
-  }) async {
+  Future<void> purchase(ProductDetails product) async {
     errorMessage = null;
+
+    // Retrieve the account token from the authenticated AWS backend.
+    final appAccountToken = await AwsSubscriptionService.instance
+        .getAccountToken();
 
     final purchaseParam = PurchaseParam(
       productDetails: product,
@@ -135,13 +137,14 @@ class PurchaseService {
     if (purchase.pendingCompletePurchase) {
       try {
         await _iap.completePurchase(purchase);
+        debugPrint('STOREKIT: Transaction completion succeeded');
       } catch (e, stackTrace) {
+        debugPrint('STOREKIT COMPLETE ERROR: $e');
         debugPrintStack(stackTrace: stackTrace);
 
-        errorMessage =
-            'Purchase processing could not be completed. Please try again.';
+        errorMessage = 'Purchase processing could not be completed.';
       }
-    } // Closes the if statement
+    }
 
     onChanged();
   } // Closes _handlePurchase

@@ -3,6 +3,7 @@ import '../services/auth_service.dart';
 import '../theme/auth_theme.dart';
 import '../widgets/auth_widgets.dart';
 import 'login_screen.dart';
+import '../theme/app_typography.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -71,7 +72,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'SFProText',
-                fontSize: 10,
+                fontSize: AppTypography.emphasis,
                 color: AuthTheme.secondaryText,
               ),
             ),
@@ -92,7 +93,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'SFProText',
-                  fontSize: 11,
+                  fontSize: AppTypography.label,
                   color: AuthTheme.secondaryText,
                 ),
               )

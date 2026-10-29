@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_typography.dart';
 
 /// Shared auth styling. Contrast ratios noted are against [fieldFill]/[card]
 /// and meet WCAG AA (4.5:1 for text, 3:1 for borders/large text).
@@ -24,23 +25,35 @@ class AuthTheme {
   /// Minimum size for text the user types or reads as body copy.
   static const fieldFontSize = 18.0;
 
+  /// Shared auth page title size (slightly above the app-wide heading).
+  static const authHeadingFontSize = 28.0;
+
+  /// Input labels (Email, Password, ...). Kept separate from [label] so footers
+  /// and links do not grow with it.
+  static const fieldLabel = TextStyle(
+    fontFamily: 'SFProText',
+    fontSize: 17,
+    fontWeight: FontWeight.w700,
+    color: text,
+  );
+
   static const heading = TextStyle(
     fontFamily: 'SFProDisplay',
-    fontSize: 26,
+    fontSize: authHeadingFontSize,
     fontWeight: FontWeight.w700,
     color: text,
   );
 
   static const body = TextStyle(
     fontFamily: 'SFProText',
-    fontSize: 16,
+    fontSize: AppTypography.body,
     height: 1.4,
     color: secondaryText,
   );
 
   static const label = TextStyle(
     fontFamily: 'SFProText',
-    fontSize: 16,
+    fontSize: AppTypography.label,
     fontWeight: FontWeight.w700,
     color: text,
   );
@@ -53,14 +66,14 @@ class AuthTheme {
 
   static const link = TextStyle(
     fontFamily: 'SFProText',
-    fontSize: 15,
+    fontSize: AppTypography.label,
     fontWeight: FontWeight.w600,
     color: legalLink,
   );
 
   static const legalLinkStyle = TextStyle(
     fontFamily: 'SFProText',
-    fontSize: 14,
+    fontSize: AppTypography.label,
     fontWeight: FontWeight.w700,
     color: legalLink,
     decoration: TextDecoration.underline,

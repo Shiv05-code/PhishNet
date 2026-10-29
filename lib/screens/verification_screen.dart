@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../theme/auth_theme.dart';
 import '../widgets/auth_widgets.dart';
 import 'reset_password_screen.dart';
+import '../theme/app_typography.dart';
 
 class VerificationScreen extends StatefulWidget {
   const VerificationScreen({super.key});
@@ -43,7 +44,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             'We sent a 4-digit code to your email',
             style: TextStyle(
               fontFamily: 'SFProText',
-              fontSize: 10,
+              fontSize: AppTypography.emphasis,
               color: AuthTheme.secondaryText,
             ),
           ),
@@ -65,7 +66,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     style: const TextStyle(
                       fontFamily: 'SFProText',
-                      fontSize: 16,
+                      fontSize: AppTypography.title,
                       color: AuthTheme.text,
                     ),
                     onChanged: (value) {

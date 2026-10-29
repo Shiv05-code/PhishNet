@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'firebase_options.dart';
 import 'screens/loading_screen.dart';
+import 'widgets/session_timeout_guard.dart';
 import 'theme/app_colors.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
 const _appSystemOverlayStyle = SystemUiOverlayStyle(
   statusBarColor: Colors.transparent,
@@ -13,21 +18,48 @@ const _appSystemOverlayStyle = SystemUiOverlayStyle(
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Use local Firebase emulators only when explicitly enabled.
+  const useEmulators = bool.fromEnvironment(
+    'USE_FIREBASE_EMULATORS',
+    defaultValue: false,
+  );
+
+  if (kDebugMode && useEmulators) {
+    const host = '127.0.0.1';
+
+    await FirebaseAuth.instance.useAuthEmulator(host, 9099);
+
+    FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+
+    FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).useFunctionsEmulator(host, 5001);
+  }
+
   runApp(const PhishNetApp());
 }
 
 class PhishNetApp extends StatelessWidget {
   const PhishNetApp({super.key});
 
+  /// Lets the session guard send the user to Login from outside the widget tree.
+  static final _navigatorKey = GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'PhishNet',
+      navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: _appSystemOverlayStyle,
-        child: child ?? const SizedBox.shrink(),
+        child: SessionTimeoutGuard(
+          navigatorKey: _navigatorKey,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
       theme: ThemeData(
         useMaterial3: true,

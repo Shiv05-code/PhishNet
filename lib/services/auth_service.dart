@@ -1,9 +1,15 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'payment_backend_service.dart';
+import 'session_timeout.dart';
+import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
-  AuthService({this._auth});
+  AuthService({this._auth, SessionTimeout? sessionTimeout})
+    : _sessionTimeout = sessionTimeout ?? SessionTimeout();
 
   final FirebaseAuth? _auth;
+  final SessionTimeout _sessionTimeout;
 
   FirebaseAuth get _firebaseAuth => _auth ?? FirebaseAuth.instance;
 
@@ -38,7 +44,14 @@ class AuthService {
     await credential.user?.updateDisplayName(
       '${firstName.trim()} ${lastName.trim()}'.trim(),
     );
-    await credential.user?.reload(); // so currentUser has the new name
+
+    await credential.user?.reload();
+
+    try {
+      await PaymentBackendService.instance.initializeSubscription();
+    } catch (error) {
+      debugPrint('Subscription initialization deferred: $error');
+    }
   }
 
   /// Re-checks a restored session with Firebase. Signs out if the account
@@ -46,6 +59,13 @@ class AuthService {
   Future<void> refreshSession() async {
     final user = _firebaseAuth.currentUser;
     if (user == null) return;
+    // Sessions left idle past the limit (including while the app was closed)
+    // end here rather than being restored.
+    if (await _sessionTimeout.hasExpired()) {
+      await _sessionTimeout.clear();
+      await signOut();
+      return;
+    }
     try {
       await user.reload();
     } on FirebaseAuthException catch (error) {
@@ -102,6 +122,33 @@ class AuthService {
     if (user == null) return false;
     await user.reload();
     return _firebaseAuth.currentUser?.emailVerified ?? false;
+  }
+
+  Future<void> deleteAccountAndData() async {
+    final user = _firebaseAuth.currentUser;
+
+    if (user == null) {
+      throw StateError('No signed-in user is available.');
+    }
+
+    final db = FirebaseFirestore.instance;
+    final userRef = db.collection('users').doc(user.uid);
+    final batch = db.batch();
+
+    for (final collectionName in ['scans', 'subscriptions']) {
+      final documents = await userRef.collection(collectionName).get();
+
+      for (final document in documents.docs) {
+        batch.delete(document.reference);
+      }
+    }
+
+    batch.delete(userRef);
+
+    await batch.commit();
+
+    // Firebase may require the user to have signed in recently.
+    await user.delete();
   }
 
   Future<void> signOut() => _firebaseAuth.signOut();

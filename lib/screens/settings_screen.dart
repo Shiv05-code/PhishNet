@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../widgets/figma_glass_button.dart';
 import '../widgets/auth_widgets.dart';
 import 'app_colors.dart';
+import '../theme/app_colors.dart' as theme_colors;
 import 'forgot_password_screen.dart';
 import 'login_screen.dart';
 import 'payment_plan_screen.dart';
 import 'privacy_policy_screen.dart';
-import 'signup_screen.dart';
 import 'terms_conditions_screen.dart';
+import 'signup_screen.dart';
+import '../theme/app_typography.dart';
+import '../theme/auth_theme.dart';
 
 class SettingsScreen extends StatelessWidget {
   final bool isGuest;
@@ -21,26 +25,109 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = (authService ?? AuthService()).currentUser;
+    final fullName = user?.displayName?.trim();
+    final email = user?.email?.trim();
+
     return Scaffold(
       appBar: const FigmaAppBar(title: 'Settings'),
       drawer: AppDrawer(currentPage: 'Settings', isGuest: isGuest),
       body: FigmaGradientBackground(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
               child: Column(
                 children: [
                   const _ProfileAvatar(),
-                  const SizedBox(height: 26),
+                  if (fullName != null && fullName.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Text(
+                        fullName,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: AppTypography.title,
+                          fontWeight: FontWeight.w700,
+                          color: theme_colors.AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  if (email != null && email.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        email,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: AppTypography.body,
+                          color: theme_colors.AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 38),
                   _settingButton(
                     context,
                     'Delete My Account',
-                    onPressed: () => Navigator.of(context).pushAndRemoveUntil(
-                      fadeRoute(const SignupScreen()),
-                      (_) => false,
-                    ),
+                    enabled: !isGuest,
+                    onPressed: isGuest
+                        ? null
+                        : () async {
+                            await showDialog<void>(
+                              context: context,
+                              builder: (dialogContext) {
+                                return AppDialog(
+                                  icon: Icons.warning_amber_rounded,
+                                  iconColor: AuthTheme.error,
+                                  title: 'Delete your account?',
+                                  message:
+                                      'This will permanently delete your account and saved data. '
+                                      'This action cannot be undone. Are you sure you want to proceed?',
+                                  actions: [
+                                    AppDialogButton(
+                                      label: 'Cancel',
+                                      onPressed: () =>
+                                          Navigator.of(dialogContext).pop(),
+                                    ),
+                                    AppDialogButton(
+                                      label: 'Yes, Delete',
+                                      color: AuthTheme.error,
+                                      onPressed: () async {
+                                        Navigator.of(dialogContext).pop();
+
+                                        try {
+                                          await (authService ?? AuthService())
+                                              .deleteAccountAndData();
+
+                                          if (!context.mounted) return;
+
+                                          Navigator.of(
+                                            context,
+                                          ).pushAndRemoveUntil(
+                                            instantRoute(const SignupScreen()),
+                                            (_) => false,
+                                          );
+                                        } catch (_) {
+                                          if (!context.mounted) return;
+
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'The account could not be deleted. Please try again.',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
                   ),
                   _settingButton(
                     context,
@@ -75,8 +162,8 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   FigmaGlassButton(
-                    width: 170,
-                    height: 54,
+                    width: 210,
+                    height: 64,
                     semanticLabel: isGuest ? 'Login' : 'Log out',
                     onPressed: () async {
                       final navigator = Navigator.of(context);
@@ -95,15 +182,15 @@ class SettingsScreen extends StatelessWidget {
                       children: [
                         Icon(
                           isGuest ? Icons.login : Icons.logout,
-                          size: 28,
+                          size: 36,
                           color: AppColors.primaryBlue,
                         ),
                         SizedBox(width: 10),
                         Text(
                           isGuest ? 'Login' : 'Log Out',
                           style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
+                            fontSize: AppTypography.title,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.primaryBlue,
                           ),
                         ),
@@ -132,15 +219,15 @@ class SettingsScreen extends StatelessWidget {
         child: Opacity(
           opacity: enabled ? 1 : 0.55,
           child: FigmaGlassButton(
-            width: 250,
-            height: 54,
+            width: 290,
+            height: 64,
             semanticLabel: label,
             onPressed: onPressed ?? () {},
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+                fontSize: AppTypography.title,
+                fontWeight: FontWeight.w700,
                 color: enabled ? AppColors.primaryBlue : AppColors.muted,
               ),
             ),
@@ -157,8 +244,8 @@ class _ProfileAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 136,
-      height: 136,
+      width: 170,
+      height: 170,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: const Color(0xBDE6F6FC),
@@ -171,7 +258,7 @@ class _ProfileAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(Icons.person, size: 92, color: Color(0xFFFDFCF9)),
+      child: const Icon(Icons.person, size: 112, color: Color(0xFFFDFCF9)),
     );
   }
 }

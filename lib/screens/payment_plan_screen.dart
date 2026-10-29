@@ -8,6 +8,12 @@ import 'app_colors.dart';
 import 'package:flutter/foundation.dart';
 import '../services/subscription_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../theme/app_typography.dart';
+import 'login_screen.dart';
+import 'signup_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
+import '../services/aws_subscription_service.dart';
 
 class PaymentPlanScreen extends StatefulWidget {
   const PaymentPlanScreen({super.key});
@@ -18,17 +24,75 @@ class PaymentPlanScreen extends StatefulWidget {
 
 class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
   bool _yearly = false;
-  bool _plusSelected = true;
+  bool _hasPlus = false;
+  StreamSubscription<Map<String, dynamic>?>? _plusListener;
   final PurchaseService _purchaseService = PurchaseService.instance;
 
-  bool _loadingStore = true;
   String? _purchaseMessage;
 
   @override
   void initState() {
     super.initState();
-    _initializePurchases();
-    _testPaymentBackend();
+    if (_isLoggedIn) {
+      _initializePurchases();
+      _listenForPlus();
+    }
+  }
+
+  @override
+  void dispose() {
+    _plusListener?.cancel();
+    super.dispose();
+  }
+
+  void _listenForPlus() {
+    _plusListener?.cancel();
+
+    _plusListener = SubscriptionService.instance
+        .watchEffectiveSubscription()
+        .listen(
+          (subscription) {
+            if (!mounted) return;
+
+            final plan = subscription?['plan'];
+            final status = subscription?['status'];
+            final environment = subscription?['environment'];
+            final expiresAt = subscription?['expiresAt'];
+
+            const useEmulators = bool.fromEnvironment(
+              'USE_FIREBASE_EMULATORS',
+              defaultValue: false,
+            );
+
+            final validEnvironment =
+                environment == 'production' ||
+                (kDebugMode && useEmulators && environment == 'local_test') ||
+                (SubscriptionService.allowSandboxSubscriptions &&
+                    environment == 'sandbox');
+
+            final notExpired =
+                expiresAt is Timestamp &&
+                expiresAt.toDate().isAfter(DateTime.now());
+
+            final hasPlus =
+                plan == 'plus' &&
+                status == 'active' &&
+                validEnvironment &&
+                notExpired;
+
+            setState(() {
+              _hasPlus = hasPlus;
+            });
+
+            debugPrint('SUBSCRIPTION UPDATE: Plan = $plan');
+            debugPrint('SUBSCRIPTION UPDATE: Status = $status');
+            debugPrint('SUBSCRIPTION UPDATE: Environment = $environment');
+            debugPrint('SUBSCRIPTION UPDATE: Has Plus = $hasPlus');
+          },
+          onError: (Object error) {
+            debugPrint('SUBSCRIPTION LISTENER ERROR: $error');
+          },
+        );
   }
 
   Future<void> _initializePurchases() async {
@@ -55,21 +119,46 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
           ),
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingStore = false;
-        });
-      }
     }
   }
 
   Future<void> _handleVerifiedPurchase(PurchaseDetails purchase) async {
-    if (!mounted) return;
+    final transactionId = purchase.purchaseID;
 
-    setState(() {
-      _purchaseMessage = 'Test purchase completed successfully!';
-    });
+    if (transactionId == null || transactionId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _purchaseMessage =
+              'Unable to verify this purchase. Missing transaction ID.';
+        });
+      }
+      return;
+    }
+
+    try {
+      final result = await AwsSubscriptionService.instance.verifyPurchase(
+        transactionId,
+      );
+
+      if (!mounted) return;
+
+      final entitlementGranted = result['entitlementGranted'] == true;
+
+      setState(() {
+        _purchaseMessage = entitlementGranted
+            ? 'Subscription verified. Updating your plan...'
+            : 'Purchase received. Subscription activation is pending.';
+      });
+    } catch (e) {
+      debugPrint('AWS SUBSCRIPTION VERIFICATION ERROR: ${e.runtimeType}');
+
+      if (!mounted) return;
+
+      setState(() {
+        _purchaseMessage =
+            'Unable to verify your subscription. Please try again.';
+      });
+    }
   }
 
   ProductDetails? get _selectedProduct {
@@ -90,18 +179,6 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
     return _yearly ? '${product.price}/year' : '${product.price}/month';
   }
 
-  Future<void> _testPaymentBackend() async {
-    try {
-      final result = await PaymentBackendService.instance.verifySubscription(
-        'com.phishnet.plus.monthly',
-      );
-
-      debugPrint('BACKEND TEST: $result');
-    } catch (e) {
-      debugPrint('BACKEND ERROR: $e');
-    }
-  }
-
   Future<void> _testDemoUpgrade() async {
     try {
       final result = await PaymentBackendService.instance
@@ -111,6 +188,45 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
     } catch (e) {
       debugPrint('DEMO UPGRADE ERROR: $e');
     }
+  }
+
+  bool get _isLoggedIn => FirebaseAuth.instance.currentUser != null;
+  bool get _onPlus => _hasPlus;
+  bool get _onFreeNoAccount => !_isLoggedIn;
+  bool get _onFreeWithAccount => _isLoggedIn && !_onPlus;
+
+  Future<void> _goToLogin() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+  }
+
+  Future<void> _goToSignup() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SignupScreen()));
+  }
+
+  String get _plusActionLabel {
+    if (!_isLoggedIn) return 'Create an Account to Upgrade';
+    return _yearly ? 'Start Plus Yearly' : 'Start Plus Monthly';
+  }
+
+  Future<void> _onPlusPressed() async {
+    if (!_isLoggedIn) {
+      _goToSignup();
+      return;
+    }
+
+    final product = _selectedProduct;
+    if (product == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Plans are still loading. Try again.')),
+      );
+      return;
+    }
+    if (_purchaseService.purchasePending) return;
+    await _purchaseService.purchase(product);
   }
 
   @override
@@ -128,104 +244,128 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
               const Text(
                 'Choose a Plan',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: AppTypography.title,
                   fontWeight: FontWeight.w700,
                   color: AppColors.text,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Get the protection you need.',
+              Text(
+                _isLoggedIn
+                    ? 'Get the protection you need.'
+                    : "You're browsing as a guest. Create a free account to unlock more.",
                 style: TextStyle(fontSize: 15, color: AppColors.text),
               ),
               const SizedBox(height: 18),
-              StreamBuilder<Map<String, dynamic>?>(
-                stream: SubscriptionService.instance.watchSubscription(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return const Text('Unable to load subscription status.');
-                  }
+              if (_isLoggedIn)
+                StreamBuilder<Map<String, dynamic>?>(
+                  stream: SubscriptionService.instance
+                      .watchEffectiveSubscription(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return const Text('Unable to load subscription status.');
+                    }
 
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.only(bottom: 16),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.only(bottom: 16),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
 
-                  final subscription = snapshot.data;
+                    final subscription = snapshot.data;
 
-                  final plan = subscription?['plan'] ?? 'free';
-                  final status = subscription?['status'] ?? 'inactive';
-                  final environment = subscription?['environment'] ?? 'none';
-                  final expiresAt = subscription?['expiresAt'];
+                    final plan = subscription?['plan'] ?? 'free';
+                    final status = subscription?['status'] ?? 'inactive';
+                    final environment = subscription?['environment'] ?? 'none';
+                    final expiresAt = subscription?['expiresAt'];
 
-                  final isExpired =
-                      expiresAt is Timestamp &&
-                      !expiresAt.toDate().isAfter(DateTime.now());
+                    final isExpired =
+                        expiresAt is Timestamp &&
+                        !expiresAt.toDate().isAfter(DateTime.now());
 
-                  final isDemo = environment == 'local_test';
+                    final isDemo =
+                        environment == 'local_test' || environment == 'sandbox';
 
-                  final isActivePlus =
-                      plan == 'plus' &&
-                      status == 'active' &&
-                      !isExpired &&
-                      expiresAt is Timestamp &&
-                      (environment == 'production' ||
-                          (kDebugMode &&
-                              const bool.fromEnvironment(
-                                'USE_FIREBASE_EMULATORS',
-                              ) &&
-                              isDemo));
+                    final isActivePlus =
+                        plan == 'plus' &&
+                        status == 'active' &&
+                        expiresAt is Timestamp &&
+                        !isExpired &&
+                        (environment == 'production' ||
+                            (kDebugMode &&
+                                const bool.fromEnvironment(
+                                  'USE_FIREBASE_EMULATORS',
+                                ) &&
+                                environment == 'local_test') ||
+                            (SubscriptionService.allowSandboxSubscriptions &&
+                                environment == 'sandbox'));
 
-                  final displayPlan = isActivePlus ? 'Plus' : 'Free';
+                    final displayPlan = isActivePlus ? 'Plus' : 'Free';
 
-                  final displayStatus = isExpired
-                      ? 'Expired'
-                      : isActivePlus
-                      ? 'Active'
-                      : 'Inactive';
+                    final displayStatus = isExpired
+                        ? 'Expired'
+                        : isActivePlus
+                        ? 'Active'
+                        : 'Inactive';
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Current Plan: $displayPlan'
-                          '${isActivePlus && isDemo ? ' (Demo)' : ''}',
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Current Plan: $displayPlan'
+                            '${isActivePlus && isDemo ? (environment == "sandbox" ? " (Sandbox)" : " (Demo)") : ""}',
+                            style: const TextStyle(
+                              fontSize: AppTypography.body,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Status: $displayStatus',
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+
+                          const SizedBox(height: 4),
+                          Text(
+                            'Status: $displayStatus',
+                            style: const TextStyle(
+                              fontSize: AppTypography.label,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               _BillingToggle(
                 yearly: _yearly,
                 onChanged: (value) => setState(() => _yearly = value),
               ),
               const SizedBox(height: 14),
+              if (!_isLoggedIn) ...[
+                _PlanCard(
+                  name: 'Free: No Account',
+                  price: '\$0/month',
+                  isCurrent: _onFreeNoAccount,
+                  features: const ['Manual Scans', 'Basic Results'],
+                ),
+              ],
+              const SizedBox(height: 14),
               _PlanCard(
-                name: 'Free',
+                name: 'Free: With Account',
                 price: '\$0/month',
-                selected: !_plusSelected,
-                features: const ['Manual Scans', 'Basic Results'],
-                onTap: () => setState(() => _plusSelected = false),
+                isCurrent: _onFreeWithAccount,
+                features: const [
+                  'Everything in Free: No Account',
+                  'Limited AI Chat Access',
+                  'Priority Support',
+                ],
+                actionLabel: _isLoggedIn ? null : 'Log In or Sign Up',
+                onAction: _isLoggedIn ? null : _goToLogin,
               ),
               const SizedBox(height: 14),
               _PlanCard(
                 name: 'Plus',
                 price: _plusPrice,
-                selected: _plusSelected,
+                isCurrent: _onPlus,
                 features: const [
                   'Everything in Free',
                   'Live Email Monitoring',
@@ -233,46 +373,23 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                   'Family/Social Features',
                   'Priority Support',
                 ],
-                onTap: () => setState(() => _plusSelected = true),
+                actionLabel: _onPlus ? null : _plusActionLabel,
+                onAction: _onPlus ? null : _onPlusPressed,
               ),
               const SizedBox(height: 20),
 
-              if (_loadingStore)
-                const Center(child: CircularProgressIndicator())
-              else if (_plusSelected) ...[
-                SizedBox(
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed:
-                        null, // Temporarily disabled until AWS verification is ready.
-                    child: _purchaseService.purchasePending
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            _yearly
-                                ? 'Start Plus Yearly'
-                                : 'Start Plus Monthly',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+              if (_isLoggedIn)
+                Center(
+                  child: TextButton(
+                    onPressed: () async {
+                      await _purchaseService.restorePurchases();
+                    },
+                    child: const Text('Restore Purchases'),
                   ),
                 ),
 
-                const SizedBox(height: 8),
-
-                TextButton(
-                  onPressed: () async {
-                    await _purchaseService.restorePurchases();
-                  },
-                  child: const Text('Restore Purchases'),
-                ),
-              ],
-              if (kDebugMode &&
+              if (_isLoggedIn &&
+                  kDebugMode &&
                   const bool.fromEnvironment('USE_FIREBASE_EMULATORS'))
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
@@ -287,7 +404,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                   _purchaseMessage!,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: AppTypography.label,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -298,7 +415,10 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 Text(
                   _purchaseService.errorMessage!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red, fontSize: 14),
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: AppTypography.caption,
+                  ),
                 ),
               ],
             ],
@@ -341,7 +461,7 @@ class _PlanIdentity extends StatelessWidget {
         const Text(
           'Your Shield\nAgainst Scams',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: AppTypography.label,
             fontWeight: FontWeight.w700,
             color: AppColors.primaryBlue,
             height: 1.05,
@@ -387,8 +507,11 @@ class _BillingToggle extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Text(
-              'Save 20%',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              'Save 16%',
+              style: TextStyle(
+                fontSize: AppTypography.caption,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -430,7 +553,10 @@ class _ToggleOption extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: AppTypography.caption,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
@@ -440,102 +566,121 @@ class _ToggleOption extends StatelessWidget {
 class _PlanCard extends StatelessWidget {
   final String name;
   final String price;
-  final bool selected;
+  final bool isCurrent;
+  final bool highlighted;
   final List<String> features;
-  final VoidCallback onTap;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   const _PlanCard({
     required this.name,
     required this.price,
-    required this.selected,
+    required this.isCurrent,
     required this.features,
-    required this.onTap,
-  });
+    this.actionLabel,
+    this.onAction,
+  }) : highlighted = false;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 14, 16),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xBFE0F6FC) : const Color(0xD9FDFCF9),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white70, width: 1.2),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x300B718E),
-              blurRadius: 10,
-              offset: Offset(0, 5),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 14, 16),
+      decoration: BoxDecoration(
+        color: isCurrent || highlighted
+            ? const Color(0xBFE0F6FC)
+            : const Color(0xD9FDFCF9),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isCurrent ? AppColors.primaryBlue : Colors.white70,
+          width: isCurrent ? 2 : 1.2,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    '$name\n$price',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      height: 1.05,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.text,
-                    ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x300B718E),
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  '$name\n$price',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    height: 1.05,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.text,
                   ),
                 ),
-                _SelectionCircle(selected: selected),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ...features.map(
-              (feature) => Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check,
-                      size: 21,
-                      color: AppColors.accentGreen,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        feature,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: AppColors.text,
-                        ),
+              ),
+              if (isCurrent) const _CurrentPlanChip(),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...features.map(
+            (feature) => Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check,
+                    size: 21,
+                    color: AppColors.accentGreen,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      feature,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: AppColors.text,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onAction,
+                child: Text(actionLabel!),
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
-class _SelectionCircle extends StatelessWidget {
-  final bool selected;
-
-  const _SelectionCircle({required this.selected});
+class _CurrentPlanChip extends StatelessWidget {
+  const _CurrentPlanChip();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 26,
-      height: 26,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: selected ? AppColors.primaryBlue : Colors.transparent,
-        border: Border.all(color: AppColors.text, width: 2),
+        color: AppColors.primaryBlue,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'Current Plan',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
       ),
     );
   }

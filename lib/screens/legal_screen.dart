@@ -3,6 +3,7 @@ import 'app_colors.dart';
 import 'legal_content.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../widgets/figma_app_bar.dart';
+import '../theme/app_typography.dart';
 
 /// Shared layout for Terms & Conditions and Privacy Policy.
 class LegalScreen extends StatelessWidget {
@@ -13,7 +14,7 @@ class LegalScreen extends StatelessWidget {
 
   static const _body = TextStyle(
     fontFamily: 'SFProText',
-    fontSize: 18,
+    fontSize: AppTypography.emphasis,
     height: 1.5,
     color: AppColors.text,
   );
@@ -58,7 +59,7 @@ class LegalScreen extends StatelessWidget {
                               document.heading,
                               style: _body.copyWith(
                                 fontFamily: 'SFProDisplay',
-                                fontSize: 24,
+                                fontSize: AppTypography.heading,
                                 height: 1.25,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -101,7 +102,10 @@ class _SectionView extends StatelessWidget {
           header: true,
           child: Text(
             section.title,
-            style: body.copyWith(fontSize: 20, fontWeight: FontWeight.w700),
+            style: body.copyWith(
+              fontSize: AppTypography.title,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         const SizedBox(height: 8),

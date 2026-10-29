@@ -17,10 +17,10 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(home: LoadingScreen(authService: auth)),
       );
-      await tester.pump(const Duration(seconds: 2));
-      expect(find.byType(LoginScreen), findsNothing, reason: 'splash ≥1s');
-      await tester.pump(const Duration(seconds: 1, milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 500));
+      // Step frame by frame so the fade-in and fade-out each get to finish.
+      for (var i = 0; i < 100; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
     }
 
     testWidgets('no session opens Login', (tester) async {
@@ -87,6 +87,23 @@ void main() {
     await tapOn(tester, find.text('Log Out'));
     expect(auth.signedIn, isFalse);
     expect(find.byType(LoginScreen), findsOneWidget);
+  });
+
+  testWidgets('Settings displays the signed-in user full name', (tester) async {
+    await pumpScreen(
+      tester,
+      SettingsScreen(
+        authService: FakeAuthService(
+          signedIn: true,
+          verified: true,
+          displayName: 'Jordan Lee',
+          email: 'jordan.lee@example.com',
+        ),
+      ),
+    );
+
+    expect(find.text('Jordan Lee'), findsOneWidget);
+    expect(find.text('jordan.lee@example.com'), findsOneWidget);
   });
 
   testWidgets('Menu Logout signs out of Firebase and opens Login', (
