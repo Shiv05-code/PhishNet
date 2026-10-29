@@ -25,6 +25,17 @@ class _SwimmingFishState extends State<SwimmingFish>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Respect reduced motion by holding the fish still.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
