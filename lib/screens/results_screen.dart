@@ -108,24 +108,7 @@ class _ResultsScreenState extends State<ResultsScreen>
     final message = widget.message.trim();
     final scan = result == null || message.isEmpty
         ? null
-        : ChatScanContext(
-            message: message,
-            assessment: {
-              'risk_level': result.riskLevel,
-              'scam_percentage': result.scamPercentage,
-              'summary': result.summary,
-              'red_flags': [
-                for (var i = 0; i < result.redFlags.length; i++)
-                  {
-                    'label': i < result.redFlagLabels.length
-                        ? result.redFlagLabels[i]
-                        : '',
-                    'description': result.redFlags[i],
-                  },
-              ],
-              'next_steps': result.nextSteps,
-            },
-          );
+        : ChatScanContext.fromResult(message, result);
     Navigator.of(context).push(fadeRoute(AiChatScreen(scan: scan)));
   }
 
