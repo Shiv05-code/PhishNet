@@ -10,7 +10,6 @@ import '../widgets/figma_gradient_background.dart';
 import '../widgets/figma_glass_button.dart';
 import 'results_screen.dart';
 import '../widgets/auth_widgets.dart';
-import '../models/scan_result.dart';
 import '../services/scan_service.dart';
 
 class CaptureScreen extends StatefulWidget {
@@ -30,7 +29,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   bool _isReadingText = false;
   bool _isTextMode = false;
-  bool _isScanning = false;
 
   @override
   void dispose() {
@@ -64,13 +62,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
         return;
       }
 
-      setState(() {
-        _isTextMode = true;
-        _textController.text = extractedText;
-        _textController.selection = TextSelection.fromPosition(
-          TextPosition(offset: extractedText.length),
-        );
-      });
+      await _submitText(extractedText);
 
       _textFocusNode.requestFocus();
     } catch (_) {
@@ -100,6 +92,16 @@ class _CaptureScreenState extends State<CaptureScreen> {
     });
   }
 
+  void _closeTextInput() {
+    _textFocusNode.unfocus();
+
+    if (mounted) {
+      setState(() {
+        _isTextMode = false;
+      });
+    }
+  }
+
   Future<void> _submitTypedText() async {
     await _submitText(_textController.text);
   }
@@ -121,20 +123,17 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
     if (!mounted) return;
 
-    setState(() => _isScanning = true);
-    try {
-      final ScanResult result = await _scanService.analyzeMessage(text);
-      if (!mounted) return;
-      Navigator.of(context).push(
-        slideRoute(
-          ResultsScreen(isGuest: widget.isGuest, message: text, result: result),
+    final analysis = _scanService.analyzeMessage(text);
+
+    Navigator.of(context).push(
+      slideRoute(
+        ResultsScreen(
+          isGuest: widget.isGuest,
+          message: text,
+          analysis: analysis,
         ),
-      );
-    } on ScanException catch (e) {
-      if (mounted) _showMessage(e.message);
-    } finally {
-      if (mounted) setState(() => _isScanning = false);
-    }
+      ),
+    );
   }
 
   void _showMessage(String message) {
@@ -155,143 +154,66 @@ class _CaptureScreenState extends State<CaptureScreen> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               return SingleChildScrollView(
-                child: Center(
-                  child: Container(
-                    width: double.infinity,
-                    constraints: BoxConstraints(
-                      maxWidth: 520,
-                      minHeight: constraints.maxHeight,
-                    ),
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 30),
-                    decoration: BoxDecoration(
-                      color: const Color(0xD9FDFCF9),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: const Color(0xB8FFFFFF),
-                        width: 1.2,
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x300B718E),
-                          blurRadius: 16,
-                          offset: Offset(0, 7),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Center(
+                    child: Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(maxWidth: 360),
+
+                      padding: const EdgeInsets.fromLTRB(24, 36, 24, 40),
+                      decoration: BoxDecoration(
+                        color: const Color(0xD9FDFCF9),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: const Color(0xB8FFFFFF),
+                          width: 1.2,
                         ),
-                      ],
-                    ),
-                    child: AnimatedSize(
-                      duration: const Duration(milliseconds: 350),
-                      curve: Curves.easeInOut,
-                      child: Column(
-                        children: [
-                          Text(
-                            _isTextMode ? 'Insert Text' : 'Tap to Upload',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontFamily: 'SFProText',
-                              fontSize: AppTypography.heading,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primaryBlue,
-                            ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x300B718E),
+                            blurRadius: 16,
+                            offset: Offset(0, 7),
                           ),
-                          const SizedBox(height: 20),
-
-                          // Upload comes first.
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            child: _isTextMode
-                                ? FigmaGlassButton(
-                                    key: const ValueKey('compact-upload'),
-                                    width: double.infinity,
-                                    height: 54,
-                                    semanticLabel: 'Upload image',
-                                    onPressed: _isReadingText
-                                        ? () {}
-                                        : () =>
-                                              _chooseImage(ImageSource.gallery),
-                                    child: const Text(
-                                      'Upload Image',
-                                      style: TextStyle(
-                                        fontFamily: 'SFProText',
-                                        fontSize: AppTypography.heading,
-                                        color: AppColors.primaryBlue,
-                                      ),
-                                    ),
-                                  )
-                                : FigmaGlassUploadButton(
-                                    key: const ValueKey('large-upload'),
-                                    onPressed: _isReadingText
-                                        ? () {}
-                                        : () =>
-                                              _chooseImage(ImageSource.gallery),
-                                  ),
-                          ),
-
-                          const SizedBox(height: 18),
-
-                          // Scan comes second.
-                          FigmaGlassButton(
-                            width: double.infinity,
-                            height: 54,
-                            semanticLabel: 'Scan with camera',
-                            onPressed: _isReadingText
-                                ? () {}
-                                : () => _chooseImage(ImageSource.camera),
-                            child: const Text(
-                              'Scan',
-                              style: TextStyle(
+                        ],
+                      ),
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 350),
+                        curve: Curves.easeInOut,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _isTextMode ? 'Insert Text' : 'Tap to Upload',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
                                 fontFamily: 'SFProText',
                                 fontSize: AppTypography.heading,
+                                fontWeight: FontWeight.w600,
                                 color: AppColors.primaryBlue,
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 28),
 
-                          const SizedBox(height: 14),
-
-                          // Insert Text stays third.
-                          FigmaGlassButton(
-                            width: double.infinity,
-                            height: 54,
-                            semanticLabel: 'Insert text',
-                            onPressed: _openTextInput,
-                            child: const Text(
-                              'Insert Text',
-                              style: TextStyle(
-                                fontFamily: 'SFProText',
-                                fontSize: AppTypography.heading,
-                                color: AppColors.primaryBlue,
-                              ),
+                            //Upload comes first and keeps the upload icon.
+                            FigmaGlassUploadButton(
+                              onPressed: _isReadingText
+                                  ? () {}
+                                  : () => _chooseImage(ImageSource.gallery),
                             ),
-                          ),
 
-                          // Text box opens underneath Insert Text.
-                          if (_isTextMode) ...[
-                            const SizedBox(height: 14),
-                            TextField(
-                              controller: _textController,
-                              focusNode: _textFocusNode,
-                              minLines: 5,
-                              maxLines: 10,
-                              maxLength: 8000,
-                              keyboardType: TextInputType.multiline,
-                              textInputAction: TextInputAction.done,
-                              onSubmitted: (_) => _submitTypedText(),
-                              onTapOutside: (_) => _textFocusNode.unfocus(),
-                              decoration: const InputDecoration(
-                                hintText: 'Type or paste a suspicious message',
-                                border: OutlineInputBorder(),
-                                filled: true,
-                                fillColor: Colors.white70,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 32),
+
+                            // Scan comes second.
                             FigmaGlassButton(
                               width: double.infinity,
                               height: 54,
-                              semanticLabel: 'Check message',
-                              onPressed: _isScanning ? () {} : _submitTypedText,
+                              semanticLabel: 'Scan with camera',
+                              onPressed: _isReadingText
+                                  ? () {}
+                                  : () => _chooseImage(ImageSource.camera),
                               child: const Text(
-                                'Check Message',
+                                'Scan',
                                 style: TextStyle(
                                   fontFamily: 'SFProText',
                                   fontSize: AppTypography.heading,
@@ -299,22 +221,56 @@ class _CaptureScreenState extends State<CaptureScreen> {
                                 ),
                               ),
                             ),
-                          ],
 
-                          if (_isReadingText) ...[
-                            const SizedBox(height: 16),
-                            const CircularProgressIndicator(),
-                            const SizedBox(height: 8),
-                            const Text('Reading text from image...'),
-                          ],
+                            const SizedBox(height: 22),
 
-                          if (_isScanning) ...[
-                            const SizedBox(height: 16),
-                            const CircularProgressIndicator(),
-                            const SizedBox(height: 8),
-                            const Text('Checking message...'),
+                            // Insert Text stays third.
+                            FigmaGlassButton(
+                              width: double.infinity,
+                              height: 54,
+                              semanticLabel: 'Insert text',
+                              onPressed: _openTextInput,
+                              child: const Text(
+                                'Insert Text',
+                                style: TextStyle(
+                                  fontFamily: 'SFProText',
+                                  fontSize: AppTypography.heading,
+                                  color: AppColors.primaryBlue,
+                                ),
+                              ),
+                            ),
+
+                            // Text box opens underneath Insert Text.
+                            if (_isTextMode) ...[
+                              const SizedBox(height: 14),
+                              TextField(
+                                controller: _textController,
+                                focusNode: _textFocusNode,
+                                minLines: 5,
+                                maxLines: 10,
+                                maxLength: 8000,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.done,
+                                onSubmitted: (_) => _submitTypedText(),
+                                onTapOutside: (_) => _closeTextInput(),
+                                decoration: const InputDecoration(
+                                  hintText:
+                                      'Type or paste a suspicious message',
+                                  border: OutlineInputBorder(),
+                                  filled: true,
+                                  fillColor: Colors.white70,
+                                ),
+                              ),
+                            ],
+
+                            if (_isReadingText) ...[
+                              const SizedBox(height: 16),
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 8),
+                              const Text('Reading text from image...'),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
