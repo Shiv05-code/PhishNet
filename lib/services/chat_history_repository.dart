@@ -1,5 +1,32 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+DateTime parseChatTimestamp(Object? value) {
+  if (value is Timestamp) {
+    return value.toDate().toUtc();
+  }
+
+  if (value is DateTime) {
+    return value.toUtc();
+  }
+
+  throw const FormatException('Invalid chat timestamp.');
+}
+
+bool shouldSaveChat({
+  required Object? incomingUpdatedAt,
+  required Object? existingUpdatedAt,
+}) {
+  final incoming = parseChatTimestamp(incomingUpdatedAt);
+
+  if (existingUpdatedAt == null) {
+    return true;
+  }
+
+  final existing = parseChatTimestamp(existingUpdatedAt);
+
+  return incoming.isAfter(existing);
+}
+
 class ChatHistoryRepository {
   ChatHistoryRepository({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -23,7 +50,27 @@ class ChatHistoryRepository {
       throw ArgumentError('Invalid conversation ID.');
     }
 
-    await _chats(uid).doc(conversationId).set(data);
+    final updatedAt = data['updatedAt'];
+    parseChatTimestamp(updatedAt);
+
+    final ref = _chats(uid).doc(conversationId);
+
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(ref);
+
+      if (snapshot.exists) {
+        final existingTime = snapshot.data()?['updatedAt'];
+
+        if (!shouldSaveChat(
+          incomingUpdatedAt: updatedAt,
+          existingUpdatedAt: existingTime,
+        )) {
+          return;
+        }
+      }
+
+      transaction.set(ref, data);
+    });
   }
 
   Future<List<Map<String, dynamic>>> loadChats(String uid) async {

@@ -23,13 +23,14 @@ service cloud.firestore {
       // Users can read their own subscription information.
       // Subscription records are managed by trusted backend code.
       match /subscriptions/{subscriptionId} {
-  allow read, delete: if isOwner(uid);
-  allow create, update: if false;
-}
-// Users can manage only their own chat history.
-match /chats/{chatId} {
-  allow read, create, update, delete: if isOwner(uid);
-}
+        allow read, delete: if isOwner(uid);
+        allow create, update: if false;
+      }
+
+      // Users can manage only their own chat history.
+      match /chats/{chatId} {
+        allow read, create, update, delete: if isOwner(uid);
+      }
     }
   }
 }
