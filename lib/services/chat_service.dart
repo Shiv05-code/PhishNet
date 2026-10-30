@@ -16,6 +16,7 @@ class ChatMessage {
     required this.fromUser,
     required this.text,
     this.imagePath,
+    this.riskLevel,
   });
 
   final bool fromUser;
@@ -23,20 +24,27 @@ class ChatMessage {
 
   /// A photo the user attached. Kept only on this phone.
   final String? imagePath;
+
+  /// Set only on a scan summary: 'high', 'medium' or 'low'. Null for chat answers.
+  final String? riskLevel;
 }
 
 /// The scan a conversation is about: the message that was checked and
 /// PhishNet's assessment of it. Both are optional on the backend.
 class ChatScanContext {
-  const ChatScanContext({required this.message, this.assessment});
+  const ChatScanContext({required this.message, this.assessment, this.result});
 
   final String message;
   final Map<String, dynamic>? assessment;
+
+  /// The scan itself, when the app has it. Chat uses it to show the summary.
+  final ScanResult? result;
 
   /// The context for a fresh scan, in the shape the backend expects.
   factory ChatScanContext.fromResult(String message, ScanResult result) =>
       ChatScanContext(
         message: message,
+        result: result,
         assessment: {
           'risk_level': result.riskLevel,
           'scam_percentage': result.scamPercentage,
@@ -148,6 +156,17 @@ class ChatService extends ChangeNotifier {
     _scan = scan;
     _error = null;
     _pendingQuestion = null;
+    final result = scan.result;
+    if (result != null) {
+      // Same summary as a photo scan, so every scan reads the same way in Chat.
+      _messages.add(
+        ChatMessage(
+          fromUser: false,
+          text: describeScan(result),
+          riskLevel: result.riskLevel,
+        ),
+      );
+    }
     notifyListeners();
   }
 
@@ -179,11 +198,19 @@ class ChatService extends ChangeNotifier {
   /// Returns false, without doing anything, if an answer is already on the way.
   /// On failure the photo is taken back out of the conversation and [error]
   /// says why, so the user can try again.
-  Future<bool> sendImage(String imagePath) async {
+  ///
+  /// With a [question], the photo and the question are sent together: the scan
+  /// becomes the context and the model answers the question once, instead of
+  /// the photo getting its own summary first.
+  Future<bool> sendImage(String imagePath, {String? question}) async {
     if (_sending) return false;
+    var typed = question?.trim() ?? '';
+    if (typed.length > maxQuestionLength) {
+      typed = typed.substring(0, maxQuestionLength);
+    }
     final shown = ChatMessage(
       fromUser: true,
-      text: photoText,
+      text: typed.isEmpty ? photoText : typed,
       imagePath: imagePath,
     );
     _messages.add(shown);
@@ -207,13 +234,26 @@ class ChatService extends ChangeNotifier {
         throw _ChatFailure(e.message);
       }
       _scan = ChatScanContext.fromResult(text, result);
-      _messages.add(ChatMessage(fromUser: false, text: describeScan(result)));
+      if (typed.isEmpty) {
+        _messages.add(
+          ChatMessage(
+            fromUser: false,
+            text: describeScan(result),
+            riskLevel: result.riskLevel,
+          ),
+        );
+      }
     } on _ChatFailure catch (e) {
       _messages.remove(shown);
       _error = e.message;
     } finally {
       _sending = false;
       notifyListeners();
+    }
+    if (_error != null) return false;
+    if (typed.isNotEmpty) {
+      // The question goes to the model now, with the scan as its context.
+      await _send(typed);
     }
     return _error == null;
   }
@@ -225,24 +265,30 @@ class ChatService extends ChangeNotifier {
       'medium' => 'Medium risk',
       _ => 'Low risk',
     };
+    final icon = switch (r.riskLevel) {
+      'high' => '🚨',
+      'medium' => '⚠️',
+      _ => '✅',
+    };
     final pct = r.scamPercentage;
-    final b = StringBuffer(pct == null ? level : '$level: $pct% likely a scam');
+    final headline = pct == null ? level : '$level: $pct% likely a scam';
+    final b = StringBuffer('**$icon $headline**');
     b.write('\n\n${r.summary}');
     final flags = r.redFlags.take(3).toList();
     if (flags.isNotEmpty) {
-      b.write('\n\nRed flags:');
+      b.write('\n\n**🚩 Red flags**');
       for (final f in flags) {
         b.write('\n• $f');
       }
     }
     final steps = r.nextSteps.take(2).toList();
     if (steps.isNotEmpty) {
-      b.write('\n\nWhat to do:');
+      b.write('\n\n**👉 What to do**');
       for (final step in steps) {
         b.write('\n• $step');
       }
     }
-    b.write('\n\nAsk me anything about this message.');
+    b.write('\n\n💬 Ask me anything about this message.');
     final out = b.toString();
     // The backend reads at most 2000 characters of each earlier turn.
     return out.length > 1900 ? '${out.substring(0, 1897)}...' : out;
