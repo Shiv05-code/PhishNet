@@ -8,6 +8,7 @@ import 'package:phishnet_app/screens/ai_chat_screen.dart';
 import 'package:phishnet_app/services/chat_service.dart';
 import 'dart:async';
 import 'support/test_helpers.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 ChatService makeService(
   Future<http.Response> Function(http.Request) handler, {
@@ -33,6 +34,73 @@ const scan = ChatScanContext(
 
 void main() {
   group('ChatService', () {
+    test('Conversation loads Firestore timestamps correctly', () {
+      final created = DateTime.utc(2026, 10, 28, 10, 30);
+      final updated = DateTime.utc(2026, 10, 29, 12, 45);
+
+      final conversation = ChatConversation.fromJson({
+        'id': 'test-firestore-chat',
+        'title': 'Suspicious email',
+        'createdAt': Timestamp.fromDate(created),
+        'updatedAt': Timestamp.fromDate(updated),
+        'messages': [
+          {'fromUser': true, 'text': 'Is this a phishing attempt?'},
+          {
+            'fromUser': false,
+            'text': 'This message contains suspicious links.',
+          },
+        ],
+        'scan': null,
+      });
+
+      expect(conversation.id, 'test-firestore-chat');
+      expect(conversation.createdAt, created);
+      expect(conversation.updatedAt, updated);
+      expect(conversation.messages.length, 2);
+      expect(conversation.messages.first.fromUser, isTrue);
+      expect(conversation.messages.last.fromUser, isFalse);
+    });
+
+    test('Conversation serialization preserves messages and scan', () {
+      final now = DateTime.utc(2026, 10, 29);
+
+      final original = ChatConversation(
+        id: 'test-conversation-id',
+        title: 'Suspicious email',
+        createdAt: now,
+        updatedAt: now,
+        messages: [
+          const ChatMessage(fromUser: true, text: 'Is this email suspicious?'),
+          const ChatMessage(
+            fromUser: false,
+            text: 'The email contains suspicious links.',
+          ),
+        ],
+        scan: const ChatScanContext(
+          message: 'Click this suspicious link',
+          assessment: {'risk_level': 'high'},
+        ),
+      );
+
+      final restored = ChatConversation.fromJson({
+        'id': original.id,
+        ...original.toJson(),
+      });
+
+      expect(restored.id, original.id);
+      expect(restored.title, original.title);
+      expect(restored.createdAt, original.createdAt);
+      expect(restored.updatedAt, original.updatedAt);
+      expect(restored.messages.length, 2);
+      expect(restored.messages.first.fromUser, isTrue);
+      expect(
+        restored.messages.last.text,
+        'The email contains suspicious links.',
+      );
+      expect(restored.scan?.message, 'Click this suspicious link');
+      expect(restored.scan?.assessment?['risk_level'], 'high');
+    });
+
     test('Cannot switch chats while an AI response is pending', () async {
       final responseCompleter = Completer<http.Response>();
 

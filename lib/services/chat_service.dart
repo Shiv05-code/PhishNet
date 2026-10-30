@@ -1,21 +1,37 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'dart:math';
 
 /// One line in the conversation.
+
 class ChatMessage {
   const ChatMessage({required this.fromUser, required this.text});
 
   final bool fromUser;
   final String text;
+
+  Map<String, dynamic> toJson() => {'fromUser': fromUser, 'text': text};
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final fromUser = json['fromUser'];
+    final text = json['text'];
+
+    if (fromUser is! bool || text is! String) {
+      throw const FormatException('Invalid chat message.');
+    }
+
+    return ChatMessage(fromUser: fromUser, text: text);
+  }
 }
 
 /// The scan a conversation is about: the message that was checked and
 /// PhishNet's assessment of it. Both are optional on the backend.
+
 class ChatScanContext {
   const ChatScanContext({required this.message, this.assessment});
 
@@ -26,6 +42,22 @@ class ChatScanContext {
     'message': message,
     if (assessment != null) 'assessment': assessment,
   };
+
+  factory ChatScanContext.fromJson(Map<String, dynamic> json) {
+    final message = json['message'];
+    final assessment = json['assessment'];
+
+    if (message is! String || (assessment != null && assessment is! Map)) {
+      throw const FormatException('Invalid chat scan context.');
+    }
+
+    return ChatScanContext(
+      message: message,
+      assessment: assessment == null
+          ? null
+          : Map<String, dynamic>.from(assessment),
+    );
+  }
 }
 
 class ChatConversation {
@@ -44,6 +76,57 @@ class ChatConversation {
   DateTime updatedAt;
   final List<ChatMessage> messages;
   final ChatScanContext? scan;
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'messages': messages.map((message) => message.toJson()).toList(),
+    'scan': scan?.toJson(),
+  };
+
+  factory ChatConversation.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    final title = json['title'];
+    final createdAt = json['createdAt'];
+    final updatedAt = json['updatedAt'];
+    final rawMessages = json['messages'];
+    final rawScan = json['scan'];
+
+    DateTime parseDate(dynamic value) {
+      if (value is Timestamp) return value.toDate().toUtc();
+      if (value is DateTime) return value.toUtc();
+
+      throw const FormatException('Invalid chat timestamp.');
+    }
+
+    final parsedCreatedAt = parseDate(createdAt);
+    final parsedUpdatedAt = parseDate(updatedAt);
+
+    if (id is! String ||
+        id.isEmpty ||
+        title is! String ||
+        rawMessages is! List) {
+      throw const FormatException('Invalid chat conversation.');
+    }
+
+    return ChatConversation(
+      id: id,
+      title: title,
+      createdAt: parsedCreatedAt,
+      updatedAt: parsedUpdatedAt,
+      messages: rawMessages.map((item) {
+        if (item is! Map) {
+          throw const FormatException('Invalid conversation message.');
+        }
+
+        return ChatMessage.fromJson(Map<String, dynamic>.from(item));
+      }).toList(),
+      scan: rawScan == null
+          ? null
+          : ChatScanContext.fromJson(Map<String, dynamic>.from(rawScan as Map)),
+    );
+  }
 }
 
 typedef IdTokenProvider = Future<String?> Function();
@@ -89,7 +172,6 @@ class ChatService extends ChangeNotifier {
   final List<ChatConversation> _conversations = [];
 
   String? _activeConversationId;
-  int _nextConversationId = 0;
 
   List<ChatConversation> get conversations => List.unmodifiable(_conversations);
 
@@ -106,6 +188,14 @@ class ChatService extends ChangeNotifier {
   /// Plain-language error for the last failed question, or null.
   String? get error => _error;
   bool get canRetry => _error != null && _pendingQuestion != null;
+
+  String _generateConversationId() {
+    final random = Random.secure();
+
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+
+    return base64UrlEncode(bytes).replaceAll('=', '');
+  }
 
   void _saveCurrentConversation() {
     if (_messages.isEmpty) return;
@@ -144,7 +234,7 @@ class ChatService extends ChangeNotifier {
         : firstQuestion;
 
     final conversation = ChatConversation(
-      id: 'chat-${++_nextConversationId}',
+      id: _generateConversationId(),
       title: title,
       createdAt: now,
       updatedAt: now,
