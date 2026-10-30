@@ -189,6 +189,28 @@ class ChatService extends ChangeNotifier {
   String? get error => _error;
   bool get canRetry => _error != null && _pendingQuestion != null;
 
+  String? _currentUserId;
+  int _requestGeneration = 0;
+
+  /// Clears account-specific chat data when the signed-in user changes.
+  /// Repeated events for the same user do not clear their conversations.
+  void setAuthenticatedUser(String? uid) {
+    if (_currentUserId == uid) return;
+
+    _currentUserId = uid;
+    _requestGeneration++;
+    _sending = false;
+
+    _messages.clear();
+    _conversations.clear();
+    _activeConversationId = null;
+    _scan = null;
+    _error = null;
+    _pendingQuestion = null;
+
+    notifyListeners();
+  }
+
   String _generateConversationId() {
     final random = Random.secure();
 
@@ -350,20 +372,29 @@ class ChatService extends ChangeNotifier {
   }
 
   Future<void> _send(String question) async {
+    final generation = _requestGeneration;
+
     _sending = true;
     _error = null;
     _pendingQuestion = question;
     notifyListeners();
+
     try {
       final answer = await _request(question);
+
+      if (generation != _requestGeneration) return;
+
       _messages.add(ChatMessage(fromUser: false, text: answer));
       _saveCurrentConversation();
       _pendingQuestion = null;
     } on _ChatFailure catch (e) {
+      if (generation != _requestGeneration) return;
       _error = e.message;
     } finally {
-      _sending = false;
-      notifyListeners();
+      if (generation == _requestGeneration) {
+        _sending = false;
+        notifyListeners();
+      }
     }
   }
 

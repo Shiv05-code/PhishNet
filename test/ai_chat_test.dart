@@ -34,6 +34,99 @@ const scan = ChatScanContext(
 
 void main() {
   group('ChatService', () {
+    test('Old AI response is discarded after switching accounts', () async {
+      final pendingResponse = Completer<http.Response>();
+
+      final chat = makeService((request) {
+        return pendingResponse.future;
+      });
+
+      chat.setAuthenticatedUser('user-a');
+
+      final request = chat.ask('Is this email suspicious?');
+
+      expect(chat.sending, isTrue);
+
+      chat.setAuthenticatedUser('user-b');
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+      expect(chat.sending, isFalse);
+
+      pendingResponse.complete(
+        http.Response('{"answer":"Old account response"}', 200),
+      );
+
+      await request;
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+      expect(chat.sending, isFalse);
+    });
+
+    test('Switching accounts clears previous chat history', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"This looks suspicious."}', 200);
+      });
+
+      chat.setAuthenticatedUser('user-a');
+
+      await chat.ask('Is this email a scam?');
+
+      expect(chat.messages.length, 2);
+      expect(chat.conversations.length, 1);
+
+      chat.setAuthenticatedUser('user-b');
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+      expect(chat.activeConversationId, isNull);
+
+      await chat.ask('Is this a phishing link?');
+
+      expect(chat.messages.length, 2);
+
+      chat.setAuthenticatedUser(null);
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+    });
+
+    test('Switching accounts clears previous chat history', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"This looks suspicious."}', 200);
+      });
+
+      chat.setAuthenticatedUser('user-a');
+
+      await chat.ask('Is this email a scam?');
+
+      expect(chat.messages.length, 2);
+      expect(chat.conversations.length, 1);
+
+      chat.setAuthenticatedUser('user-b');
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+      expect(chat.activeConversationId, isNull);
+      expect(chat.scan, isNull);
+
+      await chat.ask('Is this a phishing link?');
+
+      expect(chat.messages.length, 2);
+      expect(chat.conversations.length, 1);
+
+      chat.setAuthenticatedUser('user-b');
+
+      // Receiving another event for the same account must not clear its chats.
+      expect(chat.messages.length, 2);
+
+      chat.setAuthenticatedUser(null);
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+    });
+
     test('Conversation loads Firestore timestamps correctly', () {
       final created = DateTime.utc(2026, 10, 28, 10, 30);
       final updated = DateTime.utc(2026, 10, 29, 12, 45);

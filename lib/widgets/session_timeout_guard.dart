@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import '../services/chat_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../screens/login_screen.dart';
@@ -38,6 +38,7 @@ class _SessionTimeoutGuardState extends State<SessionTimeoutGuard>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      ChatService.instance.setAuthenticatedUser(user?.uid);
       if (user == null) {
         _idleTimer?.cancel();
       } else {
