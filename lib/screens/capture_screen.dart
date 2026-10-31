@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +12,9 @@ import '../widgets/figma_gradient_background.dart';
 import '../widgets/figma_glass_button.dart';
 import 'results_screen.dart';
 import '../widgets/auth_widgets.dart';
+import '../widgets/scan_progress_status.dart';
+import '../models/scan_result.dart';
+import '../services/mock_scans.dart';
 import '../services/scan_service.dart';
 
 class CaptureScreen extends StatefulWidget {
@@ -26,9 +31,11 @@ class _CaptureScreenState extends State<CaptureScreen> {
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
   final ScanService _scanService = ScanService();
+  final GlobalKey _cardKey = GlobalKey();
 
   bool _isReadingText = false;
   bool _isTextMode = false;
+  bool _isScanning = false;
 
   @override
   void dispose() {
@@ -123,23 +130,67 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
     if (!mounted) return;
 
-    final analysis = _scanService.analyzeMessage(text);
+    setState(() => _isScanning = true);
+    _scrollCardIntoView();
 
-    Navigator.of(context).push(
-      slideRoute(
-        ResultsScreen(
-          isGuest: widget.isGuest,
-          message: text,
-          analysis: analysis,
+    try {
+      final ScanResult result = kMockScans
+          ? await Future.delayed(
+              const Duration(milliseconds: 2000),
+              MockScans.next,
+            )
+          : await _scanService.analyzeMessage(text);
+
+      if (!mounted) return;
+
+      Navigator.of(context).push(
+        slideRoute(
+          ResultsScreen(isGuest: widget.isGuest, message: text, result: result),
         ),
-      ),
-    );
+      );
+    } on ScanException catch (error) {
+      if (mounted) {
+        _showMessage(error.message);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isScanning = false);
+      }
+    }
+  }
+
+  /// Scrolls the card so the scanning fish and phrase sit in view. The card
+  /// grows over the AnimatedSize duration, so wait for that before scrolling.
+  void _scrollCardIntoView() {
+    Timer(const Duration(milliseconds: 380), () {
+      if (!mounted) return;
+      final cardContext = _cardKey.currentContext;
+      if (cardContext == null) return;
+      Scrollable.ensureVisible(
+        cardContext,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.cardSurface,
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Text(
+          message,
+          style: const TextStyle(
+            fontSize: AppTypography.label,
+            color: AppColors.text,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -158,6 +209,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Center(
                     child: Container(
+                      key: _cardKey,
                       width: double.infinity,
                       constraints: const BoxConstraints(maxWidth: 360),
 
@@ -180,6 +232,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
                       child: AnimatedSize(
                         duration: const Duration(milliseconds: 350),
                         curve: Curves.easeInOut,
+                        // Don't clip the fish or phrase while the card grows.
+                        clipBehavior: Clip.none,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -265,9 +319,12 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
                             if (_isReadingText) ...[
                               const SizedBox(height: 16),
-                              const CircularProgressIndicator(),
-                              const SizedBox(height: 8),
-                              const Text('Reading text from image...'),
+                              const ReadingImageStatus(),
+                            ],
+
+                            if (_isScanning) ...[
+                              const SizedBox(height: 16),
+                              const ScanProgressStatus(),
                             ],
                           ],
                         ),

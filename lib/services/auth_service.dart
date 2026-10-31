@@ -135,7 +135,7 @@ class AuthService {
     final userRef = db.collection('users').doc(user.uid);
     final batch = db.batch();
 
-    for (final collectionName in ['scans', 'subscriptions']) {
+    for (final collectionName in ['scans', 'subscriptions', 'chats']) {
       final documents = await userRef.collection(collectionName).get();
 
       for (final document in documents.docs) {
