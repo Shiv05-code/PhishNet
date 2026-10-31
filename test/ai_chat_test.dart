@@ -471,6 +471,8 @@ void main() {
 
       fail = false;
       await tapOn(tester, find.text('Try again'));
+      // The answer types out over a few seconds; let it finish.
+      await tester.pump(const Duration(seconds: 5));
       expect(find.text(ChatService.genericError), findsNothing);
       expect(find.text('Back again.'), findsOneWidget);
     });

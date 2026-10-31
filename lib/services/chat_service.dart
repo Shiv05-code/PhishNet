@@ -8,25 +8,51 @@ import 'package:http/http.dart' as http;
 import 'dart:math';
 import 'chat_history_repository.dart';
 
+import '../models/scan_result.dart';
+import 'image_text_reader.dart';
+import 'scan_service.dart';
+
 /// One line in the conversation.
 
 class ChatMessage {
-  const ChatMessage({required this.fromUser, required this.text});
+  const ChatMessage({
+    required this.fromUser,
+    required this.text,
+    this.imagePath,
+    this.riskLevel,
+  });
 
   final bool fromUser;
   final String text;
 
-  Map<String, dynamic> toJson() => {'fromUser': fromUser, 'text': text};
+  /// A photo the user attached. Kept only on this phone.
+  final String? imagePath;
+
+  /// Set only on a scan summary.
+  final String? riskLevel;
+
+  Map<String, dynamic> toJson() => {
+    'fromUser': fromUser,
+    'text': text,
+    if (riskLevel != null) 'riskLevel': riskLevel,
+  };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     final fromUser = json['fromUser'];
     final text = json['text'];
+    final riskLevel = json['riskLevel'];
 
-    if (fromUser is! bool || text is! String) {
+    if (fromUser is! bool ||
+        text is! String ||
+        (riskLevel != null && riskLevel is! String)) {
       throw const FormatException('Invalid chat message.');
     }
 
-    return ChatMessage(fromUser: fromUser, text: text);
+    return ChatMessage(
+      fromUser: fromUser,
+      text: text,
+      riskLevel: riskLevel as String?,
+    );
   }
 }
 
@@ -34,10 +60,35 @@ class ChatMessage {
 /// PhishNet's assessment of it. Both are optional on the backend.
 
 class ChatScanContext {
-  const ChatScanContext({required this.message, this.assessment});
+  const ChatScanContext({required this.message, this.assessment, this.result});
 
   final String message;
   final Map<String, dynamic>? assessment;
+
+  /// The scan itself, when the app has it. Chat uses it to show the summary.
+  final ScanResult? result;
+
+  /// The context for a fresh scan, in the shape the backend expects.
+  factory ChatScanContext.fromResult(String message, ScanResult result) =>
+      ChatScanContext(
+        message: message,
+        result: result,
+        assessment: {
+          'risk_level': result.riskLevel,
+          'scam_percentage': result.scamPercentage,
+          'summary': result.summary,
+          'red_flags': [
+            for (var i = 0; i < result.redFlags.length; i++)
+              {
+                'label': i < result.redFlagLabels.length
+                    ? result.redFlagLabels[i]
+                    : '',
+                'description': result.redFlags[i],
+              },
+          ],
+          'next_steps': result.nextSteps,
+        },
+      );
 
   Map<String, dynamic> toJson() => {
     'message': message,
@@ -130,6 +181,8 @@ class ChatConversation {
   }
 }
 
+typedef AnalyzeMessage = Future<ScanResult> Function(String message);
+
 typedef IdTokenProvider = Future<String?> Function();
 
 Future<String?> _firebaseIdToken() async =>
@@ -143,9 +196,13 @@ class ChatService extends ChangeNotifier {
     IdTokenProvider? idToken,
     String? endpoint,
     this._historyRepository,
+    AnalyzeMessage? analyze,
+    TextFromImage? readText,
     this.timeout = const Duration(seconds: 35),
   }) : _client = client ?? http.Client(),
        _idToken = idToken ?? _firebaseIdToken,
+       _analyzeOverride = analyze,
+       _readText = readText ?? readTextFromImageFile,
        _endpoint =
            endpoint ??
            const String.fromEnvironment(
@@ -166,12 +223,31 @@ class ChatService extends ChangeNotifier {
   static const offlineError =
       'We couldn\'t reach PhishNet. Check your internet and try again.';
   static const signInError = 'Please sign in again, then try your question.';
+  static const noTextError =
+      'We couldn\'t find any text in that photo. Try a clearer screenshot.';
+  static const imageError =
+      'We couldn\'t read that photo. Please try a different one.';
+
+  /// What the user's side of the conversation shows for a photo.
+  static const photoText = 'Photo attached';
+
+  /// The scan endpoint accepts at most this many characters.
+  static const maxScanLength = 8000;
 
   final http.Client _client;
   final IdTokenProvider _idToken;
   final String _endpoint;
+  final AnalyzeMessage? _analyzeOverride;
+  final TextFromImage _readText;
   final Duration timeout;
   final ChatHistoryRepository? _historyRepository;
+
+  // Made on first use, so nothing touches Firebase until a photo is sent.
+  ScanService? _scanService;
+  Future<ScanResult> _analyze(String message) =>
+      (_analyzeOverride ?? (_scanService ??= ScanService()).analyzeMessage)(
+        message,
+      );
 
   final List<ChatMessage> _messages = [];
   final List<ChatConversation> _conversations = [];
@@ -408,6 +484,17 @@ class ChatService extends ChangeNotifier {
     _scan = scan;
     _error = null;
     _pendingQuestion = null;
+    final result = scan.result;
+    if (result != null) {
+      // Same summary as a photo scan, so every scan reads the same way in Chat.
+      _messages.add(
+        ChatMessage(
+          fromUser: false,
+          text: describeScan(result),
+          riskLevel: result.riskLevel,
+        ),
+      );
+    }
     notifyListeners();
   }
 
@@ -437,6 +524,107 @@ class ChatService extends ChangeNotifier {
     _saveCurrentConversation();
     await _send(clipped);
     return true;
+  }
+
+  /// Reads the text in a photo on this phone, scans it, and makes that scan
+  /// what the chat is about. Only the text is sent, never the photo.
+  /// Returns false, without doing anything, if an answer is already on the way.
+  /// On failure the photo is taken back out of the conversation and [error]
+  /// says why, so the user can try again.
+  ///
+  /// With a [question], the photo and the question are sent together: the scan
+  /// becomes the context and the model answers the question once, instead of
+  /// the photo getting its own summary first.
+  Future<bool> sendImage(String imagePath, {String? question}) async {
+    if (_sending) return false;
+    var typed = question?.trim() ?? '';
+    if (typed.length > maxQuestionLength) {
+      typed = typed.substring(0, maxQuestionLength);
+    }
+    final shown = ChatMessage(
+      fromUser: true,
+      text: typed.isEmpty ? photoText : typed,
+      imagePath: imagePath,
+    );
+    _messages.add(shown);
+    _sending = true;
+    _error = null;
+    _pendingQuestion = null;
+    notifyListeners();
+    try {
+      String text;
+      try {
+        text = (await _readText(imagePath)).trim();
+      } catch (_) {
+        throw const _ChatFailure(imageError);
+      }
+      if (text.isEmpty) throw const _ChatFailure(noTextError);
+      if (text.length > maxScanLength) text = text.substring(0, maxScanLength);
+      final ScanResult result;
+      try {
+        result = await _analyze(text);
+      } on ScanException catch (e) {
+        throw _ChatFailure(e.message);
+      }
+      _scan = ChatScanContext.fromResult(text, result);
+      if (typed.isEmpty) {
+        _messages.add(
+          ChatMessage(
+            fromUser: false,
+            text: describeScan(result),
+            riskLevel: result.riskLevel,
+          ),
+        );
+      }
+    } on _ChatFailure catch (e) {
+      _messages.remove(shown);
+      _error = e.message;
+    } finally {
+      _sending = false;
+      notifyListeners();
+    }
+    if (_error != null) return false;
+    if (typed.isNotEmpty) {
+      // The question goes to the model now, with the scan as its context.
+      await _send(typed);
+    }
+    return _error == null;
+  }
+
+  /// A short plain-language summary of a scan, shown as PhishNet's reply.
+  static String describeScan(ScanResult r) {
+    final level = switch (r.riskLevel) {
+      'high' => 'High risk',
+      'medium' => 'Medium risk',
+      _ => 'Low risk',
+    };
+    final icon = switch (r.riskLevel) {
+      'high' => '🚨',
+      'medium' => '⚠️',
+      _ => '✅',
+    };
+    final pct = r.scamPercentage;
+    final headline = pct == null ? level : '$level: $pct% likely a scam';
+    final b = StringBuffer('**$icon $headline**');
+    b.write('\n\n${r.summary}');
+    final flags = r.redFlags.take(3).toList();
+    if (flags.isNotEmpty) {
+      b.write('\n\n**🚩 Red flags**');
+      for (final f in flags) {
+        b.write('\n• $f');
+      }
+    }
+    final steps = r.nextSteps.take(2).toList();
+    if (steps.isNotEmpty) {
+      b.write('\n\n**👉 What to do**');
+      for (final step in steps) {
+        b.write('\n• $step');
+      }
+    }
+    b.write('\n\n💬 Ask me anything about this message.');
+    final out = b.toString();
+    // The backend reads at most 2000 characters of each earlier turn.
+    return out.length > 1900 ? '${out.substring(0, 1897)}...' : out;
   }
 
   /// Sends the last question again after an error, without repeating it
