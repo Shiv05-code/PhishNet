@@ -16,6 +16,7 @@ import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../theme/app_typography.dart';
 import 'app_colors.dart';
+import '../widgets/recent_chats_drawer.dart';
 
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key, this.scan, this.service});
@@ -42,6 +43,7 @@ const _followUps = [
 class _AiChatScreenState extends State<AiChatScreen> {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final _picker = ImagePicker();
   late final ChatService _chat = widget.service ?? ChatService.instance;
   String? _hint;
@@ -289,9 +291,35 @@ class _AiChatScreenState extends State<AiChatScreen> {
   @override
   Widget build(BuildContext context) {
     final messages = _chat.messages;
+
     return Scaffold(
-      appBar: const FigmaAppBar(title: 'AI Chat'),
+      key: _scaffoldKey,
+      appBar: FigmaAppBar(
+        title: 'AI Chat',
+        showChatHistoryButton: true,
+        onChatHistoryPressed: () {
+          _scaffoldKey.currentState?.openEndDrawer();
+        },
+      ),
       drawer: const AppDrawer(currentPage: 'AI Chat'),
+
+      endDrawer: RecentChatsDrawer(
+        conversations: _chat.conversations,
+        activeConversationId: _chat.activeConversationId,
+        onNewChat: () {
+          if (!_chat.startNewChat()) return;
+
+          Navigator.of(context).pop();
+          _controller.clear();
+        },
+        onOpenChat: (id) {
+          if (!_chat.openConversation(id)) return;
+
+          Navigator.of(context).pop();
+          _controller.clear();
+        },
+      ),
+
       body: FigmaGradientBackground(
         child: SafeArea(
           child: Column(
