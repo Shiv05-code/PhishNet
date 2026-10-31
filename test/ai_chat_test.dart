@@ -1,14 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:phishnet_app/screens/ai_chat_screen.dart';
 import 'package:phishnet_app/services/chat_service.dart';
-
+import 'dart:async';
 import 'support/test_helpers.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 ChatService makeService(
   Future<http.Response> Function(http.Request) handler, {
@@ -34,6 +34,190 @@ const scan = ChatScanContext(
 
 void main() {
   group('ChatService', () {
+    test('Old AI response is discarded after switching accounts', () async {
+      final pendingResponse = Completer<http.Response>();
+
+      final chat = makeService((request) {
+        return pendingResponse.future;
+      });
+
+      chat.setAuthenticatedUser('user-a');
+
+      final request = chat.ask('Is this email suspicious?');
+
+      expect(chat.sending, isTrue);
+
+      chat.setAuthenticatedUser('user-b');
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+      expect(chat.sending, isFalse);
+
+      pendingResponse.complete(
+        http.Response('{"answer":"Old account response"}', 200),
+      );
+
+      await request;
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+      expect(chat.sending, isFalse);
+    });
+
+    test('Switching accounts clears previous chat history', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"This looks suspicious."}', 200);
+      });
+
+      chat.setAuthenticatedUser('user-a');
+
+      await chat.ask('Is this email a scam?');
+
+      expect(chat.messages.length, 2);
+      expect(chat.conversations.length, 1);
+
+      chat.setAuthenticatedUser('user-b');
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+      expect(chat.activeConversationId, isNull);
+
+      await chat.ask('Is this a phishing link?');
+
+      expect(chat.messages.length, 2);
+
+      chat.setAuthenticatedUser(null);
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+    });
+
+    test('Switching accounts clears previous chat history', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"This looks suspicious."}', 200);
+      });
+
+      chat.setAuthenticatedUser('user-a');
+
+      await chat.ask('Is this email a scam?');
+
+      expect(chat.messages.length, 2);
+      expect(chat.conversations.length, 1);
+
+      chat.setAuthenticatedUser('user-b');
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+      expect(chat.activeConversationId, isNull);
+      expect(chat.scan, isNull);
+
+      await chat.ask('Is this a phishing link?');
+
+      expect(chat.messages.length, 2);
+      expect(chat.conversations.length, 1);
+
+      chat.setAuthenticatedUser('user-b');
+
+      // Receiving another event for the same account must not clear its chats.
+      expect(chat.messages.length, 2);
+
+      chat.setAuthenticatedUser(null);
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations, isEmpty);
+    });
+
+    test('Conversation loads Firestore timestamps correctly', () {
+      final created = DateTime.utc(2026, 10, 28, 10, 30);
+      final updated = DateTime.utc(2026, 10, 29, 12, 45);
+
+      final conversation = ChatConversation.fromJson({
+        'id': 'test-firestore-chat',
+        'title': 'Suspicious email',
+        'createdAt': Timestamp.fromDate(created),
+        'updatedAt': Timestamp.fromDate(updated),
+        'messages': [
+          {'fromUser': true, 'text': 'Is this a phishing attempt?'},
+          {
+            'fromUser': false,
+            'text': 'This message contains suspicious links.',
+          },
+        ],
+        'scan': null,
+      });
+
+      expect(conversation.id, 'test-firestore-chat');
+      expect(conversation.createdAt, created);
+      expect(conversation.updatedAt, updated);
+      expect(conversation.messages.length, 2);
+      expect(conversation.messages.first.fromUser, isTrue);
+      expect(conversation.messages.last.fromUser, isFalse);
+    });
+
+    test('Conversation serialization preserves messages and scan', () {
+      final now = DateTime.utc(2026, 10, 29);
+
+      final original = ChatConversation(
+        id: 'test-conversation-id',
+        title: 'Suspicious email',
+        createdAt: now,
+        updatedAt: now,
+        messages: [
+          const ChatMessage(fromUser: true, text: 'Is this email suspicious?'),
+          const ChatMessage(
+            fromUser: false,
+            text: 'The email contains suspicious links.',
+          ),
+        ],
+        scan: const ChatScanContext(
+          message: 'Click this suspicious link',
+          assessment: {'risk_level': 'high'},
+        ),
+      );
+
+      final restored = ChatConversation.fromJson({
+        'id': original.id,
+        ...original.toJson(),
+      });
+
+      expect(restored.id, original.id);
+      expect(restored.title, original.title);
+      expect(restored.createdAt, original.createdAt);
+      expect(restored.updatedAt, original.updatedAt);
+      expect(restored.messages.length, 2);
+      expect(restored.messages.first.fromUser, isTrue);
+      expect(
+        restored.messages.last.text,
+        'The email contains suspicious links.',
+      );
+      expect(restored.scan?.message, 'Click this suspicious link');
+      expect(restored.scan?.assessment?['risk_level'], 'high');
+    });
+
+    test('Cannot switch chats while an AI response is pending', () async {
+      final responseCompleter = Completer<http.Response>();
+
+      final chat = makeService((request) {
+        return responseCompleter.future;
+      });
+
+      final pendingRequest = chat.ask('Analyze this suspicious email');
+
+      expect(chat.sending, isTrue);
+      expect(chat.startNewChat(), isFalse);
+      expect(chat.openConversation('nonexistent'), isFalse);
+
+      responseCompleter.complete(
+        http.Response('{"answer":"This email looks suspicious."}', 200),
+      );
+
+      await pendingRequest;
+
+      expect(chat.sending, isFalse);
+      expect(chat.messages.length, 2);
+      expect(chat.conversations.length, 1);
+    });
+
     test('sends question, scan and history with the sign-in token', () async {
       final sent = <Map<String, dynamic>>[];
       late http.Request seen;
@@ -57,6 +241,88 @@ void main() {
         {'role': 'assistant', 'content': 'Please do not click it.'},
       ]);
       expect(chat.messages.length, 4);
+    });
+    test('Active conversation appears in recent chats immediately', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"Stay cautious."}', 200);
+      });
+
+      await chat.ask('Is this email suspicious?');
+
+      expect(chat.conversations.length, 1);
+      expect(chat.activeConversationId, chat.conversations.first.id);
+      expect(chat.conversations.first.messages.length, 2);
+    });
+
+    test('Reset preserves the previous conversation', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"This could be phishing."}', 200);
+      });
+
+      await chat.ask('Check this message');
+
+      chat.reset();
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations.length, 1);
+      expect(chat.conversations.first.messages.length, 2);
+      expect(chat.activeConversationId, isNull);
+    });
+    test('New chat saves the previous conversation', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"That looks suspicious."}', 200);
+      });
+
+      await chat.ask('Is this email a scam?');
+
+      expect(chat.startNewChat(), isTrue);
+
+      expect(chat.messages, isEmpty);
+      expect(chat.conversations.length, 1);
+      expect(chat.conversations.first.title, 'Is this email a scam?');
+      expect(chat.conversations.first.messages.length, 2);
+    });
+
+    test('Opening a previous chat restores its messages', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"Be careful with that link."}', 200);
+      });
+
+      await chat.ask('Check this suspicious link');
+
+      chat.startNewChat();
+
+      final savedId = chat.conversations.first.id;
+
+      expect(chat.openConversation(savedId), isTrue);
+
+      expect(chat.messages.length, 2);
+      expect(chat.messages.first.text, 'Check this suspicious link');
+      expect(chat.messages.last.text, 'Be careful with that link.');
+    });
+
+    test('Switching chats keeps conversations separate', () async {
+      final chat = makeService((request) async {
+        return http.Response('{"answer":"Analysis complete."}', 200);
+      });
+
+      await chat.ask('First conversation');
+      chat.startNewChat();
+
+      final firstId = chat.conversations.first.id;
+
+      await chat.ask('Second conversation');
+      chat.startNewChat();
+
+      final secondId = chat.conversations.first.id;
+
+      chat.openConversation(firstId);
+      expect(chat.messages.first.text, 'First conversation');
+
+      chat.openConversation(secondId);
+      expect(chat.messages.first.text, 'Second conversation');
+
+      expect(chat.conversations.length, 2);
     });
 
     test('empty question is not sent', () async {

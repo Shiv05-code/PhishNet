@@ -7,16 +7,20 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final double titleFontSize;
   final bool showBackButton;
+  final bool showChatHistoryButton;
+  final VoidCallback? onChatHistoryPressed;
 
   const FigmaAppBar({
     super.key,
     required this.title,
     this.titleFontSize = AppTypography.heading,
     this.showBackButton = false,
+    this.showChatHistoryButton = false,
+    this.onChatHistoryPressed,
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(64);
+  Size get preferredSize => Size.fromHeight(showChatHistoryButton ? 112 : 64);
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +30,7 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
       // Default leading width (56) is narrower than the 53pt icon plus its
       // button padding, which squeezed the menu icon on app bar screens.
       leadingWidth: 72,
+
       leading: showBackButton
           ? IconButton(
               tooltip: 'Back',
@@ -47,7 +52,29 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
                 onPressed: () => Scaffold.of(context).openDrawer(),
               ),
             ),
-      flexibleSpace: const FigmaGradientBackground(child: SizedBox.expand()),
+
+      flexibleSpace: FigmaGradientBackground(
+        child: showChatHistoryButton && !showBackButton
+            ? SafeArea(
+                bottom: false,
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 12, bottom: 4),
+                    child: IconButton(
+                      tooltip: 'Recent Chats',
+                      icon: const Icon(
+                        Icons.history,
+                        size: 29,
+                        color: AppColors.primaryBlue,
+                      ),
+                      onPressed: onChatHistoryPressed,
+                    ),
+                  ),
+                ),
+              )
+            : const SizedBox.expand(),
+      ),
       title: Align(
         alignment: Alignment.centerRight,
         child: Text(
@@ -57,7 +84,7 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
             fontSize: titleFontSize,
             fontWeight: FontWeight.w700,
             color: AppColors.text,
-            shadows: [
+            shadows: const [
               Shadow(
                 color: Color(0x40000000),
                 blurRadius: 4,
