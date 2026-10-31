@@ -39,6 +39,9 @@ class _SessionTimeoutGuardState extends State<SessionTimeoutGuard>
     WidgetsBinding.instance.addObserver(this);
     _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
       ChatService.instance.setAuthenticatedUser(user?.uid);
+      if (user != null) {
+        unawaited(ChatService.instance.loadSavedChats(user.uid));
+      }
       if (user == null) {
         _idleTimer?.cancel();
       } else {

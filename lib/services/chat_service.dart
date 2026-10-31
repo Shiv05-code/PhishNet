@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:math';
+import 'chat_history_repository.dart';
 
 /// One line in the conversation.
 
@@ -141,6 +142,7 @@ class ChatService extends ChangeNotifier {
     http.Client? client,
     IdTokenProvider? idToken,
     String? endpoint,
+    this._historyRepository,
     this.timeout = const Duration(seconds: 35),
   }) : _client = client ?? http.Client(),
        _idToken = idToken ?? _firebaseIdToken,
@@ -152,7 +154,9 @@ class ChatService extends ChangeNotifier {
                  'https://i2wkmhdclm5epiws4k53bcv35e0jcpmb.lambda-url.us-east-2.on.aws/',
            );
 
-  static final ChatService instance = ChatService();
+  static final ChatService instance = ChatService(
+    historyRepository: ChatHistoryRepository(),
+  );
 
   /// The backend keeps the last 10 turns; sending more is wasted bytes.
   static const maxHistory = 10;
@@ -167,6 +171,7 @@ class ChatService extends ChangeNotifier {
   final IdTokenProvider _idToken;
   final String _endpoint;
   final Duration timeout;
+  final ChatHistoryRepository? _historyRepository;
 
   final List<ChatMessage> _messages = [];
   final List<ChatConversation> _conversations = [];
@@ -191,6 +196,75 @@ class ChatService extends ChangeNotifier {
 
   String? _currentUserId;
   int _requestGeneration = 0;
+
+  Future<void> _pendingChatSave = Future<void>.value();
+
+  Future<void> _queueChatSave(ChatConversation conversation) {
+    final repository = _historyRepository;
+    final uid = _currentUserId;
+
+    if (repository == null || uid == null) {
+      return Future<void>.value();
+    }
+
+    final conversationId = conversation.id;
+    final data = Map<String, dynamic>.from(conversation.toJson());
+
+    final save = _pendingChatSave.then((_) async {
+      if (_currentUserId != uid) return;
+
+      await repository.saveChat(
+        uid: uid,
+        conversationId: conversationId,
+        data: data,
+      );
+    });
+
+    _pendingChatSave = save.catchError((Object error) {
+      debugPrint('Could not save chat history: $error');
+    });
+
+    return save;
+  }
+
+  Future<void> loadSavedChats(String uid) async {
+    final repository = _historyRepository;
+    if (repository == null || uid.isEmpty) return;
+
+    final generation = _requestGeneration;
+
+    try {
+      final saved = await repository.loadChats(uid);
+
+      if (_currentUserId != uid || generation != _requestGeneration) {
+        return;
+      }
+
+      final loaded = <ChatConversation>[];
+
+      for (final data in saved) {
+        try {
+          loaded.add(ChatConversation.fromJson(data));
+        } on FormatException {
+          debugPrint('Skipping invalid saved chat.');
+        }
+      }
+
+      final existingIds = _conversations.map((chat) => chat.id).toSet();
+
+      for (final conversation in loaded) {
+        if (!existingIds.contains(conversation.id)) {
+          _conversations.add(conversation);
+        }
+      }
+
+      _conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+      notifyListeners();
+    } catch (error) {
+      debugPrint('Could not load saved chats: $error');
+    }
+  }
 
   /// Clears account-specific chat data when the signed-in user changes.
   /// Repeated events for the same user do not clear their conversations.
@@ -240,6 +314,7 @@ class ChatService extends ChangeNotifier {
 
         _conversations.removeAt(index);
         _conversations.insert(0, conversation);
+        unawaited(_queueChatSave(conversation));
         return;
       }
     }
@@ -266,6 +341,7 @@ class ChatService extends ChangeNotifier {
 
     _conversations.insert(0, conversation);
     _activeConversationId = conversation.id;
+    unawaited(_queueChatSave(conversation));
   }
 
   bool startNewChat() {
