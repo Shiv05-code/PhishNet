@@ -73,3 +73,6 @@ skills-lock.json
 
 # Local Firebase configuration
 .firebaserc
+# macOS generated Flutter and Xcode files (not used by iOS builds)
+macos/Podfile
+macos/**/xcshareddata/swiftpm/
