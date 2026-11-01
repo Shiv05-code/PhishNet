@@ -27,6 +27,7 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       backgroundColor: Colors.transparent,
       elevation: 0,
+      automaticallyImplyActions: !showChatHistoryButton,
       // Default leading width (56) is narrower than the 53pt icon plus its
       // button padding, which squeezed the menu icon on app bar screens.
       leadingWidth: 72,
@@ -58,14 +59,15 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
             ? SafeArea(
                 bottom: false,
                 child: Align(
-                  alignment: Alignment.bottomLeft,
+                  alignment: Alignment.bottomRight,
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 12, bottom: 4),
+                    padding: const EdgeInsets.only(right: 12, bottom: 4),
                     child: IconButton(
                       tooltip: 'Recent Chats',
                       icon: const Icon(
                         Icons.history,
-                        size: 29,
+                        size: 32,
+                        weight: 700,
                         color: AppColors.primaryBlue,
                       ),
                       onPressed: onChatHistoryPressed,
