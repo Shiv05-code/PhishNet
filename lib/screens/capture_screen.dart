@@ -12,7 +12,6 @@ import '../widgets/figma_gradient_background.dart';
 import '../widgets/figma_glass_button.dart';
 import 'results_screen.dart';
 import '../widgets/auth_widgets.dart';
-import '../widgets/scan_progress_status.dart';
 import '../models/scan_result.dart';
 import '../services/mock_scans.dart';
 import '../services/scan_service.dart';
@@ -35,7 +34,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   bool _isReadingText = false;
   bool _isTextMode = false;
-  bool _isScanning = false;
 
   @override
   void dispose() {
@@ -102,7 +100,9 @@ class _CaptureScreenState extends State<CaptureScreen> {
   void _closeTextInput() {
     _textFocusNode.unfocus();
 
-    if (mounted) {
+    if (!mounted) return;
+
+    if (_textController.text.trim().isEmpty) {
       setState(() {
         _isTextMode = false;
       });
@@ -130,7 +130,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
     if (!mounted) return;
 
-    setState(() => _isScanning = true);
     _scrollCardIntoView();
 
     try {
@@ -151,10 +150,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
     } on ScanException catch (error) {
       if (mounted) {
         _showMessage(error.message);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isScanning = false);
       }
     }
   }
@@ -315,16 +310,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
                                   fillColor: Colors.white70,
                                 ),
                               ),
-                            ],
-
-                            if (_isReadingText) ...[
-                              const SizedBox(height: 16),
-                              const ReadingImageStatus(),
-                            ],
-
-                            if (_isScanning) ...[
-                              const SizedBox(height: 16),
-                              const ScanProgressStatus(),
                             ],
                           ],
                         ),
