@@ -330,12 +330,18 @@ class _AiChatScreenState extends State<AiChatScreen> {
                         hasScan: _chat.scan != null,
                         onPick: _usePrompt,
                       )
-                    : ListView(
+                    : ListView.builder(
                         controller: _scroll,
                         padding: const EdgeInsets.all(16),
-                        children: [
-                          for (final m in messages)
-                            _Bubble(
+                        // Builds only the bubbles on screen, not every message.
+                        itemCount:
+                            messages.length +
+                            (_chat.sending ? 1 : 0) +
+                            (_showFollowUps(messages) ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index < messages.length) {
+                            final m = messages[index];
+                            return _Bubble(
                               key: ObjectKey(m),
                               message: m,
                               typing: _typing.contains(m),
@@ -344,11 +350,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
                               onProgress: _followEnd,
                               onShowAll: () => _showAll(m),
                               onCopy: () => _copy(m),
-                            ),
-                          if (_chat.sending) const ChatThinking(),
-                          if (_showFollowUps(messages))
-                            _FollowUps(onPick: _usePrompt),
-                        ],
+                            );
+                          }
+                          if (_chat.sending && index == messages.length) {
+                            return const ChatThinking();
+                          }
+                          return _FollowUps(onPick: _usePrompt);
+                        },
                       ),
               ),
               if (_chat.error != null)
