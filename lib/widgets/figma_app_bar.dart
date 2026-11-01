@@ -25,8 +25,9 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
+  backgroundColor: Colors.transparent,
+  elevation: 0,
+  automaticallyImplyActions: !showChatHistoryButton,
       // Default leading width (56) is narrower than the 53pt icon plus its
       // button padding, which squeezed the menu icon on app bar screens.
       leadingWidth: 72,
