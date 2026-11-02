@@ -225,10 +225,26 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: AuthLink(
                       label: 'Continue as guest',
                       underline: true,
-                      onTap: () {
-                        Navigator.of(context).pushReplacement(
-                          fadeRoute(const CaptureScreen(isGuest: true)),
-                        );
+                      onTap: () async {
+                        try {
+                          await FirebaseAuth.instance.signInAnonymously();
+
+                          if (!context.mounted) return;
+
+                          Navigator.of(context).pushReplacement(
+                            fadeRoute(const CaptureScreen(isGuest: true)),
+                          );
+                        } catch (_) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Unable to continue as guest. Please try again.',
+                                ),
+                              ),
+                            );
+                          }
+                        }
                       },
                     ),
                   ),
