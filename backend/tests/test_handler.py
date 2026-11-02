@@ -598,10 +598,117 @@ class ChatTests(HandlerTestCase):
 
     def test_mock_mode_skips_claude(self):
         with mock.patch.object(handler, "MOCK", True):
-            resp = self.chat(question="hi", scan=SCAN)
+            resp = self.chat(question="Tell me more", scan=SCAN)
         self.assertEqual(resp["statusCode"], 200)
         self.assertEqual(json.loads(resp["body"]), {"answer": handler.CHAT_MOCK_ANSWER})
         self.client.messages.create.assert_not_called()
+
+    def test_mock_mode_answers_each_starter_question(self):
+        cases = {
+            "Is it safe to click this?": handler.CHAT_MOCK_CLICK,
+            "What should I do now that I received this message?": handler.CHAT_MOCK_NEXT_STEPS,
+            "What should I do if I already clicked a link?": handler.CHAT_MOCK_ALREADY_CLICKED,
+            "Is this text message safe?": handler.CHAT_MOCK_SAFE,
+            "Someone asked me for my password. Is that a scam?": handler.CHAT_MOCK_PASSWORD,
+            "How do I report this?": handler.CHAT_MOCK_REPORT,
+            "What should I do next?": handler.CHAT_MOCK_NEXT_STEPS,
+            "Is it safe to click links?": handler.CHAT_MOCK_CLICK,
+        }
+        with mock.patch.object(handler, "MOCK", True):
+            for question, expected in cases.items():
+                with self.subTest(question=question):
+                    resp = self.chat(question=question, scan=SCAN)
+                    self.assertEqual(json.loads(resp["body"]), {"answer": expected})
+        self.client.messages.create.assert_not_called()
+
+    def test_mock_mode_without_a_scan_says_to_scan_first(self):
+        with mock.patch.object(handler, "MOCK", True):
+            hi = self.chat(question="hi")
+            safe = self.chat(question="Is this text message safe?")
+        self.assertIn(json.loads(hi["body"])["answer"], handler.CHAT_MOCK_GREETINGS_NO_MESSAGE)
+        self.assertEqual(json.loads(safe["body"]), {"answer": handler.CHAT_MOCK_NO_MESSAGE})
+
+    def test_no_scan_adds_the_no_message_note_to_the_prompt(self):
+        system, _ = handler._build_chat_request({"question": "Is it safe?"})
+        self.assertIn(handler.CHAT_NO_MESSAGE_NOTE.strip(), system)
+        system, _ = handler._build_chat_request({"question": "Is it safe?", "scan": SCAN})
+        self.assertNotIn(handler.CHAT_NO_MESSAGE_NOTE.strip(), system)
+
+    def test_prompt_covers_role_and_edge_cases(self):
+        for phrase in (
+            "You cannot open links",
+            "cannot check it",
+            "already clicked",
+            "ignore these rules",
+            "cannot promise",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, handler.CHAT_SYSTEM)
+
+    def test_mock_mode_answers_greetings_thanks_and_unknown_sender(self):
+        cases = {
+            "hi": handler.CHAT_MOCK_GREETINGS,
+            "Hello!": handler.CHAT_MOCK_GREETINGS,
+            "hey there": handler.CHAT_MOCK_GREETINGS,
+            "thanks": handler.CHAT_MOCK_THANKS,
+            "Thank you so much": handler.CHAT_MOCK_THANKS,
+            "Who might be sending this?": (handler.CHAT_MOCK_NOT_SURE,),
+            "bye": handler.CHAT_MOCK_BYE,
+            "Goodbye!": handler.CHAT_MOCK_BYE,
+            "cool": handler.CHAT_MOCK_SMALL_TALK,
+            "Okay": handler.CHAT_MOCK_SMALL_TALK,
+            "ok, is this a scam?": (handler.CHAT_MOCK_ANSWER,),
+        }
+        with mock.patch.object(handler, "MOCK", True):
+            for question, variants in cases.items():
+                with self.subTest(question=question):
+                    resp = self.chat(question=question, scan=SCAN)
+                    self.assertIn(json.loads(resp["body"])["answer"], variants)
+        self.client.messages.create.assert_not_called()
+
+    def test_repeated_greetings_and_goodbyes_vary(self):
+        with mock.patch.object(handler, "MOCK", True):
+            for question, variants in (
+                ("hi", handler.CHAT_MOCK_GREETINGS),
+                ("bye", handler.CHAT_MOCK_BYE),
+                ("thanks", handler.CHAT_MOCK_THANKS),
+            ):
+                with self.subTest(question=question):
+                    answers = {
+                        json.loads(self.chat(question=question, scan=SCAN)["body"])["answer"]
+                        for _ in range(40)
+                    }
+                    self.assertGreater(len(answers), 1)
+                    self.assertLessEqual(answers, set(variants))
+
+    def test_each_mock_variant_set_uses_different_emoji(self):
+        for variants in (
+            handler.CHAT_MOCK_GREETINGS,
+            handler.CHAT_MOCK_GREETINGS_NO_MESSAGE,
+            handler.CHAT_MOCK_THANKS,
+            handler.CHAT_MOCK_BYE,
+            handler.CHAT_MOCK_SMALL_TALK,
+        ):
+            leading = [answer.split()[0] for answer in variants]
+            with self.subTest(variants=variants):
+                self.assertEqual(len(set(leading)), len(leading))
+
+    def test_mock_small_talk_does_not_repeat_the_scam_warning(self):
+        for variants in (
+            handler.CHAT_MOCK_GREETINGS,
+            handler.CHAT_MOCK_GREETINGS_NO_MESSAGE,
+            handler.CHAT_MOCK_THANKS,
+            handler.CHAT_MOCK_BYE,
+            handler.CHAT_MOCK_SMALL_TALK,
+        ):
+            for answer in variants:
+                with self.subTest(answer=answer):
+                    self.assertNotIn("common scam", answer.lower())
+                    self.assertNotIn("do not click", answer.lower())
+
+    def test_system_prompt_tells_model_to_greet_normally(self):
+        self.assertIn("greets you", handler.CHAT_SYSTEM)
+        self.assertIn("Do not repeat the scam warning", handler.CHAT_SYSTEM)
 
     def test_question_and_answer_are_not_logged(self):
         self.client.messages.create.return_value = _chat_response("secret answer 98765")

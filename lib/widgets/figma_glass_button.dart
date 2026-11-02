@@ -80,8 +80,8 @@ class FigmaGlassUploadButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FigmaGlassButton(
-      width: 230,
-      height: 230,
+      width: 290,
+      height: 290,
       borderRadius: BorderRadius.circular(100),
       semanticLabel: 'Upload content',
       onPressed: onPressed,

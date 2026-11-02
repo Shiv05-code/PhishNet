@@ -17,12 +17,14 @@ class ResultsScreen extends StatefulWidget {
   final bool isGuest;
   final String message;
   final ScanResult? result;
+  final Future<ScanResult>? analysis;
 
   const ResultsScreen({
     super.key,
     this.isGuest = false,
     this.message = '',
     this.result,
+    this.analysis,
   });
 
   static const _sample = ScanResult(
@@ -57,6 +59,8 @@ class _ResultsScreenState extends State<ResultsScreen>
   late final Animation<double> _buttons;
   late final Animation<double> _flags;
   bool _hapticFired = false;
+  ScanResult? _resolvedResult;
+  Object? _analysisError;
 
   @override
   void initState() {
@@ -74,6 +78,10 @@ class _ResultsScreenState extends State<ResultsScreen>
     _stepsText = _interval(0.5, 0.9, curve: Curves.linear);
     _buttons = _interval(0.7, 0.85);
     _flags = _interval(0.85, 1.0);
+
+    if (widget.analysis != null) {
+      _loadAnalysis();
+    }
   }
 
   Animation<double> _interval(
@@ -94,13 +102,43 @@ class _ResultsScreenState extends State<ResultsScreen>
     if (MediaQuery.disableAnimationsOf(context)) _controller.value = 1;
   }
 
+  Future<void> _loadAnalysis() async {
+    try {
+      final result = await widget.analysis!;
+
+      if (!mounted) return;
+
+      setState(() {
+        _resolvedResult = result;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _analysisError = error;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
-  ScanResult get _r => widget.result ?? ResultsScreen._sample;
+  ScanResult get _r =>
+      _resolvedResult ?? widget.result ?? ResultsScreen._sample;
+
+  /// Opens AI Chat about this scan. Only a real scan is handed to Chat, not
+  /// the sample shown before one exists.
+  void _openChat() {
+    final result = widget.result;
+    final message = widget.message.trim();
+    final scan = result == null || message.isEmpty
+        ? null
+        : ChatScanContext.fromResult(message, result);
+    Navigator.of(context).push(fadeRoute(AiChatScreen(scan: scan)));
+  }
 
   /// A light haptic once the score has finished filling, scaled to risk.
   void _hapticWhenScored() {
@@ -148,24 +186,20 @@ class _ResultsScreenState extends State<ResultsScreen>
     ];
   }
 
-  Map<String, dynamic> _assessmentForChat() {
-    return {
-      'risk_level': _r.riskLevel,
-      if (_r.scamPercentage != null) 'scam_percentage': _r.scamPercentage,
-      'summary': _r.summary,
-      'red_flags': [
-        for (var i = 0; i < _r.redFlags.length; i++)
-          {
-            'label': i < _r.redFlagLabels.length ? _r.redFlagLabels[i] : '',
-            'description': _r.redFlags[i],
-          },
-      ],
-      'next_steps': _r.nextSteps,
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
+    if (widget.analysis != null && _resolvedResult == null) {
+      if (_analysisError != null) {
+        return Scaffold(
+          appBar: const FigmaAppBar(title: 'Results'),
+          body: Center(
+            child: Text('The scan could not be completed. Please try again.'),
+          ),
+        );
+      }
+
+      return _AnalyzingResults(isGuest: widget.isGuest);
+    }
     final String headline;
     final String riskLabel;
     final Color riskColor;
@@ -320,16 +354,7 @@ class _ResultsScreenState extends State<ResultsScreen>
                       const SizedBox(width: 16),
                       Flexible(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).push(
-                            fadeRoute(
-                              AiChatScreen(
-                                scan: ChatScanContext(
-                                  message: widget.message,
-                                  assessment: _assessmentForChat(),
-                                ),
-                              ),
-                            ),
-                          ),
+                          onPressed: _openChat,
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
@@ -450,6 +475,111 @@ class _ResultsScreenState extends State<ResultsScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AnalyzingResults extends StatefulWidget {
+  final bool isGuest;
+
+  const _AnalyzingResults({required this.isGuest});
+
+  @override
+  State<_AnalyzingResults> createState() => _AnalyzingResultsState();
+}
+
+class _AnalyzingResultsState extends State<_AnalyzingResults>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _waveController;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _waveController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: const FigmaAppBar(title: 'Results'),
+      drawer: AppDrawer(currentPage: 'Results', isGuest: widget.isGuest),
+      body: FigmaGradientBackground(
+        child: Center(
+          child: Card(
+            margin: const EdgeInsets.all(16),
+            color: Colors.white.withValues(alpha: 0.9),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Analyzing...',
+                          style: TextStyle(
+                            fontSize: AppTypography.emphasis,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        AnimatedBuilder(
+                          animation: _waveController,
+                          builder: (context, child) {
+                            return Row(
+                              children: List.generate(5, (index) {
+                                final height =
+                                    10 +
+                                    ((sin(
+                                                  _waveController.value *
+                                                          pi *
+                                                          2 +
+                                                      index,
+                                                ) +
+                                                1) /
+                                            2) *
+                                        20;
+
+                                return Container(
+                                  width: 5,
+                                  height: height,
+                                  margin: const EdgeInsets.only(right: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade400,
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                );
+                              }),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  const SizedBox(
+                    width: 105,
+                    height: 105,
+                    child: CircularProgressIndicator(strokeWidth: 9),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
