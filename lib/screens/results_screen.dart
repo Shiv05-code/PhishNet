@@ -11,6 +11,7 @@ import '../theme/app_typography.dart';
 import 'app_colors.dart';
 import 'family_social_screen.dart';
 import 'ai_chat_screen.dart';
+import '../services/chat_service.dart';
 
 class ResultsScreen extends StatefulWidget {
   final bool isGuest;
@@ -26,6 +27,7 @@ class ResultsScreen extends StatefulWidget {
 
   static const _sample = ScanResult(
     riskLevel: 'high',
+    scamPercentage: 85,
     summary:
         'PhishNet found several red flags in this message. Be very careful.',
     redFlags: [
@@ -128,7 +130,7 @@ class _ResultsScreenState extends State<ResultsScreen>
     'link' => Icons.link,
     'person_search' => Icons.person_search,
     'currency_exchange' => Icons.currency_exchange,
-    'attaach_file' => Icons.attach_file,
+    'attach_file' => Icons.attach_file,
     'compare_arrows' => Icons.compare_arrows,
     _ => Icons.error_outline,
   };
@@ -144,6 +146,22 @@ class _ResultsScreenState extends State<ResultsScreen>
           icon: _iconFor(i < _r.redFlagIcons.length ? _r.redFlagIcons[i] : ''),
         ),
     ];
+  }
+
+  Map<String, dynamic> _assessmentForChat() {
+    return {
+      'risk_level': _r.riskLevel,
+      if (_r.scamPercentage != null) 'scam_percentage': _r.scamPercentage,
+      'summary': _r.summary,
+      'red_flags': [
+        for (var i = 0; i < _r.redFlags.length; i++)
+          {
+            'label': i < _r.redFlagLabels.length ? _r.redFlagLabels[i] : '',
+            'description': _r.redFlags[i],
+          },
+      ],
+      'next_steps': _r.nextSteps,
+    };
   }
 
   @override
@@ -302,9 +320,16 @@ class _ResultsScreenState extends State<ResultsScreen>
                       const SizedBox(width: 16),
                       Flexible(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.of(
-                            context,
-                          ).push(fadeRoute(const AiChatScreen())),
+                          onPressed: () => Navigator.of(context).push(
+                            fadeRoute(
+                              AiChatScreen(
+                                scan: ChatScanContext(
+                                  message: widget.message,
+                                  assessment: _assessmentForChat(),
+                                ),
+                              ),
+                            ),
+                          ),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
