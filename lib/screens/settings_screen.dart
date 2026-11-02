@@ -67,68 +67,71 @@ class SettingsScreen extends StatelessWidget {
                       ),
                     ),
                   const SizedBox(height: 38),
-                  _settingButton(
-                    context,
-                    'Delete My Account',
-                    enabled: !isGuest,
-                    onPressed: isGuest
-                        ? null
-                        : () async {
-                            await showDialog<void>(
-                              context: context,
-                              builder: (dialogContext) {
-                                return AppDialog(
-                                  icon: Icons.warning_amber_rounded,
-                                  iconColor: AuthTheme.error,
-                                  title: 'Delete your account?',
-                                  message:
-                                      'This will permanently delete your account and saved data. '
-                                      'This action cannot be undone. Are you sure you want to proceed?',
-                                  actions: [
-                                    AppDialogButton(
-                                      label: 'Cancel',
-                                      onPressed: () =>
-                                          Navigator.of(dialogContext).pop(),
-                                    ),
-                                    AppDialogButton(
-                                      label: 'Yes, Delete',
-                                      color: AuthTheme.error,
-                                      onPressed: () async {
-                                        Navigator.of(dialogContext).pop();
+                  if (!isGuest)
+                    _settingButton(
+                      context,
+                      'Delete My Account',
+                      enabled: !isGuest,
+                      onPressed: isGuest
+                          ? null
+                          : () async {
+                              await showDialog<void>(
+                                context: context,
+                                builder: (dialogContext) {
+                                  return AppDialog(
+                                    icon: Icons.warning_amber_rounded,
+                                    iconColor: AuthTheme.error,
+                                    title: 'Delete your account?',
+                                    message:
+                                        'This will permanently delete your account and saved data. '
+                                        'This action cannot be undone. Are you sure you want to proceed?',
+                                    actions: [
+                                      AppDialogButton(
+                                        label: 'Cancel',
+                                        onPressed: () =>
+                                            Navigator.of(dialogContext).pop(),
+                                      ),
+                                      AppDialogButton(
+                                        label: 'Yes, Delete',
+                                        color: AuthTheme.error,
+                                        onPressed: () async {
+                                          Navigator.of(dialogContext).pop();
 
-                                        try {
-                                          await (authService ?? AuthService())
-                                              .deleteAccountAndData();
+                                          try {
+                                            await (authService ?? AuthService())
+                                                .deleteAccountAndData();
 
-                                          if (!context.mounted) return;
+                                            if (!context.mounted) return;
 
-                                          Navigator.of(
-                                            context,
-                                          ).pushAndRemoveUntil(
-                                            instantRoute(const SignupScreen()),
-                                            (_) => false,
-                                          );
-                                        } catch (_) {
-                                          if (!context.mounted) return;
-
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                'The account could not be deleted. Please try again.',
+                                            Navigator.of(
+                                              context,
+                                            ).pushAndRemoveUntil(
+                                              instantRoute(
+                                                const SignupScreen(),
                                               ),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          },
-                  ),
+                                              (_) => false,
+                                            );
+                                          } catch (_) {
+                                            if (!context.mounted) return;
+
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'The account could not be deleted. Please try again.',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                    ),
                   _settingButton(
                     context,
                     'Terms & Conditions',
@@ -150,16 +153,17 @@ class SettingsScreen extends StatelessWidget {
                       context,
                     ).push(fadeRoute(const PaymentPlanScreen())),
                   ),
-                  _settingButton(
-                    context,
-                    'Change Password',
-                    enabled: !isGuest,
-                    onPressed: isGuest
-                        ? null
-                        : () => Navigator.of(
-                            context,
-                          ).push(fadeRoute(const ForgotPasswordScreen())),
-                  ),
+                  if (!isGuest)
+                    _settingButton(
+                      context,
+                      'Change Password',
+                      enabled: !isGuest,
+                      onPressed: isGuest
+                          ? null
+                          : () => Navigator.of(
+                              context,
+                            ).push(fadeRoute(const ForgotPasswordScreen())),
+                    ),
                   const SizedBox(height: 8),
                   FigmaGlassButton(
                     width: 210,
