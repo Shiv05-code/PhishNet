@@ -80,6 +80,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
   @override
   Widget build(BuildContext context) {
     final messages = _chat.messages;
+    final hasScan = _chat.scan != null && _chat.scan!.message.isNotEmpty;
     return Scaffold(
       appBar: const FigmaAppBar(title: 'AI Chat'),
       drawer: const AppDrawer(currentPage: 'AI Chat'),
@@ -88,15 +89,15 @@ class _AiChatScreenState extends State<AiChatScreen> {
           child: Column(
             children: [
               Expanded(
-                child: messages.isEmpty && !_chat.sending
-                    ? ChatWelcome(
-                        hasScan: _chat.scan != null,
-                        onPick: _usePrompt,
-                      )
+                child: messages.isEmpty && !_chat.sending && !hasScan
+                    ? ChatWelcome(hasScan: false, onPick: _usePrompt)
                     : ListView(
                         controller: _scroll,
                         padding: const EdgeInsets.all(16),
                         children: [
+                          if (hasScan) _ScannedMessageBubble(scan: _chat.scan!),
+                          if (hasScan && messages.isEmpty && !_chat.sending)
+                            _ScanPrompt(onPick: _usePrompt),
                           for (final m in messages) _Bubble(message: m),
                           if (_chat.sending) const _Thinking(),
                         ],
@@ -326,6 +327,141 @@ class _InputBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ScannedMessageBubble extends StatelessWidget {
+  const _ScannedMessageBubble({required this.scan});
+  final ChatScanContext scan;
+
+  @override
+  Widget build(BuildContext context) {
+    final risk = scan.assessment?['risk_level'] as String?;
+    final (label, color) = switch (risk) {
+      'high' => ('High Risk', const Color(0xFFD64545)),
+      'medium' => ('Medium Risk', const Color(0xFFE08A1E)),
+      'low' => ('Low Risk', const Color(0xFF2E9E5B)),
+      _ => (null, AppColors.primaryBlue),
+    };
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.85,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.cardSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Message you checked',
+              style: TextStyle(
+                fontSize: AppTypography.caption,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              scan.message,
+              maxLines: 6,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: AppTypography.body,
+                height: 1.3,
+                color: AppColors.text,
+              ),
+            ),
+            if (label != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: AppTypography.caption,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScanPrompt extends StatelessWidget {
+  const _ScanPrompt({required this.onPick});
+  final void Function(String question) onPick;
+
+  static const _questions = [
+    'Is this a scam?',
+    'Is it safe to click the link?',
+    'What should I do?',
+    'Who might be sending this?',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width * 0.85,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.cardSurface,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Text(
+            'What would you like to know about this message?',
+            style: TextStyle(
+              fontSize: AppTypography.body,
+              height: 1.35,
+              color: AppColors.text,
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final q in _questions)
+              ActionChip(
+                label: Text(
+                  q,
+                  style: const TextStyle(
+                    fontSize: AppTypography.body,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+                backgroundColor: const Color(0xD9FDFCF9),
+                onPressed: () => onPick(q),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 }
