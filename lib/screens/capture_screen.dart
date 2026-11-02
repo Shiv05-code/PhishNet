@@ -17,6 +17,7 @@ import '../widgets/scan_progress_status.dart';
 import '../models/scan_result.dart';
 import '../services/mock_scans.dart';
 import '../services/scan_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class CaptureScreen extends StatefulWidget {
   final bool isGuest;
@@ -151,7 +152,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
     _scrollCardIntoView();
 
     try {
-      final ScanResult result = kMockScans
+      final useMock =
+          kMockScans ||
+          (widget.isGuest && FirebaseAuth.instance.currentUser == null);
+      final ScanResult result = useMock
           ? await Future.delayed(
               const Duration(milliseconds: 2000),
               MockScans.next,

@@ -10,6 +10,7 @@ import 'email_verification_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_conditions_screen.dart';
 import '../theme/app_typography.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? initialEmail;
@@ -78,7 +79,17 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _continueAsGuest() {
+  Future<void> _continueAsGuest() async {
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _error = "We could not start guest mode. Please try again.",
+      );
+      return;
+    }
+    if (!mounted) return;
     Navigator.of(
       context,
     ).pushReplacement(fadeRoute(const CaptureScreen(isGuest: true)));

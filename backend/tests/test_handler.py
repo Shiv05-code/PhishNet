@@ -100,6 +100,17 @@ class AuthAndInputTests(HandlerTestCase):
         resp = handler.handler({"headers": {"authorization": "Bearer good-token"}, "body": raw, "isBase64Encoded": True}, None)
         self.assertEqual(resp["statusCode"], 200)
 
+    def test_anonymous_user_scan_is_not_saved(self):
+        def verify(token):
+            return {"uid": "anon-1", "firebase": {"sign_in_provider": "anonymous"}}
+
+        with mock.patch.object(handler.auth, "verify_id_token", side_effect=verify), \
+             mock.patch.object(handler, "_db_ready", True), \
+             mock.patch.object(handler.firestore, "client") as db:
+            resp = self.call(text="hello")
+        self.assertEqual(resp["statusCode"], 200)
+        db.assert_not_called()
+
 
 class SameTextPayloadTests(HandlerTestCase):
     def test_manual_and_ocr_text_use_the_same_text_only_payload(self):
