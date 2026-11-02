@@ -190,7 +190,11 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
     }
   }
 
-  bool get _isLoggedIn => FirebaseAuth.instance.currentUser != null;
+  bool get _isLoggedIn {
+    final user = FirebaseAuth.instance.currentUser;
+    return user != null && !user.isAnonymous;
+  }
+
   bool get _onPlus => _hasPlus;
   bool get _onFreeNoAccount => !_isLoggedIn;
   bool get _onFreeWithAccount => _isLoggedIn && !_onPlus;
