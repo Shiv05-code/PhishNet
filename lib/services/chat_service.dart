@@ -251,6 +251,7 @@ class ChatService extends ChangeNotifier {
 
   final List<ChatMessage> _messages = [];
   final List<ChatConversation> _conversations = [];
+  final Set<String> _titleRequestsStarted = {};
 
   String? _activeConversationId;
 
@@ -274,6 +275,187 @@ class ChatService extends ChangeNotifier {
   int _requestGeneration = 0;
 
   Future<void> _pendingChatSave = Future<void>.value();
+  Future<String?> _requestChatTitle(ChatConversation conversation) async {
+    if (_endpoint.isEmpty) return null;
+
+    final messages = conversation.messages
+        .where((message) => message.text.trim().isNotEmpty)
+        .take(8)
+        .map(
+          (message) => {
+            'role': message.fromUser ? 'user' : 'assistant',
+            'content': message.text.trim().substring(
+              0,
+              message.text.trim().length > 500
+                  ? 500
+                  : message.text.trim().length,
+            ),
+          },
+        )
+        .toList();
+
+    if (!messages.any((message) => message['role'] == 'user')) {
+      return null;
+    }
+
+    try {
+      final token = await _idToken();
+      if (token == null) return null;
+
+      final response = await _client
+          .post(
+            Uri.parse(_endpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'action': 'chat_title',
+              'messages': messages,
+              if (conversation.scan != null)
+                'scan': {
+                  'message': conversation.scan!.message.length > 500
+                      ? conversation.scan!.message.substring(0, 500)
+                      : conversation.scan!.message,
+                },
+            }),
+          )
+          .timeout(timeout);
+
+      if (response.statusCode != 200) return null;
+
+      final data = jsonDecode(response.body);
+      if (data is! Map || data['title'] is! String) return null;
+
+      final title = (data['title'] as String).trim();
+      return title.isEmpty ? null : title;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _generateTitleForConversation(
+    ChatConversation conversation,
+  ) async {
+    final meaningfulQuestions = conversation.messages
+        .where((message) => message.fromUser)
+        .map((message) => message.text.trim().toLowerCase())
+        .where(
+          (text) =>
+              text.isNotEmpty &&
+              !const {
+                'hi',
+                'hello',
+                'hey',
+                'thanks',
+                'thank you',
+                'ok',
+                'okay',
+                'bye',
+              }.contains(text),
+        )
+        .toList();
+
+    if (meaningfulQuestions.isEmpty) return;
+
+    if (!_titleRequestsStarted.add(conversation.id)) return;
+
+    final uid = _currentUserId;
+    final generation = _requestGeneration;
+    final conversationId = conversation.id;
+
+    final title = await _requestChatTitle(conversation);
+
+    if (title == null ||
+        uid != _currentUserId ||
+        generation != _requestGeneration) {
+      _titleRequestsStarted.remove(conversationId);
+      return;
+    }
+
+    final index = _conversations.indexWhere(
+      (item) => item.id == conversationId,
+    );
+
+    if (index == -1) return;
+
+    final current = _conversations[index];
+
+    final repository = _historyRepository;
+
+    if (repository == null || uid == null) {
+      current.title = title;
+      notifyListeners();
+      return;
+    }
+
+    final previousTitle = current.title;
+
+    current.title = title;
+    notifyListeners();
+
+    try {
+      final updated = await _queueChatTitleUpdate(
+        uid: uid,
+        generation: generation,
+        conversationId: conversationId,
+        title: title,
+      );
+
+      if (!updated ||
+          _currentUserId != uid ||
+          generation != _requestGeneration) {
+        return;
+      }
+    } catch (error) {
+      _titleRequestsStarted.remove(conversationId);
+
+      if (_currentUserId == uid &&
+          generation == _requestGeneration &&
+          current.title == title) {
+        current.title = previousTitle;
+        notifyListeners();
+      }
+
+      debugPrint('Could not update chat title: $error');
+    }
+  }
+
+  Future<bool> _queueChatTitleUpdate({
+    required String uid,
+    required int generation,
+    required String conversationId,
+    required String title,
+  }) {
+    final repository = _historyRepository;
+
+    if (repository == null) {
+      return Future<bool>.value(false);
+    }
+
+    final update = _pendingChatSave.then((_) async {
+      if (_currentUserId != uid || _requestGeneration != generation) {
+        return false;
+      }
+
+      await repository.updateChatTitle(
+        uid: uid,
+        conversationId: conversationId,
+        title: title,
+      );
+
+      return true;
+    });
+
+    _pendingChatSave = update.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('Could not update chat title: $error');
+      },
+    );
+
+    return update;
+  }
 
   Future<void> _queueChatSave(ChatConversation conversation) {
     final repository = _historyRepository;
@@ -350,6 +532,7 @@ class ChatService extends ChangeNotifier {
 
     _currentUserId = uid;
     _requestGeneration++;
+    _titleRequestsStarted.clear();
     _sending = false;
 
     _messages.clear();
@@ -651,6 +834,17 @@ class ChatService extends ChangeNotifier {
 
       _messages.add(ChatMessage(fromUser: false, text: answer));
       _saveCurrentConversation();
+
+      final conversationId = _activeConversationId;
+
+      if (conversationId != null) {
+        final conversation = _conversations.firstWhere(
+          (item) => item.id == conversationId,
+        );
+
+        unawaited(_generateTitleForConversation(conversation));
+      }
+
       _pendingQuestion = null;
     } on _ChatFailure catch (e) {
       if (generation != _requestGeneration) return;

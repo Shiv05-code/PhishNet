@@ -16,6 +16,15 @@ class RecentChatsDrawer extends StatelessWidget {
   final String? activeConversationId;
   final VoidCallback onNewChat;
   final ValueChanged<String> onOpenChat;
+  String _formatChatDate(DateTime date) {
+    final local = date.toLocal();
+
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final year = local.year;
+
+    return '$month/$day/$year';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +90,13 @@ class RecentChatsDrawer extends StatelessWidget {
                                 conversation.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                _formatChatDate(conversation.updatedAt),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
                               ),
                               selected: isActive,
                               selectedTileColor: AppColors.primaryBlue

@@ -34,6 +34,139 @@ const scan = ChatScanContext(
 
 void main() {
   group('ChatService', () {
+    test('Generated title remains after another chat message', () async {
+      final pendingTitle = Completer<http.Response>();
+      final titleRequested = Completer<void>();
+
+      final chat = makeService((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+
+        if (body['action'] == 'chat_title') {
+          if (!titleRequested.isCompleted) {
+            titleRequested.complete();
+          }
+          return pendingTitle.future;
+        }
+
+        return answer('This message may be suspicious.');
+      });
+
+      chat.setAuthenticatedUser('user-a');
+
+      await chat.ask('I received a USPS delivery text.');
+
+      await titleRequested.future;
+
+      await chat.ask('Should I click the link?');
+
+      pendingTitle.complete(
+        http.Response(
+          jsonEncode({'title': 'Suspicious USPS Delivery Text'}),
+          200,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(chat.conversations.first.title, 'Suspicious USPS Delivery Text');
+
+      expect(chat.conversations.first.messages.length, 4);
+    });
+    test('Failed AI title request does not lose conversation', () async {
+      final chat = makeService((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+
+        if (body['action'] == 'chat_title') {
+          return http.Response(
+            jsonEncode({'error': 'chat_title_unavailable'}),
+            502,
+          );
+        }
+
+        return answer('This message may be suspicious.');
+      });
+
+      chat.setAuthenticatedUser('user-a');
+
+      await chat.ask('I received a suspicious bank login link.');
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(chat.conversations.length, 1);
+      expect(chat.messages.length, 2);
+      expect(chat.conversations.first.title, isNotEmpty);
+      expect(chat.error, isNull);
+    });
+    test('Discards AI title after switching accounts', () async {
+      final pendingTitle = Completer<http.Response>();
+
+      final chat = makeService((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+
+        if (body['action'] == 'chat_title') {
+          return pendingTitle.future;
+        }
+
+        return answer('This message may be suspicious.');
+      });
+
+      chat.setAuthenticatedUser('user-a');
+
+      await chat.ask('I received a suspicious USPS delivery message.');
+
+      expect(chat.conversations.length, 1);
+
+      chat.setAuthenticatedUser('user-b');
+
+      pendingTitle.complete(
+        http.Response(jsonEncode({'title': 'Old User USPS Conversation'}), 200),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(chat.conversations, isEmpty);
+      expect(chat.messages, isEmpty);
+    });
+    test('Generates an AI title for a meaningful conversation', () async {
+      final actions = <String>[];
+
+      final chat = ChatService(
+        endpoint: 'https://example.test/',
+        idToken: () async => 'test-token',
+        client: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          final action = body['action'] as String;
+          actions.add(action);
+
+          if (action == 'chat') {
+            return http.Response(
+              jsonEncode({'answer': 'This USPS message may be suspicious.'}),
+              200,
+            );
+          }
+
+          if (action == 'chat_title') {
+            return http.Response(
+              jsonEncode({'title': 'Suspicious USPS Delivery Text'}),
+              200,
+            );
+          }
+
+          return http.Response('{}', 400);
+        }),
+      );
+
+      chat.setAuthenticatedUser('test-user');
+
+      await chat.ask('I received a USPS text asking for a delivery fee.');
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(actions, contains('chat'));
+      expect(actions, contains('chat_title'));
+
+      expect(chat.conversations.first.title, 'Suspicious USPS Delivery Text');
+    });
     test('Old AI response is discarded after switching accounts', () async {
       final pendingResponse = Completer<http.Response>();
 

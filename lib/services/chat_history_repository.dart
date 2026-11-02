@@ -73,6 +73,32 @@ class ChatHistoryRepository {
     });
   }
 
+  Future<void> updateChatTitle({
+    required String uid,
+    required String conversationId,
+    required String title,
+  }) async {
+    if (conversationId.isEmpty || conversationId.contains('/')) {
+      throw ArgumentError('Invalid conversation ID.');
+    }
+
+    final cleanedTitle = title.trim();
+
+    if (cleanedTitle.isEmpty || cleanedTitle.length > 35) {
+      throw ArgumentError('Invalid chat title.');
+    }
+
+    final ref = _chats(uid).doc(conversationId);
+
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(ref);
+
+      if (!snapshot.exists) return;
+
+      transaction.update(ref, {'title': cleanedTitle});
+    });
+  }
+
   Future<List<Map<String, dynamic>>> loadChats(String uid) async {
     final snapshot = await _chats(
       uid,
