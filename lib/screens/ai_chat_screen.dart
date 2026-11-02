@@ -291,7 +291,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
   @override
   Widget build(BuildContext context) {
     final messages = _chat.messages;
-
     return Scaffold(
       key: _scaffoldKey,
       appBar: FigmaAppBar(

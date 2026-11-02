@@ -29,6 +29,7 @@ class ResultsScreen extends StatefulWidget {
 
   static const _sample = ScanResult(
     riskLevel: 'high',
+    scamPercentage: 85,
     summary:
         'PhishNet found several red flags in this message. Be very careful.',
     redFlags: [
@@ -167,7 +168,7 @@ class _ResultsScreenState extends State<ResultsScreen>
     'link' => Icons.link,
     'person_search' => Icons.person_search,
     'currency_exchange' => Icons.currency_exchange,
-    'attaach_file' => Icons.attach_file,
+    'attach_file' => Icons.attach_file,
     'compare_arrows' => Icons.compare_arrows,
     _ => Icons.error_outline,
   };
