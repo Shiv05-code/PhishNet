@@ -807,14 +807,24 @@ def handler(event, context):
         if not authz.startswith("Bearer "):
             return _resp(401, {"error": "unauthorized"})
         try:
-            uid = auth.verify_id_token(authz[7:])["uid"]
+            decoded = auth.verify_id_token(authz[7:])
+            uid = decoded["uid"]
         except (ValueError, auth.InvalidIdTokenError):
             return _resp(401, {"error": "unauthorized"})
+        is_anonymous = (
+            decoded.get("firebase", {}).get("sign_in_provider") == "anonymous"
+        )
 
         body = event.get("body") or "{}"
         if event.get("isBase64Encoded"):
             body = base64.b64decode(body).decode("utf-8")
         payload = json.loads(body)
+
+        if is_anonymous and payload.get("action") in (
+            "scan_history",
+            "delete_account",
+        ):
+            return _resp(403, {"error": "account_required"})
 
         if payload.get("action") == "delete_account":
             if not _db_ready:
@@ -886,7 +896,7 @@ def handler(event, context):
                 },
             )
 
-        if _db_ready:
+        if _db_ready and not is_anonymous:
             try:
                 firestore.client().collection("users").document(uid).collection(
                     "scans"
