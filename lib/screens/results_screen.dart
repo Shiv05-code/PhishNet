@@ -12,6 +12,7 @@ import 'app_colors.dart';
 import 'family_social_screen.dart';
 import 'ai_chat_screen.dart';
 import '../services/chat_service.dart';
+import '../widgets/guest_prompt.dart';
 
 class ResultsScreen extends StatefulWidget {
   final bool isGuest;
@@ -29,6 +30,7 @@ class ResultsScreen extends StatefulWidget {
 
   static const _sample = ScanResult(
     riskLevel: 'high',
+    scamPercentage: 85,
     summary:
         'PhishNet found several red flags in this message. Be very careful.',
     redFlags: [
@@ -167,7 +169,7 @@ class _ResultsScreenState extends State<ResultsScreen>
     'link' => Icons.link,
     'person_search' => Icons.person_search,
     'currency_exchange' => Icons.currency_exchange,
-    'attaach_file' => Icons.attach_file,
+    'attach_file' => Icons.attach_file,
     'compare_arrows' => Icons.compare_arrows,
     _ => Icons.error_outline,
   };
@@ -317,69 +319,101 @@ class _ResultsScreenState extends State<ResultsScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Flexible(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(
-                            context,
-                          ).push(fadeRoute(const FamilySocialScreen())),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                        child: Opacity(
+                          opacity: widget.isGuest ? 0.55 : 1,
+                          child: OutlinedButton(
+                            onPressed: widget.isGuest
+                                ? () => showGuestPrompt(
+                                    context,
+                                    feature: 'Share with Family',
+                                  )
+                                : () => Navigator.of(
+                                    context,
+                                  ).push(fadeRoute(const FamilySocialScreen())),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: widget.isGuest
+                                  ? AppColors.muted
+                                  : AppColors.primaryBlue,
+                              side: BorderSide(
+                                color: widget.isGuest
+                                    ? AppColors.muted
+                                    : AppColors.primaryBlue,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                             ),
-                          ),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 2.0),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.share, size: 26),
-                                SizedBox(width: 6),
-                                Flexible(
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      'Share with Family',
-                                      style: TextStyle(
-                                        fontSize: AppTypography.emphasis + 2,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 2.0),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.share, size: 26),
+                                  SizedBox(width: 6),
+                                  Flexible(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        'Share with Family',
+                                        style: TextStyle(
+                                          fontSize: AppTypography.emphasis + 2,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Flexible(
-                        child: OutlinedButton(
-                          onPressed: _openChat,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                        child: Opacity(
+                          opacity: widget.isGuest ? 0.55 : 1,
+                          child: OutlinedButton(
+                            onPressed: widget.isGuest
+                                ? () => showGuestPrompt(
+                                    context,
+                                    feature: 'Ask PhishNet AI',
+                                  )
+                                : _openChat,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: widget.isGuest
+                                  ? AppColors.muted
+                                  : AppColors.primaryBlue,
+                              side: BorderSide(
+                                color: widget.isGuest
+                                    ? AppColors.muted
+                                    : AppColors.primaryBlue,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                             ),
-                          ),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 2.0),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.chat, size: 26),
-                                SizedBox(width: 6),
-                                Flexible(
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      'Ask PhishNet AI',
-                                      style: TextStyle(
-                                        fontSize: AppTypography.emphasis + 2,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 2.0),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.chat, size: 26),
+                                  SizedBox(width: 6),
+                                  Flexible(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        'Ask PhishNet AI',
+                                        style: TextStyle(
+                                          fontSize: AppTypography.emphasis + 2,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),

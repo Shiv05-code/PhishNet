@@ -12,6 +12,7 @@ import '../services/auth_service.dart';
 import 'auth_widgets.dart';
 import 'figma_gradient_background.dart';
 import '../theme/app_typography.dart';
+import 'guest_prompt.dart';
 
 /// Drawer matching the mockup — light-blue background, plain-text menu
 /// items (no icons except Settings/Logout), hamburger toggle inside the
@@ -50,14 +51,16 @@ class AppDrawer extends StatelessWidget {
     BuildContext context,
     String label,
     Widget screen, {
-    bool enabled = true,
+    bool locked = false,
     double fontSize = AppTypography.heading,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: enabled ? () => _navigate(context, label, screen) : null,
+        onTap: locked
+            ? () => showGuestPrompt(context, feature: label)
+            : () => _navigate(context, label, screen),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Text(
@@ -65,16 +68,16 @@ class AppDrawer extends StatelessWidget {
             style: TextStyle(
               fontSize: fontSize,
               fontWeight: FontWeight.w700,
-              color: enabled ? AppColors.primary : AppColors.muted,
-              shadows: enabled
-                  ? const [
+              color: locked ? AppColors.muted : AppColors.primary,
+              shadows: locked
+                  ? null
+                  : const [
                       Shadow(
                         color: Color(0x30000000),
                         blurRadius: 2,
                         offset: Offset(0, 1),
                       ),
-                    ]
-                  : null,
+                    ],
             ),
           ),
         ),
@@ -106,31 +109,26 @@ class AppDrawer extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _menuItem(
-                  context,
-                  'Home',
-                  const HomeScreen(),
-                  enabled: !isGuest,
-                ),
+                _menuItem(context, 'Home', const HomeScreen(), locked: isGuest),
                 _menuItem(context, 'Capture', CaptureScreen(isGuest: isGuest)),
                 _menuItem(context, 'Results', ResultsScreen(isGuest: isGuest)),
                 _menuItem(
                   context,
                   'AI Chat',
                   const AiChatScreen(),
-                  enabled: !isGuest,
+                  locked: isGuest,
                 ),
                 _menuItem(
                   context,
                   'Family/Social',
                   const FamilySocialScreen(),
-                  enabled: !isGuest,
+                  locked: isGuest,
                 ),
                 _menuItem(
                   context,
                   'History',
                   const HistoryScreen(),
-                  enabled: !isGuest,
+                  locked: isGuest,
                 ),
                 const Divider(color: Color(0x6681B9CC)),
                 InkWell(

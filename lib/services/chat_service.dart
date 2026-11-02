@@ -296,11 +296,12 @@ class ChatService extends ChangeNotifier {
       );
     });
 
-    _pendingChatSave = save.catchError((Object error) {
+    final handledSave = save.catchError((Object error) {
       debugPrint('Could not save chat history: $error');
     });
+    _pendingChatSave = handledSave;
 
-    return save;
+    return handledSave;
   }
 
   Future<void> loadSavedChats(String uid) async {

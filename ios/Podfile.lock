@@ -56,12 +56,15 @@ PODS:
     - nanopb/encode (= 3.30910.0)
   - nanopb/decode (3.30910.0)
   - nanopb/encode (3.30910.0)
+  - pasteboard (0.0.1):
+    - Flutter
   - PromisesObjC (2.4.1)
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
   - google_mlkit_commons (from `.symlinks/plugins/google_mlkit_commons/ios`)
   - google_mlkit_text_recognition (from `.symlinks/plugins/google_mlkit_text_recognition/ios`)
+  - pasteboard (from `.symlinks/plugins/pasteboard/ios`)
 
 SPEC REPOS:
   trunk:
@@ -85,9 +88,11 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/google_mlkit_commons/ios"
   google_mlkit_text_recognition:
     :path: ".symlinks/plugins/google_mlkit_text_recognition/ios"
+  pasteboard:
+    :path: ".symlinks/plugins/pasteboard/ios"
 
 SPEC CHECKSUMS:
-  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
   google_mlkit_commons: b2c0a76e7ef4ff555e70e5d71f21d66ce3d08a97
   google_mlkit_text_recognition: 5a8cb8b73c765938fb7111de6f5f883b90f15d52
   GoogleDataTransport: a24e58982ab3ba2f64d79613e027fe7f57e88539
@@ -101,6 +106,7 @@ SPEC CHECKSUMS:
   MLKitTextRecognitionCommon: 234ceb1cfdfb5fceb4fd664943046609a2961cc2
   MLKitVision: 39a5a812db83c4a0794445088e567f3631c11961
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
+  pasteboard: 49088aeb6119d51f976a421db60d8e1ab079b63c
   PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
 
 PODFILE CHECKSUM: 02871cdc8a2b2ff7a8a17ec53c2b880664696fd2

@@ -82,19 +82,20 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _continueAsGuest() async {
     try {
       await FirebaseAuth.instance.signInAnonymously();
-
+    } catch (_) {
       if (!mounted) return;
 
-      Navigator.of(
-        context,
-      ).pushReplacement(fadeRoute(const CaptureScreen(isGuest: true)));
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _error = 'Unable to continue as guest. Please try again.';
-        });
-      }
+      setState(
+        () => _error = 'We could not start guest mode. Please try again.',
+      );
+      return;
     }
+
+    if (!mounted) return;
+
+    Navigator.of(
+      context,
+    ).pushReplacement(fadeRoute(const CaptureScreen(isGuest: true)));
   }
 
   @override
