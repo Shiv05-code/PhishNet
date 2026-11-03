@@ -240,7 +240,7 @@ class ChatService extends ChangeNotifier {
   final AnalyzeMessage? _analyzeOverride;
   final TextFromImage _readText;
   final Duration timeout;
-  final ChatHistoryRepository? _historyRepository;
+  final ChatHistoryStore? _historyRepository;
 
   // Made on first use, so nothing touches Firebase until a photo is sent.
   ScanService? _scanService;

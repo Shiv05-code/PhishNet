@@ -27,7 +27,25 @@ bool shouldSaveChat({
   return incoming.isAfter(existing);
 }
 
-class ChatHistoryRepository {
+abstract interface class ChatHistoryStore {
+  Future<void> saveChat({
+    required String uid,
+    required String conversationId,
+    required Map<String, dynamic> data,
+  });
+  Future<void> updateChatTitle({
+    required String uid,
+    required String conversationId,
+    required String title,
+  });
+  Future<List<Map<String, dynamic>>> loadChats(String uid);
+  Future<void> deleteChat({
+    required String uid,
+    required String conversationId,
+  });
+}
+
+class ChatHistoryRepository implements ChatHistoryStore {
   ChatHistoryRepository({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
 
@@ -41,6 +59,7 @@ class ChatHistoryRepository {
     return _firestore.collection('users').doc(uid).collection('chats');
   }
 
+  @override
   Future<void> saveChat({
     required String uid,
     required String conversationId,
@@ -73,6 +92,7 @@ class ChatHistoryRepository {
     });
   }
 
+  @override
   Future<void> updateChatTitle({
     required String uid,
     required String conversationId,
@@ -99,6 +119,7 @@ class ChatHistoryRepository {
     });
   }
 
+  @override
   Future<List<Map<String, dynamic>>> loadChats(String uid) async {
     final snapshot = await _chats(
       uid,
@@ -109,6 +130,7 @@ class ChatHistoryRepository {
     }).toList();
   }
 
+  @override
   Future<void> deleteChat({
     required String uid,
     required String conversationId,
