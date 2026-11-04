@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
@@ -7,8 +9,9 @@ import '../models/scan_result.dart';
 
 class ScanException implements Exception {
   final String message;
+  final bool retryable;
 
-  const ScanException(this.message);
+  const ScanException(this.message, {this.retryable = false});
 
   @override
   String toString() => message;
@@ -75,9 +78,20 @@ class ScanService {
             body: jsonEncode({'text': text}),
           )
           .timeout(const Duration(seconds: 35));
+    } on TimeoutException {
+      throw const ScanException(
+        'The check is taking longer than expected. Please try again.',
+        retryable: true,
+      );
+    } on SocketException {
+      throw const ScanException(
+        'No internet connection. Check your connection and try again.',
+        retryable: true,
+      );
     } catch (_) {
       throw const ScanException(
-        'Unable to reach the scan service. Please try again.',
+        'We could not reach PhishNet. Please try again.',
+        retryable: true,
       );
     }
 
@@ -87,10 +101,15 @@ class ScanService {
       );
     }
 
-    if (response.statusCode != 200) {
-      throw ScanException(
-        'Scan failed (HTTP ${response.statusCode}). Please try again.',
+    if (response.statusCode >= 500) {
+      throw const ScanException(
+        'PhishNet could not check this message right now. Please try again.',
+        retryable: true,
       );
+    }
+
+    if (response.statusCode != 200) {
+      throw const ScanException('Something went wrong. Please try again.');
     }
 
     try {

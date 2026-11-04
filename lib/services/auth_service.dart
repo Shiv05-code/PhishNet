@@ -31,6 +31,10 @@ class AuthService {
     return parts.first.isEmpty ? null : parts.first;
   }
 
+  Future<void> signInAsGuest() async {
+    await _firebaseAuth.signInAnonymously();
+  }
+
   Future<void> createAccount({
     required String firstName,
     required String lastName,
