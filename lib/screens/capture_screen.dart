@@ -171,7 +171,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
       );
     } on ScanException catch (error) {
       if (mounted) {
-        _showMessage(error.message);
+        _showMessage(
+          error.message,
+          onRetry: error.retryable ? () => _submitText(text) : null,
+        );
       }
     } finally {
       if (mounted) {
@@ -196,13 +199,22 @@ class _CaptureScreenState extends State<CaptureScreen> {
     });
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {VoidCallback? onRetry}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.cardSurface,
         elevation: 6,
+        duration: Duration(seconds: onRetry == null ? 4 : 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        action: onRetry == null
+            ? null
+            : SnackBarAction(
+                label: 'Retry',
+                textColor: AppColors.primaryBlue,
+                onPressed: onRetry,
+              ),
         content: Text(
           message,
           style: const TextStyle(

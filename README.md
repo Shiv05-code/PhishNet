@@ -63,7 +63,7 @@ respectful, never rushed or condescending.
 
 | Step | What you do | What PhishNet gives you |
 | --- | --- | --- |
-| **1. Share** | Enter a suspicious message on the **Capture** screen. | Sprint 2 adds photo capture and on-device text recognition, so screenshot images do not need to be uploaded. |
+| **1. Share** | Enter a suspicious message on the **Capture** screen. | Sprint 2 added photo capture and on-device text recognition, so screenshot images do not need to be uploaded. |
 | **2. Understand** | Read the **Results** screen. | A plain-language breakdown of the warning signs, with no technical terms. |
 | **3. Decide** | Ask a follow-up in **AI Chat** if you are unsure. | Clear, practical next steps, plus detailed explanations on request. |
 
@@ -84,13 +84,17 @@ milestones, not features that are available today.
 
 | ✅ Built so far | 🛠️ Planned |
 | --- | --- |
-| Firebase Email/Password authentication | Capture and Results screens connected to Claude scam analysis |
-| Signup validation for Gmail and Yahoo addresses | AI Chat for follow-up questions |
-| Email verification and verified-account login checks | History of saved scans and a Home dashboard |
-| Password reset by email | Capture and Results connected to Claude, including photo capture and on-device screenshot text recognition |
-| Guest access to the capture flow | Yahoo inbox monitoring and push alerts |
-| Screen foundations: capture, results, AI chat, family/social, history, settings, and payment plans | Family/Social sharing and scam-pattern insights |
-| Shared, accessible styling across the app | Payment-plan backend |
+| Firebase Email/Password authentication | History of saved scans and a Home dashboard |
+| Signup validation for Gmail and Yahoo addresses | Yahoo inbox monitoring and push alerts |
+| Email verification and verified-account login checks | Family/Social sharing and scam-pattern insights |
+| Password reset by email | Saved AI Chat conversations |
+| Guest access to the capture flow | |
+| Screen foundations: capture, results, AI chat, family/social, history, settings, and payment plans | |
+| Shared, accessible styling across the app | |
+| Capture and Results screens connected to Claude (scam analysis, photo capture, text recognition) | |
+| AI Chat for follow-up questions | |
+| Payment-plan backend | |
+| Guest mode with Firebase Anonymous sign-in (guest scans are not saved) | |
 
 Follow day-to-day progress on the
 **[GitHub project board](https://github.com/users/Shiv05-code/projects/2)**.
@@ -144,31 +148,29 @@ windows and scheduled demos, and may change as work progresses.
 ## 🏗️ Infrastructure
 
 PhishNet is an iOS-focused Flutter app backed by Firebase, AWS, and Claude.
-**Firebase Authentication is integrated today; every other backend service
-below is planned.**
+**Firebase Authentication, AWS Lambda, Secrets Manager, Firestore, and Claude are in use. 
+Scheduled monitoring is a disabled scaffold; Yahoo, push alers, and History are planned.**
 
 ```mermaid
 flowchart LR
-    App["📱 PhishNet app<br/>Flutter · iOS<br/>ML Kit OCR (planned)"]
-    Auth["🔐 Firebase<br/>Authentication"]
-    Lambda["⚙️ AWS Lambda"]
+    App["📱 PhishNet app<br/>Flutter · iOS<br/>ML Kit OCR (on-device)"]
+    Auth["🔐 Firebase<br/>Authentication<br/>(accounts + guests)"]
+    Lambda["⚙️ AWS Lambda<br/>phishnet-scan"]
+    Secrets["🔑 AWS Secrets<br/>Manager"]
     Haiku["🤖 Claude Haiku<br/>classification"]
     Sonnet["💬 Claude Sonnet<br/>AI chat"]
     DB[("🗄️ Cloud Firestore")]
-    FCM["🔔 Firebase Cloud<br/>Messaging"]
-    EB["⏱️ Amazon<br/>EventBridge"]
-    Yahoo["📧 Yahoo Mail<br/>OAuth 2.0"]
+    EB["⏱️ EventBridge Scheduler<br/>(disabled)"]
+    Worker["⚙️ Lambda<br/>phishnet-monitor-worker<br/>(placeholder)"]
 
-    App -->|"sign in"| Auth
-    App -->|"message text"| Lambda
-    Lambda -->|"verifies sign-in"| Auth
+    App -->|"sign in / guest sign-in"| Auth
+    App -->|"message text + ID token"| Lambda
+    Lambda -->|"verifies token"| Auth
+    Lambda -->|"reads credentials"| Secrets
     Lambda --> Haiku
     Lambda --> Sonnet
-    Lambda -->|"saves findings"| DB
-    EB -->|"scheduled checks"| Lambda
-    Lambda <-->|"inbox access"| Yahoo
-    DB --> FCM
-    FCM -->|"phishing alerts via APNs"| App
+    Lambda -->|"saves account scans only"| DB
+    EB -.->|"disabled"| Worker
 ```
 
 ### Frontend
@@ -177,7 +179,7 @@ flowchart LR
 | --- | --- |
 | **Flutter and Dart** | The iOS-focused mobile app |
 | **Xcode and iOS Simulator** | iOS development and visual testing |
-| **Google ML Kit** | Planned: on-device text recognition for screenshots (not yet in the app) |
+| **Google ML Kit** | On-device text recognition for screenshots, used by Capture |
 | **iOS Share Sheet** | Family and social sharing |
 | **Figma, SF Symbols, Google Fonts** | Design, icons, and typography |
 | **Apple Developer Account** | TestFlight and App Store distribution |
@@ -186,21 +188,22 @@ flowchart LR
 
 | Service | Status | Purpose |
 | --- | --- | --- |
-| **Firebase Authentication** | Integrated | Account sign-in and registration |
-| **Cloud Firestore** | Planned | Single database for scan history, chat records, monitoring settings, and restricted Yahoo authorization data |
+| **Firebase Authentication** | Integrated | Email/password accounts and Anonymous sign in for guest mode |
+| **Cloud Firestore** | In use | Single database for scan history, chat records, monitoring settings, and restricted Yahoo authorization data |
 | **Firebase Cloud Messaging** | Planned | Phishing alerts on iPhone, delivered through Apple Push Notification service (APNs) |
-| **AWS Lambda** | Planned | Secure app requests: verifies the user's Firebase sign-in before calling Claude. Handler code exists in `backend/lambda/`; deployment and app wiring are not yet verified |
-| **Amazon EventBridge** | Planned | Scheduled Yahoo inbox checks (planned every 1–2 minutes, subject to Yahoo access and rate limits) |
-| **Claude Haiku** | Planned | Fast, routine message and email classification |
-| **Claude Sonnet** | Planned | AI Chat and more detailed explanations |
+| **Claude Haiku** | In use | Fast, routine message and email classification |
+| **Claude Sonnet** | In use | AI Chat and more detailed explanations |
 | **Yahoo OAuth 2.0** | Planned | Lets users authorize and disconnect inbox monitoring |
+| **AWS Lambda (`phishnet-scan`)** | Deployed | Verifies the Firebase ID token (account or guest), then calls Claude. Region us-east-2. See [`docs/backend-scan-api.md`](docs/backend-scan-api.md) |
+| **AWS Secrets Manager** | In use | Secret `phishnet/prod` holds the Claude key and Firebase service account |
+| **Amazon EventBridge Scheduler** | Scaffold, disabled | Schedule targets a placeholder worker; no mailbox polling yet. Planned every 1–2 minutes |
 
 ### Privacy by design
 
-- **Planned: screenshots stay on the phone.** Text recognition is planned to run on the device, so images would not need to be uploaded. No image or OCR code exists in the app yet.
-- **Verified in code (`backend/lambda/handler.py`):** the scan endpoint does not store message text or log it. It saves only the analysis result (risk level, summary, red flags, next steps) and a timestamp to the user's scans, and it does not run unless deployed and configured. Account deletion removes the account-linked scan records and profile, but copies each scan's analysis fields to `anonymized_training_scans` without user IDs. Those unlinked assessments remain and may contain personal details from messages. No model training code exists in this repository. The app does not yet call this endpoint or the deletion action.
+- **Screenshots stay on the phone.** Text recognition runs on the device, so images are not uploaded.
+- **Verified in code (`backend/lambda/handler.py`):** the scan endpoint does not store message text or log it. It saves only the analysis result (risk level, summary, red flags, next steps) and a timestamp to the user's scans. Account deletion removes the account-linked scan records and profile, but copies each scan's analysis fields to `anonymized_training_scans` without user IDs. Those unlinked assessments remain and may contain personal details from messages. No model training code exists in this repository. The app’s Delete My Account currently removes Firestore data directly and does not call the Lambda deletion action. Guest (Anonymous) users can scan, but their scans are not saved, and history and account deletion are denied for them.
 - **Users stay in control.** Yahoo inbox access requires explicit authorization and can be disconnected at any time.
-- **Credentials stay out of the app.** Claude and Firebase service credentials are planned to live in KMS-encrypted Lambda environment variables, never in the app or repository.
+- **Credentials stay out of the app.** The Claude API key and Firebase service account are read from AWS Secrets Manager (`phishnet/prod`) by the Lambda. They are not in the app, the repository, or environment variables, and the code never logs them.
 - **Restricted data.** Yahoo authorization data is planned to be accessible only to trusted backend services, not to other app users.
 
 ---
@@ -252,7 +255,7 @@ The app uses Firebase project `phishnet-b93e0` and the iOS bundle identifier
      --ios-bundle-id=com.Phishers.PhishNetApp
 ```
 
-4. Enable **Email/Password** under Firebase Console → Authentication → Sign-in method.
+4. Enable **Email/Password** under Firebase Console → Authentication → Sign-in method. Also enable Anonymous (guest mode).
 
 > [!WARNING]
 > Do not commit credentials, debug logs, or generated build artifacts. Share

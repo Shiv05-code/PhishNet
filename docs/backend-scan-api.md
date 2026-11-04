@@ -1,7 +1,7 @@
 # Scan API (backend)
 
 The scan endpoint is an AWS Lambda function URL served by `backend/lambda/handler.py`.
-Flow: app -> Lambda -> verify Firebase ID token -> Claude Haiku (or mock) -> Firestore -> JSON.
+Flow: app -> Lambda -> verify Firebase ID token (account or anonymous guest) -> Claude Haiku (or mock) -> Firestore (accounts only) -> JSON.
 
 ## Request
 
@@ -16,6 +16,18 @@ Flow: app -> Lambda -> verify Firebase ID token -> Claude Haiku (or mock) -> Fir
 Manual entry and OCR output send the same payload. Text is trimmed and truncated to 8000 characters. Empty text returns `400 {"error": "empty_message"}`.
 
 Account deletion uses `{"action": "delete_account"}` and is unchanged.
+
+## Who can call it
+
+Every request needs `Authorization: Bearer <Firebase ID token>`.
+
+| Caller | Token | Scan | Saved to Firestore | `scan_history` / `delete_account` |
+| --- | --- | --- | --- | --- |
+| Account user | Firebase ID token | Allowed | Yes | Allowed |
+| Guest | Firebase Anonymous token | Allowed | No | `403 {"error": "account_required"}` |
+| No or invalid token | none | `401` | No | `401` |
+
+Guests get a token from `AuthService.signInAsGuest()`, used by both the Login and Sign Up "Continue as guest" links. **Anonymous** sign-in must be enabled in the Firebase console (Authentication > Sign-in method).
 
 ## Success response (`200`)
 
@@ -81,20 +93,69 @@ Raw provider errors are never returned. Logs record only the error type, never t
 - `401 {"error": "unauthorized"}`: missing or invalid token.
 - `400 {"error": "empty_message"}`: no text.
 - `500 {"error": "server_error", "retryable": true}`: unexpected failure.
+- `403 {"error": "account_required"}`: a guest called `scan_history` or `delete_account`.
+- `502 {"error": "chat_unavailable", "retryable": true}`: chat answer failed.
+
+### How the app handles errors
+
+| Situation | App message | Retry |
+| --- | --- | --- |
+| Offline | "No internet connection. Check your connection and try again." | Yes |
+| Timeout (60 s client limit) | "The check is taking longer than expected. Please try again." | Yes |
+| 5xx | "PhishNet could not check this message right now. Please try again." | Yes |
+| 401 / 403 | "Your session could not be verified. Please sign in again." | No |
+
+Capture keeps the submitted text on failure and offers a Retry action.
 
 ## Mock mode
 
-Set `MOCK_CLAUDE=true` to skip Claude. The handler then returns a fixed, deterministic result (score 85, `high`).
+Set `MOCK_CLAUDE=true` to skip Claude. Returns one of three fixed sample results (high, medium, low).
 
 Limits: the mock verifies the endpoint, auth, request handling, and response shape. It does not test whether Claude can tell different messages apart. Use real mode for that.
 
-## Deployment prerequisites
+## AWS configuration
 
-- Lambda env: `SECRET_ID` (defaults to `phishnet/prod`) and optionally `FIREBASE_PROJECT_ID`.
-- Secrets Manager secret must contain `anthropic_api_key` and `firebase_service_account`.
-- Lambda execution role needs `secretsmanager:GetSecretValue` on that secret.
-- Dependencies from `backend/lambda/requirements.txt` plus `boto3` (provided by the Lambda runtime).
-- Do not set `MOCK_CLAUDE=true` in production.
+Checked on 11/03/26.
+
+| Item | Value |
+| --- | --- |
+| Function | `phishnet-scan` |
+| Region | `us-east-2` |
+| Runtime / handler | Python 3.12 / `handler.handler` |
+| Function URL auth type | `NONE` (the handler verifies the Firebase token itself) |
+| Timeout | 35 seconds. Raise it if scans start timing out |
+| Environment variables | `MOCK_CLAUDE` only. Optional: `SECRET_ID` (default `phishnet/prod`), `FIREBASE_PROJECT_ID` (default `phishnet-b93e0`), `CHAT_MODEL` (default `claude-sonnet-5-5`) |
+| Execution role | `phishnet-scan-execution-role` |
+
+The app uses the Function URL as the default in `lib/services/scan_service.dart` and can override it with `--dart-define=SCAN_API_URL=<url>`.
+
+### Secrets
+
+Credentials are read from AWS Secrets Manager at cold start. They are never in the app, the repository, or environment variables, and the code never logs them.
+
+| Secret name | Region | Required keys |
+| --- | --- | --- |
+| `phishnet/prod` | `us-east-2` | `anthropic_api_key`, `firebase_service_account` |
+
+If `firebase_service_account` is missing or a placeholder, token verification still works but Firestore writes are disabled.
+
+### IAM (least privilege)
+
+Execution role for `phishnet-scan`:
+
+- AWS managed `AWSLambdaBasicExecutionRole` (CloudWatch Logs)
+- Inline policy allowing only `secretsmanager:GetSecretValue` on the `phishnet/prod` secret
+- `kms:Decrypt` only if the secret uses a customer-managed key
+
+Trust policy: `lambda.amazonaws.com` only. Verified with a real scan on 11/03/26, with no `AccessDenied` in CloudWatch.
+
+### Deploying
+
+1. Change `backend/lambda/handler.py` and run the tests below.
+2. Deploy to `phishnet-scan` (upload the zip with its libraries, or paste the handler in the console editor). Deploy from the repo version so AWS and git stay identical.
+3. Confirm the environment variables and role are unchanged, then run the smoke tests.
+
+Do not set `MOCK_CLAUDE=true` in production.
 
 ## Tests
 
@@ -124,6 +185,29 @@ curl -sS -X POST "$URL" -H "Content-Type: application/json" -d '{"text":"hi"}'
 # Empty text: expect 400
 curl -sS -X POST "$URL" -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d '{"text":"  "}'
+
+# Invalid token: expect 401
+curl -sS -X POST "$URL" -H "Authorization: Bearer not-a-real-token" \
+  -H "Content-Type: application/json" -d '{"text":"hi"}'
 ```
 
-With `MOCK_CLAUDE=true`, the first request should return the fixed mock result. Without it, it calls Claude.
+A successful request returns `200` with `brief_description`, `scam_percentage`, `risk_level`, `summary`, `red_flags` and `next_steps`. The easiest way to get `$TOKEN` is to scan from the app while signed in. Guest check: scan as a guest and confirm no document appears under `users/{uid}/scans`.
+
+With `MOCK_CLAUDE=true`, the first request should return a sample mock result. Without it, it calls Claude.
+
+## Live Monitoring: scheduled processing (planned)
+
+The resources exist but are **disabled** and do no real work.
+
+| Resource | Name | Notes |
+| --- | --- | --- |
+| Worker Lambda | `phishnet-monitor-worker` | Placeholder that logs one line. Own logging-only role |
+| EventBridge Scheduler schedule | `phishnet-monitor-schedule` | `rate(2 minutes)` (planned every 1-2 minutes), **Disabled** |
+| Scheduler execution role | `Amazon_EventBridge_Scheduler_LAMBDA_...` | `lambda:InvokeFunction` on the worker only |
+
+The schedule does **not** target `phishnet-scan`: that handler requires a Firebase bearer token, which a scheduled event does not carry. Mailbox polling needs its own worker.
+
+- **Enable:** set the schedule to Enabled, only after the worker is implemented.
+- **Disable or remove:** toggle it off or delete the schedule.
+- **Overlap:** consider reserved concurrency of 1 on the worker.
+- **Out of scope for this issue:** Yahoo authorization, mailbox polling, user alerts. The future worker will need its own secrets and a narrowly scoped role.
