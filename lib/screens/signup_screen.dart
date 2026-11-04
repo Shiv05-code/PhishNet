@@ -96,6 +96,22 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  Future<void> _continueAsGuest() async {
+    try {
+      await _authService.signInAsGuest();
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _error = 'We could not start guest mode. Please try again.',
+      );
+      return;
+    }
+    if (!mounted) return;
+    Navigator.of(
+      context,
+    ).pushReplacement(fadeRoute(const CaptureScreen(isGuest: true)));
+  }
+
   @override
   Widget build(BuildContext context) {
     const footerStyle = TextStyle(
@@ -225,11 +241,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: AuthLink(
                       label: 'Continue as guest',
                       underline: true,
-                      onTap: () {
-                        Navigator.of(context).pushReplacement(
-                          fadeRoute(const CaptureScreen(isGuest: true)),
-                        );
-                      },
+                      onTap: _continueAsGuest,
                     ),
                   ),
                 ],

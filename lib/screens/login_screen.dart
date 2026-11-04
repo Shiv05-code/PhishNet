@@ -10,7 +10,6 @@ import 'email_verification_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_conditions_screen.dart';
 import '../theme/app_typography.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? initialEmail;
@@ -81,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _continueAsGuest() async {
     try {
-      await FirebaseAuth.instance.signInAnonymously();
+      await _authService.signInAsGuest();
     } catch (_) {
       if (!mounted) return;
       setState(
