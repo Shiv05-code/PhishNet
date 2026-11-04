@@ -322,14 +322,21 @@ class ChatService extends ChangeNotifier {
           )
           .timeout(timeout);
 
-      if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) {
+        debugPrint('Chat title request failed: HTTP ${response.statusCode}');
+        return null;
+      }
 
       final data = jsonDecode(response.body);
       if (data is! Map || data['title'] is! String) return null;
 
       final title = (data['title'] as String).trim();
+
+      debugPrint('Chat title generated successfully: ${title.isNotEmpty}');
+
       return title.isEmpty ? null : title;
-    } catch (_) {
+    } catch (error) {
+      debugPrint('Chat title request exception: ${error.runtimeType}');
       return null;
     }
   }
