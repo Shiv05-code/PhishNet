@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
-
+import '../models/saved_scan.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
@@ -124,6 +124,97 @@ class ScanService {
       throw const ScanException('The scan service returned an invalid result.');
     } on TypeError {
       throw const ScanException('The scan service returned an invalid result.');
+    }
+  }
+
+  Future<List<SavedScan>> getScanHistory() async {
+    final uri = Uri.tryParse(_endpoint);
+
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      throw const ScanException('The scan service is not configured.');
+    }
+
+    final user = _auth.currentUser;
+
+    if (user == null || user.isAnonymous) {
+      throw const ScanException('Please sign in to view your scan history.');
+    }
+
+    final token = await user.getIdToken();
+
+    if (token == null || token.isEmpty) {
+      throw const ScanException(
+        'Unable to authenticate your scan history request.',
+      );
+    }
+
+    late final http.Response response;
+
+    try {
+      response = await _client
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'action': 'scan_history'}),
+          )
+          .timeout(const Duration(seconds: 35));
+    } on TimeoutException {
+      throw const ScanException(
+        'Loading scan history took too long. Please try again.',
+        retryable: true,
+      );
+    } on SocketException {
+      throw const ScanException(
+        'No internet connection. Check your connection and try again.',
+        retryable: true,
+      );
+    } catch (_) {
+      throw const ScanException(
+        'Unable to load scan history. Please try again.',
+        retryable: true,
+      );
+    }
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw const ScanException(
+        'Your session could not be verified. Please sign in again.',
+      );
+    }
+
+    if (response.statusCode != 200) {
+      throw const ScanException(
+        'Unable to load scan history. Please try again.',
+        retryable: true,
+      );
+    }
+
+    try {
+      final decoded = jsonDecode(response.body);
+
+      if (decoded is! Map<String, dynamic> || decoded['scans'] is! List) {
+        throw const FormatException('Invalid history response');
+      }
+
+      return (decoded['scans'] as List).map((scan) {
+        if (scan is! Map<String, dynamic>) {
+          throw const FormatException('Invalid saved scan');
+        }
+        return SavedScan.fromJson(scan);
+      }).toList();
+    } on FormatException {
+      throw const ScanException(
+        'The scan service returned invalid history data.',
+      );
+    } on TypeError {
+      throw const ScanException(
+        'The scan service returned invalid history data.',
+      );
     }
   }
 
