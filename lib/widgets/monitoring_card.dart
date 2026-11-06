@@ -133,11 +133,21 @@ class _MonitoringCardState extends State<MonitoringCard>
         children: [
           Row(
             children: [
-              Icon(
-                connected ? Icons.verified_user : Icons.mail_outline,
-                color: AppColors.primaryBlue,
-                size: 26,
-              ),
+              if (connected)
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF2E9E5B),
+                    shape: BoxShape.circle,
+                  ),
+                )
+              else
+                const Icon(
+                  Icons.mail_outline,
+                  color: AppColors.primaryBlue,
+                  size: 26,
+                ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
