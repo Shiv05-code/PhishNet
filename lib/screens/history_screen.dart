@@ -6,6 +6,7 @@ import '../services/scan_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
+import '../widgets/monitoring_card.dart';
 import 'results_screen.dart';
 
 List<SavedScan> filterSavedScans(List<SavedScan> scans, String query) {
@@ -143,6 +144,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         child: SafeArea(
           child: Column(
             children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: MonitoringCard(),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
                 child: TextField(
