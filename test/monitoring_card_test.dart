@@ -71,7 +71,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Yahoo email checks are on'), findsOneWidget);
+    expect(find.text('Yahoo email is connected'), findsOneWidget);
+    expect(find.textContaining('not active yet'), findsOneWidget);
     expect(find.text('Turn off'), findsOneWidget);
   });
 }

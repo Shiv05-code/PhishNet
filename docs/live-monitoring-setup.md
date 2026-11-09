@@ -1,6 +1,6 @@
 # Live Monitoring setup (Yahoo connection)
 
-Status: Phase 2 code is written and tested with mocks. Nothing is deployed yet.
+Status: Yahoo connection code is written and tested with mocks. Nothing is deployed yet. Connecting does not start automatic checks; scheduled scanning is not built yet.
 
 ## Before you start: Yahoo approval
 
@@ -34,18 +34,20 @@ Do not paste any key into chat, code, or docs.
 
 Run the app with `--dart-define=MONITOR_API_URL=<Function URL>`, signed in with an account (not guest).
 
-1. **No setup needed (check the screen only):** run the app without the define. Settings → Live Monitoring should show "Unavailable".
-2. **Status:** after steps 1–7, the screen shows "Not connected".
-3. **Deny:** tap Connect Yahoo, then deny consent. It should say "Access needed", and Secrets Manager should have no `phishnet/monitor/<uid>` secret.
-4. **Connect:** tap Try again, approve, return to the app. It should say "Connected" and note that automatic checks aren't active yet.
-5. **Disconnect:** tap Disconnect Yahoo and confirm. The `phishnet/monitor/<uid>` secret should be gone.
+The monitoring card is on the **History** screen (not Settings).
+
+1. **Without the define:** run the app without `MONITOR_API_URL`. The card should not appear on History.
+2. **Status:** after setup steps 1–7, the card shows "Check my Yahoo email for scams" with a "Connect Yahoo" button.
+3. **Deny:** tap Connect Yahoo, then deny consent in Yahoo. Return to the app. It should show "Yahoo email is not connected" with the message "Couldn't reach…" or the consent error, and Secrets Manager should have no `phishnet/monitor/<uid>` secret.
+4. **Connect:** tap Connect Yahoo again, approve, return to the app. It should show "Yahoo email is connected" and say automatic checks are not active yet. It must not say emails are being checked.
+5. **Turn off:** tap Turn off. The card returns to "Check my Yahoo email for scams", and the `phishnet/monitor/<uid>` secret should be gone.
 
 ## Failure handling
 
 - Consent denied: status becomes `disconnected`, and the screen explains access is needed.
 - Expired or forged state: the callback is rejected and nothing is stored.
 - Token exchange failure: status becomes `error`, and the user can retry.
-- Disconnect: the token secret is deleted first. If that fails, status is unchanged and the app asks the user to retry.
+- Turn off: the token secret is deleted first. If that fails, status is unchanged and the app asks the user to retry.
 
 ## Not done yet
 

@@ -103,10 +103,10 @@ class _MonitoringCardState extends State<MonitoringCard>
       buttonLabel = 'Try again';
       onPressed = _refresh;
     } else if (connected) {
-      headline = 'Yahoo email checks are on';
+      headline = 'Yahoo email is connected';
       detail =
           _error ??
-          'New emails are checked. You are alerted only about risky ones.';
+          'Connected. Automatic checks are not active yet, so new emails are not being scanned.';
       buttonLabel = 'Turn off';
       onPressed = _turnOff;
     } else {
