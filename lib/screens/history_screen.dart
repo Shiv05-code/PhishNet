@@ -21,14 +21,17 @@ List<SavedScan> filterSavedScans(List<SavedScan> scans, String query) {
 }
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  const HistoryScreen({super.key, this.scanService});
+
+  final ScanService? scanService;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  final ScanService _service = ScanService();
+  late final ScanService _service;
+  late final bool _ownsService;
   final TextEditingController _search = TextEditingController();
 
   List<SavedScan> _scans = [];
@@ -39,12 +42,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
+    _ownsService = widget.scanService == null;
+    _service = widget.scanService ?? ScanService();
     _loadHistory();
   }
 
   Future<void> _loadHistory() async {
+    final hadScans = _scans.isNotEmpty;
+
     setState(() {
-      _loading = true;
+      _loading = !hadScans;
       _error = null;
     });
 
@@ -56,21 +63,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
       setState(() {
         _scans = scans;
         _loading = false;
+        _error = null;
       });
-    } on ScanException catch (error) {
+    } catch (error) {
       if (!mounted) return;
 
-      setState(() {
-        _error = error.message;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
+      final message = error is ScanException
+          ? error.message
+          : 'Unable to load scan history.';
 
       setState(() {
-        _error = 'Unable to load scan history.';
         _loading = false;
+        _error = hadScans ? null : message;
       });
+
+      if (hadScans) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$message Your previous scans are still available.'),
+            action: SnackBarAction(label: 'Retry', onPressed: _loadHistory),
+          ),
+        );
+      }
     }
   }
 
@@ -112,7 +126,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void dispose() {
     _search.dispose();
-    _service.dispose();
+    if (_ownsService) {
+      _service.dispose();
+    }
     super.dispose();
   }
 
