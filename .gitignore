@@ -80,3 +80,6 @@ macos/**/xcshareddata/swiftpm/
 # Local Python test venv
 .venv/
 .venv-test/
+
+# Golden test failure images
+test/failures/

@@ -52,4 +52,5 @@ The monitoring card is on the **History** screen (not Settings).
 ## Not done yet
 
 - Disconnect does not call Yahoo's revocation. Revoke the grant in Yahoo's account settings if needed.
-- "Actively monitored", the scheduled worker, and FCM alerts are Phases 3 and 4.
+- Scheduled polling: `backend/monitor/worker.py` is written and mock-tested (checkpoints, retries, overlap lock, duplicate skipping, no content in logs). It is not wired to Yahoo mail, not deployed, and has no schedule. Yahoo mail access is required before it can run live.
+- "Actively monitored" and FCM alerts are not built yet (later phases). The card must not claim active checks until polling runs.
