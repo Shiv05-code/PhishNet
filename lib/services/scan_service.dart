@@ -6,12 +6,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/scan_result.dart';
+import 'daily_limit.dart';
 
 class ScanException implements Exception {
   final String message;
   final bool retryable;
 
-  const ScanException(this.message, {this.retryable = false});
+  /// Set when a free user has used up today's requests.
+  final DailyLimitInfo? dailyLimit;
+
+  const ScanException(this.message, {this.retryable = false, this.dailyLimit});
 
   @override
   String toString() => message;
@@ -93,6 +97,13 @@ class ScanService {
         'We could not reach PhishNet. Please try again.',
         retryable: true,
       );
+    }
+
+    if (response.statusCode == 429) {
+      final limit = DailyLimitInfo.fromBody(response.body);
+      if (limit != null) {
+        throw ScanException(limit.message(), dailyLimit: limit);
+      }
     }
 
     if (response.statusCode == 401 || response.statusCode == 403) {

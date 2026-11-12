@@ -8,9 +8,14 @@ Actions (JSON body):
   {"action": "chat", ...}       ask a follow-up question about a scan
   {"action": "delete_account"}  anonymize scans and delete the account
 
+Free accounts, including guests, get FREE_DAILY_LIMIT scans and chat questions
+per day (the day ends at midnight Pacific). Active Plus subscribers have no limit.
+Past the limit, scans and chat questions return 429 before Claude is called.
+
 Environment variables (all optional):
   MOCK_CLAUDE=true         return a fixed result instead of calling Claude
   CHAT_MODEL               model for AI Chat, defaults to claude-sonnet-5-5
+  FREE_DAILY_LIMIT         scans plus chat questions per free user per day, default 10
   SECRET_ID=phishnet/prod  Secrets Manager secret name
   FIREBASE_PROJECT_ID      defaults to phishnet-b93e0
 """
@@ -18,6 +23,8 @@ import base64
 import json
 import os
 import random
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import anthropic
 import boto3
@@ -46,6 +53,19 @@ CHAT_TITLE_SYSTEM = (
 PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "phishnet-b93e0")
 SECRET_ID = os.environ.get("SECRET_ID", "phishnet/prod")
 MOCK = os.environ.get("MOCK_CLAUDE", "false").lower() == "true"
+
+
+def _env_int(name, default):
+    try:
+        value = int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+FREE_DAILY_LIMIT = _env_int("FREE_DAILY_LIMIT", 10)
+LIMIT_TIMEZONE = "America/Los_Angeles"
+DAILY_LIMIT_MESSAGE = "You've reached today's limit of {limit} free requests."
 
 _secrets = None
 _db_ready = False
@@ -216,6 +236,122 @@ def _resp(code, body):
         "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body),
     }
+
+
+# ------------------------------------------------------------ Daily limit ---
+
+
+def _limit_window(now=None):
+    """Return (day key, reset time) for the daily limit.
+
+    The day runs midnight to midnight in Pacific time. The reset time is the
+    next midnight, as a UTC datetime.
+    """
+    # Looked up here, not at import, so a missing time zone database can only
+    # affect the limit and never stop the whole function from loading.
+    zone = ZoneInfo(LIMIT_TIMEZONE)
+    now = now or datetime.now(timezone.utc)
+    local = now.astimezone(zone)
+    next_midnight = datetime.combine(
+        local.date() + timedelta(days=1), time.min, tzinfo=zone
+    )
+    return local.date().isoformat(), next_midnight.astimezone(timezone.utc)
+
+
+def _has_active_plus(db, uid, now):
+    """True when the user has a paid, unexpired Plus subscription."""
+    snap = (
+        db.collection("users")
+        .document(uid)
+        .collection("subscriptions")
+        .document("current")
+        .get()
+    )
+    data = (snap.to_dict() or {}) if snap.exists else {}
+    expires_at = data.get("expiresAt")
+    return (
+        data.get("plan") == "plus"
+        and data.get("status") == "active"
+        and data.get("environment") == "production"
+        and isinstance(expires_at, datetime)
+        and expires_at > now
+    )
+
+
+def _reserve_count(transaction, ref, day, limit):
+    """Add one to today's count unless it is already at the limit."""
+    snap = ref.get(transaction=transaction)
+    used = (snap.to_dict() or {}).get("count", 0) if snap.exists else 0
+    if type(used) is not int or used < 0:
+        used = 0
+    if used >= limit:
+        return False
+    transaction.set(
+        ref,
+        {"day": day, "count": used + 1, "updatedAt": firestore.SERVER_TIMESTAMP},
+    )
+    return True
+
+
+# Runs the count as one Firestore transaction, so two requests sent at the same
+# moment cannot both slip under the limit.
+_reserve_in_transaction = firestore.transactional(_reserve_count)
+
+
+def _reserve_request(uid, is_anonymous):
+    """Count one scan or chat question against the user's daily limit.
+
+    Call this after the request has been validated and before Claude is called.
+    Returns (blocked_response, refund). When blocked_response is not None, return
+    it and stop. Otherwise pass refund to _refund_request if Claude then fails,
+    so a failure on our side does not use up one of the user's requests.
+    """
+    if not _db_ready:
+        return None, None  # no Firestore (local or placeholder setup): no limit
+
+    try:
+        db = firestore.client()
+        now = datetime.now(timezone.utc)
+        if not is_anonymous and _has_active_plus(db, uid, now):
+            return None, None
+        day, resets_at = _limit_window(now)
+        ref = db.collection("users").document(uid).collection("usage").document(day)
+        allowed = _reserve_in_transaction(
+            db.transaction(), ref, day, FREE_DAILY_LIMIT
+        )
+    except Exception as e:
+        # Fail closed: without a count we cannot keep Claude usage within limits.
+        print(f"usage check failed: {type(e).__name__}")
+        return (
+            _resp(503, {"error": "usage_unavailable", "retryable": True}),
+            None,
+        )
+
+    if not allowed:
+        return (
+            _resp(
+                429,
+                {
+                    "error": "daily_limit_reached",
+                    "message": DAILY_LIMIT_MESSAGE.format(limit=FREE_DAILY_LIMIT),
+                    "limit": FREE_DAILY_LIMIT,
+                    "resets_at": resets_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "retryable": False,
+                },
+            ),
+            None,
+        )
+    return None, ref
+
+
+def _refund_request(ref):
+    """Give back a request that never produced an answer. Best effort."""
+    if ref is None:
+        return
+    try:
+        ref.update({"count": firestore.Increment(-1)})
+    except Exception as e:
+        print(f"usage refund failed: {type(e).__name__}")
 
 
 def _init():
@@ -835,14 +971,18 @@ def _handle_chat_title(payload, secrets):
 
     return _resp(200, {"title": title})
 
-def _handle_chat(payload, secrets):
+def _handle_chat(payload, secrets, uid, is_anonymous):
     try:
         system, messages = _build_chat_request(payload)
     except ChatRequestError as e:
         return _resp(400, {"error": e.code})
+    blocked, refund = _reserve_request(uid, is_anonymous)
+    if blocked:
+        return blocked
     try:
         answer = _chat(system, messages, secrets.get("anthropic_api_key"))
     except (anthropic.APIError, ChatError) as e:
+        _refund_request(refund)
         # Never log the question or answer; log only the error type.
         print(f"chat error: {type(e).__name__}")
         return _resp(
@@ -899,6 +1039,13 @@ def _anonymize_and_delete_user_data(uid):
 
     # Delete the user's profile document.
     user_ref.delete()
+
+def _delete_usage(uid):
+    """Delete the user's daily usage counters."""
+    db = firestore.client()
+    for doc in db.collection("users").document(uid).collection("usage").stream():
+        doc.reference.delete()
+
 
 def _get_scan_history(uid):
     """Retrieve the authenticated user's 20 most recent scans."""
@@ -981,6 +1128,7 @@ def handler(event, context):
 
             try:
                 _anonymize_and_delete_user_data(uid)
+                _delete_usage(uid)
                 auth.delete_user(uid)
             except Exception as e:
                 print(f"account deletion failed: {type(e).__name__}")
@@ -1018,16 +1166,20 @@ def handler(event, context):
                 )
 
         if payload.get("action") == "chat":
-            return _handle_chat(payload, secrets)
+            return _handle_chat(payload, secrets, uid, is_anonymous)
         if payload.get("action") == "chat_title":
             return _handle_chat_title(payload, secrets)
 
         text = (payload.get("text") or "").strip()[:8000]
         if not text:
             return _resp(400, {"error": "empty_message"})
+        blocked, refund = _reserve_request(uid, is_anonymous)
+        if blocked:
+            return blocked
         try:
             result = _analyze(text, secrets.get("anthropic_api_key"))
         except (anthropic.APIError, AnalysisError) as e:
+            _refund_request(refund)
             # Never log the message text; log only the error type, plus the
             # fixed validation reason for AnalysisError (no user text in it).
             detail = f": {e}" if isinstance(e, AnalysisError) else ""

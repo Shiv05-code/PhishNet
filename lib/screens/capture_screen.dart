@@ -171,9 +171,20 @@ class _CaptureScreenState extends State<CaptureScreen> {
       );
     } on ScanException catch (error) {
       if (mounted) {
+        final atLimit = error.dailyLimit != null;
+        if (atLimit) {
+          // Keep what was going to be scanned. A photo's text goes into the box
+          // too, so it can be scanned after usage resets without picking it again.
+          if (_textController.text.trim().isEmpty) {
+            _textController.text = text;
+          }
+          setState(() => _isTextMode = true);
+        }
         _showMessage(
           error.message,
           onRetry: error.retryable ? () => _submitText(text) : null,
+          // Longer than usual, so there is time to read when usage resets.
+          duration: atLimit ? const Duration(seconds: 10) : null,
         );
       }
     } finally {
@@ -199,14 +210,18 @@ class _CaptureScreenState extends State<CaptureScreen> {
     });
   }
 
-  void _showMessage(String message, {VoidCallback? onRetry}) {
+  void _showMessage(
+    String message, {
+    VoidCallback? onRetry,
+    Duration? duration,
+  }) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.cardSurface,
         elevation: 6,
-        duration: Duration(seconds: onRetry == null ? 4 : 10),
+        duration: duration ?? Duration(seconds: onRetry == null ? 4 : 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         action: onRetry == null
             ? null
