@@ -6,6 +6,7 @@ import os
 import sys
 import unittest
 from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest import mock
 
@@ -106,6 +107,7 @@ class AuthAndInputTests(HandlerTestCase):
 
         with mock.patch.object(handler.auth, "verify_id_token", side_effect=verify), \
              mock.patch.object(handler, "_db_ready", True), \
+             mock.patch.object(handler, "_reserve_request", return_value=(None, None)), \
              mock.patch.object(handler.firestore, "client") as db:
             resp = self.call(text="hello")
         self.assertEqual(resp["statusCode"], 200)
@@ -886,6 +888,363 @@ class ChatTitleTests(HandlerTestCase):
         ])
 
         self.assertEqual(response["statusCode"], 502)
+
+
+class FakeSnapshot:
+    def __init__(self, data):
+        self.exists = data is not None
+        self._data = data
+
+    def to_dict(self):
+        return None if self._data is None else dict(self._data)
+
+
+class FakeDoc:
+    def __init__(self, store, path):
+        self.store, self.path = store, path
+
+    def collection(self, name):
+        return FakeCollection(self.store, self.path + (name,))
+
+    def get(self, transaction=None):
+        return FakeSnapshot(self.store.get(self.path))
+
+    def update(self, changes):
+        doc = self.store[self.path]
+        for key, value in changes.items():
+            doc[key] = doc.get(key, 0) + value.value if hasattr(value, "value") else value
+
+
+class FakeCollection:
+    def __init__(self, store, path):
+        self.store, self.path = store, path
+
+    def document(self, doc_id):
+        return FakeDoc(self.store, self.path + (doc_id,))
+
+    def add(self, data):
+        """Saving a scan: nothing in these tests reads it back."""
+
+
+class FakeTransaction:
+    def __init__(self, store):
+        self.store = store
+
+    def set(self, ref, data):
+        self.store[ref.path] = dict(data)
+
+
+class FakeFirestore:
+    """In-memory stand-in for the parts of Firestore the daily limit uses."""
+
+    def __init__(self):
+        self.store = {}
+
+    def collection(self, name):
+        return FakeCollection(self.store, (name,))
+
+    def transaction(self):
+        return FakeTransaction(self.store)
+
+    def count(self, uid, day="2026-11-12"):
+        return self.store.get(("users", uid, "usage", day), {}).get("count", 0)
+
+    def add_subscription(self, uid, **fields):
+        data = {
+            "plan": "plus",
+            "status": "active",
+            "environment": "production",
+            "expiresAt": datetime.now(timezone.utc) + timedelta(days=30),
+        }
+        data.update(fields)
+        self.store[("users", uid, "subscriptions", "current")] = data
+
+
+NOW = datetime(2026, 11, 12, 20, 0, tzinfo=timezone.utc)  # noon Pacific
+RESET = datetime(2026, 11, 13, 8, 0, tzinfo=timezone.utc)  # next midnight Pacific
+
+
+class LimitWindowTests(unittest.TestCase):
+    def test_day_ends_at_midnight_pacific(self):
+        day, resets_at = handler._limit_window(NOW)
+        self.assertEqual(day, "2026-11-12")
+        self.assertEqual(resets_at, RESET)
+
+    def test_evening_pacific_is_still_the_same_day(self):
+        # 7 PM Pacific on Nov 12 is already Nov 13 in UTC.
+        day, resets_at = handler._limit_window(datetime(2026, 11, 13, 3, 0, tzinfo=timezone.utc))
+        self.assertEqual(day, "2026-11-12")
+        self.assertEqual(resets_at, RESET)
+
+    def test_midnight_pacific_starts_a_new_day(self):
+        day, _ = handler._limit_window(RESET)
+        self.assertEqual(day, "2026-11-13")
+        day, _ = handler._limit_window(RESET - timedelta(seconds=1))
+        self.assertEqual(day, "2026-11-12")
+
+    def test_reset_follows_daylight_saving_changes(self):
+        # Clocks go forward on March 8, 2026: midnight Pacific is then 07:00 UTC.
+        _, resets_at = handler._limit_window(datetime(2026, 3, 8, 12, 0, tzinfo=timezone.utc))
+        self.assertEqual(resets_at, datetime(2026, 3, 9, 7, 0, tzinfo=timezone.utc))
+        # Clocks go back on November 1, 2026: back to 08:00 UTC.
+        _, resets_at = handler._limit_window(datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc))
+        self.assertEqual(resets_at, datetime(2026, 11, 2, 8, 0, tzinfo=timezone.utc))
+
+
+class ReserveCountTests(unittest.TestCase):
+    def reserve(self, store, limit=10):
+        db = FakeFirestore()
+        db.store = store
+        ref = db.collection("users").document("u").collection("usage").document("2026-11-12")
+        return handler._reserve_count(db.transaction(), ref, "2026-11-12", limit), db
+
+    def test_first_request_starts_the_count(self):
+        allowed, db = self.reserve({})
+        self.assertTrue(allowed)
+        self.assertEqual(db.count("u"), 1)
+
+    def test_request_up_to_the_limit_is_allowed(self):
+        allowed, db = self.reserve({("users", "u", "usage", "2026-11-12"): {"count": 9}})
+        self.assertTrue(allowed)
+        self.assertEqual(db.count("u"), 10)
+
+    def test_request_at_the_limit_is_blocked_and_not_counted(self):
+        allowed, db = self.reserve({("users", "u", "usage", "2026-11-12"): {"count": 10}})
+        self.assertFalse(allowed)
+        self.assertEqual(db.count("u"), 10)
+
+    def test_unreadable_count_starts_over(self):
+        allowed, db = self.reserve({("users", "u", "usage", "2026-11-12"): {"count": "many"}})
+        self.assertTrue(allowed)
+        self.assertEqual(db.count("u"), 1)
+
+
+class DailyLimitTests(HandlerTestCase):
+    def setUp(self):
+        super().setUp()
+        self.db = FakeFirestore()
+        for p in (
+            mock.patch.object(handler, "_db_ready", True),
+            mock.patch.object(handler.firestore, "client", return_value=self.db),
+            mock.patch.object(handler, "_limit_window", return_value=("2026-11-12", RESET)),
+            mock.patch.object(
+                handler,
+                "_reserve_in_transaction",
+                side_effect=lambda txn, ref, day, limit: handler._reserve_count(txn, ref, day, limit),
+            ),
+        ):
+            p.start()
+            self.addCleanup(p.stop)
+        self.client.messages.create.side_effect = lambda **kw: (
+            _chat_response("Do not click the link.")
+            if "tools" not in kw
+            else _tool_response(dict(VALID))
+        )
+
+    def scan(self, text="hello", **kw):
+        return self.call(text=text, **kw)
+
+    def chat(self, question="Is this safe?", **kw):
+        body = json.dumps({"action": "chat", "question": question})
+        return handler.handler(_event(raw_body=body, **kw), None)
+
+    def title(self):
+        body = json.dumps(
+            {"action": "chat_title", "messages": [{"role": "user", "content": "hi"}]}
+        )
+        return handler.handler(_event(raw_body=body), None)
+
+    def body(self, resp):
+        return json.loads(resp["body"])
+
+    def use_up_limit(self, uid="user-1", used=10):
+        self.db.store[("users", uid, "usage", "2026-11-12")] = {"count": used}
+
+    def login_as(self, uid, anonymous=False):
+        def verify(token):
+            decoded = {"uid": uid}
+            if anonymous:
+                decoded["firebase"] = {"sign_in_provider": "anonymous"}
+            return decoded
+
+        p = mock.patch.object(handler.auth, "verify_id_token", side_effect=verify)
+        p.start()
+        self.addCleanup(p.stop)
+
+    # AC 6: the limit
+    def test_default_limit_is_ten(self):
+        self.assertEqual(handler.FREE_DAILY_LIMIT, 10)
+
+    def test_ten_scans_work_and_the_eleventh_is_blocked(self):
+        for _ in range(10):
+            self.assertEqual(self.scan()["statusCode"], 200)
+        resp = self.scan()
+        self.assertEqual(resp["statusCode"], 429)
+        self.assertEqual(self.client.messages.create.call_count, 10)
+
+    def test_chat_and_scans_share_one_limit(self):
+        for _ in range(6):
+            self.assertEqual(self.scan()["statusCode"], 200)
+        for _ in range(4):
+            self.assertEqual(self.chat()["statusCode"], 200)
+        self.assertEqual(self.scan()["statusCode"], 429)
+        self.assertEqual(self.chat()["statusCode"], 429)
+        self.assertEqual(self.client.messages.create.call_count, 10)
+
+    def test_blocked_request_never_reaches_claude(self):
+        self.use_up_limit()
+        self.assertEqual(self.scan()["statusCode"], 429)
+        self.assertEqual(self.chat()["statusCode"], 429)
+        self.client.messages.create.assert_not_called()
+
+    def test_blocked_request_does_not_change_the_count(self):
+        self.use_up_limit()
+        self.scan()
+        self.chat()
+        self.assertEqual(self.db.count("user-1"), 10)
+
+    def test_guests_are_limited(self):
+        self.login_as("guest-1", anonymous=True)
+        for _ in range(10):
+            self.assertEqual(self.scan()["statusCode"], 200)
+        self.assertEqual(self.scan()["statusCode"], 429)
+        self.assertEqual(self.chat()["statusCode"], 429)
+
+    def test_a_plus_subscription_on_a_guest_does_not_lift_the_limit(self):
+        self.login_as("guest-1", anonymous=True)
+        self.db.add_subscription("guest-1")
+        self.use_up_limit("guest-1")
+        self.assertEqual(self.scan()["statusCode"], 429)
+
+    def test_each_user_has_their_own_count(self):
+        self.use_up_limit("user-1")
+        self.login_as("user-2")
+        self.assertEqual(self.scan()["statusCode"], 200)
+        self.assertEqual(self.db.count("user-2"), 1)
+
+    def test_a_new_day_starts_a_new_count(self):
+        self.use_up_limit()
+        self.assertEqual(self.scan()["statusCode"], 429)
+        tomorrow = ("2026-11-13", RESET + timedelta(days=1))
+        with mock.patch.object(handler, "_limit_window", return_value=tomorrow):
+            self.assertEqual(self.scan()["statusCode"], 200)
+            self.assertEqual(self.db.count("user-1", "2026-11-13"), 1)
+
+    def test_limit_can_be_changed_with_the_environment(self):
+        with mock.patch.object(handler, "FREE_DAILY_LIMIT", 2):
+            self.assertEqual(self.scan()["statusCode"], 200)
+            self.assertEqual(self.scan()["statusCode"], 200)
+            resp = self.scan()
+        self.assertEqual(resp["statusCode"], 429)
+        self.assertEqual(self.body(resp)["limit"], 2)
+
+    def test_bad_limit_setting_falls_back_to_ten(self):
+        for value in ("", "abc", "0", "-3"):
+            with mock.patch.dict(os.environ, {"FREE_DAILY_LIMIT": value}):
+                self.assertEqual(handler._env_int("FREE_DAILY_LIMIT", 10), 10)
+
+    # Plus
+    def test_active_plus_has_no_limit(self):
+        self.db.add_subscription("user-1")
+        for _ in range(15):
+            self.assertEqual(self.scan()["statusCode"], 200)
+        self.assertEqual(self.chat()["statusCode"], 200)
+        self.assertEqual(self.db.count("user-1"), 0)
+
+    def test_plus_that_is_not_active_is_limited(self):
+        cases = {
+            "expired": {"expiresAt": datetime.now(timezone.utc) - timedelta(days=1)},
+            "canceled": {"status": "canceled"},
+            "other plan": {"plan": "free"},
+            "sandbox purchase": {"environment": "sandbox"},
+            "no expiry": {"expiresAt": None},
+        }
+        for name, fields in cases.items():
+            with self.subTest(name):
+                self.db.store.clear()
+                self.db.add_subscription("user-1", **fields)
+                self.use_up_limit()
+                self.assertEqual(self.scan()["statusCode"], 429)
+
+    def test_plus_user_blocked_earlier_is_let_through_after_upgrading(self):
+        self.use_up_limit()
+        self.assertEqual(self.scan()["statusCode"], 429)
+        self.db.add_subscription("user-1")
+        self.assertEqual(self.scan()["statusCode"], 200)
+
+    # AC 7: what the app is told
+    def test_limit_response_says_when_usage_resets(self):
+        self.use_up_limit()
+        resp = self.scan()
+        self.assertEqual(resp["statusCode"], 429)
+        body = self.body(resp)
+        self.assertEqual(body["error"], "daily_limit_reached")
+        self.assertEqual(body["limit"], 10)
+        self.assertEqual(body["resets_at"], "2026-11-13T08:00:00Z")
+        self.assertFalse(body["retryable"])
+        self.assertIn("10", body["message"])
+
+    def test_chat_limit_response_has_the_same_shape(self):
+        self.use_up_limit()
+        self.assertEqual(self.body(self.chat()), self.body(self.scan()))
+
+    # What does not count
+    def test_invalid_requests_do_not_use_a_request(self):
+        for _ in range(12):
+            self.assertEqual(self.scan(text="   ")["statusCode"], 400)
+            self.assertEqual(self.chat(question="  ")["statusCode"], 400)
+        self.assertEqual(self.db.count("user-1"), 0)
+        self.assertEqual(self.scan()["statusCode"], 200)
+
+    def test_chat_title_is_never_limited_or_counted(self):
+        self.use_up_limit()
+        self.assertEqual(self.title()["statusCode"], 200)
+        self.assertEqual(self.db.count("user-1"), 10)
+
+    def test_a_failed_scan_gives_the_request_back(self):
+        self.client.messages.create.side_effect = handler.anthropic.APIError(
+            "boom", request=None, body=None
+        )
+        self.assertEqual(self.scan()["statusCode"], 502)
+        self.assertEqual(self.db.count("user-1"), 0)
+
+    def test_a_failed_chat_answer_gives_the_request_back(self):
+        self.client.messages.create.side_effect = handler.anthropic.APIError(
+            "boom", request=None, body=None
+        )
+        self.assertEqual(self.chat()["statusCode"], 502)
+        self.assertEqual(self.db.count("user-1"), 0)
+
+    def test_a_successful_request_is_not_given_back(self):
+        self.scan()
+        self.chat()
+        self.assertEqual(self.db.count("user-1"), 2)
+
+    # When counting is not possible
+    def test_unreadable_count_blocks_the_request_instead_of_skipping_the_limit(self):
+        with mock.patch.object(handler, "_reserve_in_transaction", side_effect=RuntimeError("down")):
+            resp = self.scan()
+        self.assertEqual(resp["statusCode"], 503)
+        self.assertEqual(self.body(resp), {"error": "usage_unavailable", "retryable": True})
+        self.client.messages.create.assert_not_called()
+
+    def test_no_limit_when_firestore_is_not_set_up(self):
+        with mock.patch.object(handler, "_db_ready", False):
+            for _ in range(12):
+                self.assertEqual(self.scan()["statusCode"], 200)
+
+    def test_usage_is_removed_when_an_account_is_deleted(self):
+        self.use_up_limit()
+        doc = mock.Mock()
+        usage = mock.Mock()
+        usage.stream.return_value = [doc]
+        db = mock.Mock()
+        db.collection.return_value.document.return_value.collection.return_value = usage
+        with mock.patch.object(handler.firestore, "client", return_value=db):
+            handler._delete_usage("user-1")
+        db.collection.return_value.document.return_value.collection.assert_called_with("usage")
+        doc.reference.delete.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
