@@ -127,7 +127,10 @@ class ChatConversation {
   final DateTime createdAt;
   DateTime updatedAt;
   final List<ChatMessage> messages;
-  final ChatScanContext? scan;
+
+  /// The scan the conversation is about. It changes when a photo is scanned
+  /// in a conversation that already exists.
+  ChatScanContext? scan;
 
   Map<String, dynamic> toJson() => {
     'title': title,
@@ -577,6 +580,9 @@ class ChatService extends ChangeNotifier {
           ..clear()
           ..addAll(_messages);
 
+        // A photo scanned after the conversation began must be saved too, or
+        // reopening the conversation loses its extracted text and assessment.
+        conversation.scan = _scan;
         conversation.updatedAt = now;
 
         _conversations.removeAt(index);
@@ -728,6 +734,7 @@ class ChatService extends ChangeNotifier {
   /// the photo getting its own summary first.
   Future<bool> sendImage(String imagePath, {String? question}) async {
     if (_sending) return false;
+    final generation = _requestGeneration;
     var typed = question?.trim() ?? '';
     if (typed.length > maxQuestionLength) {
       typed = typed.substring(0, maxQuestionLength);
@@ -757,6 +764,8 @@ class ChatService extends ChangeNotifier {
       } on ScanException catch (e) {
         throw _ChatFailure(e.message);
       }
+      // Signed out, or a different user signed in, while the photo was read.
+      if (generation != _requestGeneration) return false;
       _scan = ChatScanContext.fromResult(text, result);
       if (typed.isEmpty) {
         _messages.add(
@@ -767,11 +776,14 @@ class ChatService extends ChangeNotifier {
           ),
         );
       }
+      // Save now, so the photo's text and assessment are kept even if the
+      // user leaves before asking anything else.
+      _saveCurrentConversation();
     } on _ChatFailure catch (e) {
       _messages.remove(shown);
       _error = e.message;
     } finally {
-      _sending = false;
+      if (generation == _requestGeneration) _sending = false;
       notifyListeners();
     }
     if (_error != null) return false;
