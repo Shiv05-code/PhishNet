@@ -227,7 +227,12 @@ class _ResultsScreenState extends State<ResultsScreen>
 
     return Scaffold(
       appBar: const FigmaAppBar(title: 'Results'),
-      drawer: AppDrawer(currentPage: 'Results', isGuest: widget.isGuest),
+      drawer: AppDrawer(
+        currentPage: 'Results',
+        isGuest: widget.isGuest,
+        result: _r,
+        message: widget.message,
+      ),
       body: FigmaGradientBackground(
         child: ListView(
           padding: const EdgeInsets.all(16),

@@ -21,9 +21,10 @@ List<SavedScan> filterSavedScans(List<SavedScan> scans, String query) {
 }
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key, this.scanService});
+  const HistoryScreen({super.key, this.scanService, this.onScanSelected});
 
   final ScanService? scanService;
+  final ValueChanged<SavedScan>? onScanSelected;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -116,6 +117,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _openScan(SavedScan scan) {
+    final callback = widget.onScanSelected;
+
+    if (callback != null) {
+      callback(scan);
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ResultsScreen(result: scan.result),
