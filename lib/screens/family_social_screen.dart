@@ -142,8 +142,8 @@ class _ScanCard extends StatelessWidget {
     };
 
     final scanMessage = message.trim().isEmpty
-    ? 'No message text is available for this saved scan.'
-    : message.trim();
+        ? 'No message text is available for this saved scan.'
+        : message.trim();
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 20, 12, 14),

@@ -23,8 +23,7 @@ class AppDrawer extends StatelessWidget {
   final bool isGuest;
   final AuthService? authService;
   final ScanResult? result;
-final String message;
-
+  final String message;
 
   const AppDrawer({
     super.key,
@@ -32,7 +31,7 @@ final String message;
     this.isGuest = false,
     this.authService,
     this.result,
-this.message = '',
+    this.message = '',
   });
 
   void _navigate(BuildContext context, String label, Widget screen) {
@@ -125,14 +124,11 @@ this.message = '',
                   locked: isGuest,
                 ),
                 _menuItem(
-  context,
-  'Family/Social',
-  FamilySocialScreen(
-    result: result,
-    message: message,
-  ),
-  locked: isGuest,
-),
+                  context,
+                  'Family/Social',
+                  FamilySocialScreen(result: result, message: message),
+                  locked: isGuest,
+                ),
                 _menuItem(
                   context,
                   'History',
