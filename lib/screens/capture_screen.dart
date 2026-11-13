@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import '../services/scan_history_cache.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -161,6 +161,14 @@ class _CaptureScreenState extends State<CaptureScreen> {
               MockScans.next,
             )
           : await _scanService.analyzeMessage(text);
+
+      if (!useMock && !widget.isGuest) {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+
+        if (uid != null) {
+          ScanHistoryCache.instance.clear(uid);
+        }
+      }
 
       if (!mounted) return;
 
