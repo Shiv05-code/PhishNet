@@ -13,6 +13,7 @@ import 'auth_widgets.dart';
 import 'figma_gradient_background.dart';
 import '../theme/app_typography.dart';
 import 'guest_prompt.dart';
+import '../models/scan_result.dart';
 
 /// Drawer matching the mockup — light-blue background, plain-text menu
 /// items (no icons except Settings/Logout), hamburger toggle inside the
@@ -21,12 +22,16 @@ class AppDrawer extends StatelessWidget {
   final String currentPage;
   final bool isGuest;
   final AuthService? authService;
+  final ScanResult? result;
+  final String message;
 
   const AppDrawer({
     super.key,
     required this.currentPage,
     this.isGuest = false,
     this.authService,
+    this.result,
+    this.message = '',
   });
 
   void _navigate(BuildContext context, String label, Widget screen) {
@@ -121,7 +126,7 @@ class AppDrawer extends StatelessWidget {
                 _menuItem(
                   context,
                   'Family/Social',
-                  const FamilySocialScreen(),
+                  FamilySocialScreen(result: result, message: message),
                   locked: isGuest,
                 ),
                 _menuItem(
