@@ -6,14 +6,23 @@ import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../theme/app_typography.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final AuthService? authService;
 
   const HomeScreen({super.key, this.authService});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _monitoring = false;
+
+  void _toggleMonitoring() => setState(() => _monitoring = !_monitoring);
+
+  @override
   Widget build(BuildContext context) {
-    final firstName = (authService ?? AuthService()).firstName;
+    final firstName = (widget.authService ?? AuthService()).firstName;
     return Scaffold(
       backgroundColor: AppColors.screenBackground,
       appBar: const FigmaAppBar(title: 'Home'),
@@ -33,9 +42,14 @@ class HomeScreen extends StatelessWidget {
               firstName ?? 'there',
               style: const TextStyle(
                 fontSize: AppTypography.title,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: AppColors.text,
               ),
+            ),
+            const SizedBox(height: 16),
+            _MonitoringCard(
+              monitoring: _monitoring,
+              onToggle: _toggleMonitoring
             ),
             const SizedBox(height: 16),
             const Row(
@@ -105,6 +119,94 @@ class _SoftCard extends StatelessWidget {
         ],
       ),
       child: child,
+    );
+  }
+}
+
+class _MonitoringCard extends StatelessWidget {
+  const _MonitoringCard({required this.monitoring, required this.onToggle});
+  final bool monitoring;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                monitoring ? Icons.shield : Icons.shield_outlined,
+                size: 44,
+                color: monitoring ? AppColors.primaryBlue : AppColors.muted,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      monitoring
+                          ? 'Monitoring your inbox'
+                          : 'Monitoring is off',
+                      style: const TextStyle(
+                        fontSize: AppTypography.emphasis,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                    const Text(
+                      'Yahoo inbox: not connected yet',
+                      style: TextStyle(
+                        fontSize: AppTypography.label,
+                        color: AppColors.text,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (monitoring) ...[
+            const SizedBox(height: 6),
+            const Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'Last checked: sample',
+                style: TextStyle(
+                  fontSize: AppTypography.caption,
+                  color: AppColors.muted,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: monitoring
+                ? OutlinedButton.icon(
+                    onPressed: onToggle,
+                    icon: const Icon(Icons.pause_circle_outline),
+                    label: const Text(
+                      'Stop monitoring',
+                      style: TextStyle(fontSize: AppTypography.emphasis),
+                    ),
+                  )
+                : FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                    ),
+                    onPressed: onToggle,
+                    icon: const Icon(Icons.play_circle_outline),
+                    label: const Text(
+                      'Start monitoring',
+                      style: TextStyle(fontSize: AppTypography.emphasis),
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
