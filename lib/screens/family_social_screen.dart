@@ -50,15 +50,6 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
     });
   }
 
-  static const contacts = [
-    ('JF', 'Jack Feria'),
-    ('DS', 'Dhara Shah'),
-    ('SK', 'Shivansh Kanda'),
-    ('PC', 'Payton Curry'),
-    ('NC', 'Nicholas Chang'),
-    ('Dr', 'Dr. Albinani'),
-  ];
-
   Future<void> _shareMessage(BuildContext context, String name) async {
     final text = _selectedMessage.trim().isEmpty
         ? 'No scanned message is available.'
@@ -88,7 +79,23 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
           padding: const EdgeInsets.fromLTRB(14, 18, 14, 28),
           children: [
             _ScanCard(result: _selectedResult, message: _selectedMessage),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
+
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _OutlineButton(
+                label: 'Add Contact Favorites',
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Contact favorites prototype opened.'),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 28),
 
             Align(
               alignment: Alignment.centerLeft,
@@ -98,25 +105,27 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
               ),
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 16),
 
-            const Text(
-              'Trusted Contacts',
-              style: TextStyle(
-                fontSize: 29,
-                fontWeight: FontWeight.w500,
-                color: AppColors.text,
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _OutlineButton(
+                label: 'Share with Family',
+                onPressed: () => _shareMessage(context, 'Family'),
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
 
-            for (final contact in contacts)
-              _ContactRow(
-                initials: contact.$1,
-                name: contact.$2,
-                onPressed: () => _shareMessage(context, contact.$2),
+            const Text(
+              'Share this message with a trusted family member '
+              'to help confirm PhishNet’s analysis.',
+              style: TextStyle(
+                fontSize: AppTypography.body,
+                height: 1.35,
+                color: AppColors.text,
               ),
+            ),
           ],
         ),
       ),
@@ -176,13 +185,13 @@ class _ScanCard extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     SizedBox.expand(
-  child: CircularProgressIndicator(
-    value: score.clamp(0, 100) / 100,
-    strokeWidth: 9,
-    color: riskColor,
-    backgroundColor: riskColor.withValues(alpha: 0.2),
-  ),
-),
+                      child: CircularProgressIndicator(
+                        value: score.clamp(0, 100) / 100,
+                        strokeWidth: 9,
+                        color: riskColor,
+                        backgroundColor: riskColor.withValues(alpha: 0.2),
+                      ),
+                    ),
                     SizedBox(
                       width: 95,
                       height: 45,
@@ -269,75 +278,6 @@ class _ScanCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ContactRow extends StatelessWidget {
-  const _ContactRow({
-    required this.initials,
-    required this.name,
-    required this.onPressed,
-  });
-
-  final String initials;
-  final String name;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 82,
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0x66808080))),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(shape: BoxShape.circle),
-            child: Text(
-              initials,
-              style: const TextStyle(fontSize: 20, color: AppColors.text),
-            ),
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(fontSize: 24, color: AppColors.text),
-            ),
-          ),
-          _MessageButton(onPressed: onPressed),
-        ],
-      ),
-    );
-  }
-}
-
-class _MessageButton extends StatelessWidget {
-  const _MessageButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: const Icon(Icons.chat_bubble_outline, size: 22),
-      label: const Text(
-        'Message',
-        style: TextStyle(fontSize: AppTypography.body),
-      ),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF168BC2),
-        side: const BorderSide(color: Colors.white, width: 1.5),
-        backgroundColor: Colors.white.withValues(alpha: 0.38),
-        shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
     );
   }
