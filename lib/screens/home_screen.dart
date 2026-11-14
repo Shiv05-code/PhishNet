@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../models/home_stats.dart';
 import '../models/saved_scan.dart';
 import '../screens/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/home_stats_cache.dart';
+import '../services/monitoring_prefs.dart';
 import '../services/scan_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
@@ -11,40 +14,7 @@ import '../widgets/figma_gradient_background.dart';
 import '../theme/app_typography.dart';
 import '../widgets/auth_widgets.dart';
 import 'capture_screen.dart';
-
-/// Counts derived from real scan history. Week stats use the last 7 days;
-/// attention uses high-risk scans from the last 48 hours.
-class _ScanSummary {
-  _ScanSummary(List<SavedScan> scans, DateTime now) {
-    final week = <SavedScan>[];
-    final recent = <SavedScan>[];
-    for (final s in scans) {
-      final at = s.createdAt;
-      if (at != null && (lastChecked == null || at.isAfter(lastChecked!))) {
-        lastChecked = at;
-      }
-      final age = at == null ? null : now.difference(at);
-      if (age != null && age <= const Duration(days: 7)) week.add(s);
-      if (age != null &&
-          age <= const Duration(hours: 48) &&
-          s.result.riskLevel == 'high') {
-        recent.add(s);
-      }
-    }
-    total = week.length;
-    flagged = week.where((s) => s.result.riskLevel == 'high').length;
-    safe = week.where((s) => s.result.riskLevel == 'low').length;
-    attention = recent;
-  }
-
-  int total = 0;
-  int flagged = 0;
-  int safe = 0;
-  List<SavedScan> attention = const [];
-  DateTime? lastChecked;
-
-  int get scamRatePercent => total == 0 ? 0 : (flagged * 100 ~/ total);
-}
+import 'results_screen.dart';
 
 String _timeAgo(DateTime? at, DateTime now) {
   if (at == null) return 'No checks yet';
@@ -60,6 +30,29 @@ String _timeAgo(DateTime? at, DateTime now) {
   }
   final days = d.inDays;
   return 'Last checked: $days ${days == 1 ? 'day' : 'days'} ago';
+}
+
+String _scanTime(DateTime? at) {
+  if (at == null) return 'Time unavailable';
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final local = at.toLocal();
+  final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+  return '${months[local.month - 1]} ${local.day} · $hour12:$minute $period';
 }
 
 String _greetingForHour(int hour) {
@@ -84,8 +77,14 @@ class _HomeScreenState extends State<HomeScreen>
     vsync: this,
     duration: const Duration(milliseconds: 900),
   );
+  late final AuthService _auth = widget.authService ?? AuthService();
+  late final String _firstName = _auth.firstName ?? 'there';
   bool _started = false;
-  List<SavedScan> _scans = [];
+  bool _loadingStats = false;
+  Timer? _autoRefresh;
+
+  ScanService? _ownedService;
+  HomeStats _stats = HomeStats.empty;
 
   // Inbox linking is not built yet: connecting is simulated in the demo.
   bool _inboxConnected = false;
@@ -94,7 +93,35 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _loadScans();
+    // Paint the last known numbers at once, then refresh in the background.
+    final key = _cacheKey();
+    if (key != null) _stats = HomeStatsCache.peek(key) ?? HomeStats.empty;
+    _loadStats(force: true);
+    _autoRefresh = Timer.periodic(
+      const Duration(minutes: 2),
+      (_) => _loadStats(force: true),
+    );
+    _restoreMonitoring();
+  }
+
+  Future<void> _restoreMonitoring() async {
+    final key = _cacheKey();
+    if (key == null) return;
+    final saved = await MonitoringPrefs.load(key);
+    if (!mounted) return;
+    setState(() {
+      _inboxConnected = saved.connected;
+      _monitoring = saved.monitoring;
+    });
+  }
+
+  void _saveMonitoring() {
+    final key = _cacheKey();
+    if (key == null) return;
+    MonitoringPrefs.save(
+      key,
+      MonitoringState(connected: _inboxConnected, monitoring: _monitoring),
+    );
   }
 
   @override
@@ -111,57 +138,105 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _autoRefresh?.cancel();
     _enter.dispose();
+    _ownedService?.dispose();
     super.dispose();
   }
 
-  Future<void> _loadScans() async {
+  String? _cacheKey() {
     try {
-      final service = widget.scanService ?? ScanService();
-      final scans = await service.getScanHistory();
-      if (!mounted) return;
-      setState(() => _scans = scans);
+      return _auth.currentUser?.uid;
     } catch (_) {
-      // Keep zeros when history can't load; Home stays usable.
+      return null;
     }
   }
 
-  void _toggleMonitoring() => setState(() => _monitoring = !_monitoring);
+  /// Fetches the summary unless a fresh copy is cached. Failures keep the
+  /// numbers already on screen, so Home never breaks when offline.
+  Future<void> _loadStats({bool force = false}) async {
+    if (_loadingStats) return;
+    final key = _cacheKey();
+    final now = DateTime.now();
+    if (!force && key != null && HomeStatsCache.isFresh(key, now)) return;
+
+    _loadingStats = true;
+    try {
+      final service = widget.scanService ?? (_ownedService ??= ScanService());
+      final fresh = await service.getHomeStats();
+      if (key != null) HomeStatsCache.put(key, fresh, DateTime.now());
+      if (mounted) setState(() => _stats = fresh);
+    } catch (error) {
+      // Keep the last known numbers.
+      debugPrint('Home stats failed: $error');
+    } finally {
+      _loadingStats = false;
+    }
+  }
+
+  void _toggleMonitoring() {
+    setState(() => _monitoring = !_monitoring);
+    _saveMonitoring();
+  }
 
   void _connectInbox() {
     setState(() {
       _inboxConnected = true;
       _monitoring = true;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Yahoo inbox connected.')),
+    _saveMonitoring();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Yahoo inbox connected.')));
+  }
+
+  Future<void> _openCapture() async {
+    await Navigator.of(context).push(fadeRoute(const CaptureScreen()));
+    // A scan may have been saved while on the capture screen.
+    if (mounted) _loadStats(force: true);
+  }
+
+  /// Opening a flagged scan counts as reviewing it: it leaves the attention
+  /// list. Results opens right away; the refresh runs on return.
+  Future<void> _openAttention(SavedScan scan) async {
+    final service = widget.scanService ?? (_ownedService ??= ScanService());
+    service.markScanReviewed(scan.id).catchError((Object error) {
+      debugPrint('Mark reviewed failed: $error');
+    });
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ResultsScreen(result: scan.result),
+      ),
     );
+    if (mounted) _loadStats(force: true);
   }
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final firstName = (widget.authService ?? AuthService()).firstName;
-    final summary = _ScanSummary(_scans, now);
-    final hasScans = _scans.isNotEmpty;
+    final stats = _stats;
+    final hasAnyScans = stats.lastCheckedAt != null || stats.weekTotal > 0;
+    final hasAttention = stats.attention48h > 0;
 
     final String statusText;
     final IconData statusIcon;
     final Color statusColor;
-    if (summary.attention.isNotEmpty) {
-      final n = summary.attention.length;
-      statusText = '$n ${n == 1 ? 'message needs' : 'messages need'} your attention';
+    if (hasAttention) {
+      final n = stats.attention48h;
+      statusText =
+          'Review $n flagged ${n == 1 ? 'message' : 'messages'} below.';
       statusIcon = Icons.warning_amber_rounded;
       statusColor = AppColors.dangerRed;
-    } else if (!hasScans) {
+    } else if (!hasAnyScans) {
       statusText = _inboxConnected
           ? 'Check a message to get started.'
           : 'Connect your inbox to start protection.';
       statusIcon = Icons.info_outline;
       statusColor = AppColors.cautionAmber;
     } else {
-      statusText = 'Nothing needs your attention right now.';
-      statusIcon = Icons.verified_user;
+      statusText = 'Hooray! No messages need your attention.';
+      statusIcon = Icons.celebration;
       statusColor = AppColors.accentGreen;
     }
 
@@ -170,146 +245,166 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: const FigmaAppBar(title: 'Home'),
       drawer: const AppDrawer(currentPage: 'Home'),
       body: FigmaGradientBackground(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-          children: [
-            _Reveal(
-              animation: _enter,
-              start: 0,
-              child: _TypedGreeting(
-                prefix: _greetingForHour(now.hour),
-                name: firstName ?? 'there',
+        child: RefreshIndicator(
+          color: AppColors.primaryBlue,
+          onRefresh: () => _loadStats(force: true),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            children: [
+              _Reveal(
+                animation: _enter,
+                start: 0,
+                child: _TypedGreeting(
+                  prefix: _greetingForHour(now.hour),
+                  name: _firstName,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            _Reveal(
-              animation: _enter,
-              start: 0.1,
-              child: Row(
-                children: [
-                  Icon(statusIcon, size: AppTypography.emphasis, color: statusColor),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      statusText,
-                      style: const TextStyle(
-                        fontSize: AppTypography.label,
-                        color: AppColors.text,
+              const SizedBox(height: 8),
+              _Reveal(
+                animation: _enter,
+                start: 0.1,
+                child: Row(
+                  children: [
+                    Icon(
+                      statusIcon,
+                      size: AppTypography.emphasis,
+                      color: statusColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        statusText,
+                        style: const TextStyle(
+                          fontSize: AppTypography.label,
+                          color: AppColors.text,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            _Reveal(
-              animation: _enter,
-              start: 0.2,
-              child: SizedBox(
-                height: 56,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+              const SizedBox(height: 16),
+              _Reveal(
+                animation: _enter,
+                start: 0.2,
+                child: SizedBox(
+                  height: 56,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
-                  ),
-                  onPressed: () => Navigator.of(
-                    context,
-                  ).push(fadeRoute(const CaptureScreen())),
-                  icon: const Icon(Icons.search),
-                  label: const Text(
-                    'Check a message',
-                    style: TextStyle(fontSize: AppTypography.emphasis),
+                    onPressed: _openCapture,
+                    icon: const Icon(Icons.search),
+                    label: const Text(
+                      'Check a message',
+                      style: TextStyle(fontSize: AppTypography.emphasis),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            _Reveal(
-              animation: _enter,
-              start: 0.3,
-              child: _MonitoringCard(
-                connected: _inboxConnected,
-                monitoring: _monitoring,
-                lastChecked: _timeAgo(summary.lastChecked, now),
-                onToggle: _toggleMonitoring,
-                onConnect: _connectInbox,
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (!hasScans) ...[
+              const SizedBox(height: 12),
               _Reveal(
                 animation: _enter,
-                start: 0.35,
+                start: 0.25,
                 child: const _EmptyStateCard(),
               ),
               const SizedBox(height: 16),
-            ],
-            if (summary.attention.isNotEmpty) ...[
               _Reveal(
                 animation: _enter,
-                start: 0.35,
-                child: _AttentionCard(scans: summary.attention),
+                start: 0.3,
+                child: _MonitoringCard(
+                  connected: _inboxConnected,
+                  monitoring: _monitoring,
+                  lastChecked: _timeAgo(stats.lastCheckedAt, now),
+                  onToggle: _toggleMonitoring,
+                  onConnect: _connectInbox,
+                ),
               ),
               const SizedBox(height: 16),
+              if (hasAttention) ...[
+                _Reveal(
+                  animation: _enter,
+                  start: 0.35,
+                  child: _AttentionCard(
+                    count: stats.attention48h,
+                    items: stats.recentHigh,
+                    onOpen: _openAttention,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              _Reveal(
+                animation: _enter,
+                start: 0.4,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                        icon: Icons.mark_email_read,
+                        value: '${stats.weekTotal}',
+                        boldLabel: 'Emails',
+                        restLabel: ' checked this week',
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _StatCard(
+                        icon: Icons.warning_amber_rounded,
+                        value: '${stats.weekHigh}',
+                        boldLabel: 'Possible scams',
+                        restLabel: ' found',
+                        color: AppColors.dangerRed,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              _Reveal(
+                animation: _enter,
+                start: 0.5,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                        icon: Icons.check_circle,
+                        value: '${stats.weekLow}',
+                        boldLabel: 'Safe',
+                        restLabel: ' emails',
+                        color: AppColors.accentGreen,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _StatCard(
+                        icon: Icons.shield,
+                        value: '${stats.scamRate}%',
+                        boldLabel: 'Scam rate',
+                        restLabel: ' of emails',
+                        color: AppColors.cautionAmber,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (stats.mockAnalysis) ...[
+                const SizedBox(height: 10),
+                const Text(
+                  'Demo analysis: results are sample data.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.caption,
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
             ],
-            _Reveal(
-              animation: _enter,
-              start: 0.4,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      icon: Icons.mark_email_read,
-                      value: '${summary.total}',
-                      boldLabel: 'Emails',
-                      restLabel: ' checked this week',
-                      color: AppColors.primaryBlue,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _StatCard(
-                      icon: Icons.warning_amber_rounded,
-                      value: '${summary.flagged}',
-                      boldLabel: 'Possible scams',
-                      restLabel: ' found',
-                      color: AppColors.dangerRed,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            _Reveal(
-              animation: _enter,
-              start: 0.5,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      icon: Icons.check_circle,
-                      value: '${summary.safe}',
-                      boldLabel: 'Safe',
-                      restLabel: ' emails',
-                      color: AppColors.accentGreen,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _StatCard(
-                      icon: Icons.shield,
-                      value: '${summary.scamRatePercent}%',
-                      boldLabel: 'Scam rate',
-                      restLabel: ' of emails',
-                      color: AppColors.cautionAmber,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -332,7 +427,11 @@ class _Reveal extends StatelessWidget {
   Widget build(BuildContext context) {
     final curve = CurvedAnimation(
       parent: animation,
-      curve: Interval(start, (start + 0.4).clamp(0.0, 1.0), curve: Curves.easeOut),
+      curve: Interval(
+        start,
+        (start + 0.4).clamp(0.0, 1.0),
+        curve: Curves.easeOut,
+      ),
     );
     return FadeTransition(
       opacity: curve,
@@ -391,9 +490,7 @@ class _TypedGreetingState extends State<_TypedGreeting> {
   Widget build(BuildContext context) {
     final full = _full;
     final shown = full.substring(0, _shown.clamp(0, full.length));
-    final p = shown.length < widget.prefix.length
-        ? shown
-        : widget.prefix;
+    final p = shown.length < widget.prefix.length ? shown : widget.prefix;
     final n = shown.length > widget.prefix.length
         ? shown.substring(widget.prefix.length)
         : '';
@@ -457,16 +554,20 @@ class _EmptyStateCard extends StatelessWidget {
     return _SoftCard(
       child: Row(
         children: [
-          const Icon(Icons.tips_and_updates, size: 36, color: AppColors.primaryBlue),
+          const Icon(
+            Icons.tips_and_updates,
+            size: 36,
+            color: AppColors.primaryBlue,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text.rich(
               TextSpan(
                 style: base,
                 children: const [
-                  TextSpan(text: 'Paste a message and tap '),
+                  TextSpan(text: 'Tap '),
                   TextSpan(text: 'Check a message', style: bold),
-                  TextSpan(text: ' to see if it is '),
+                  TextSpan(text: ', then enter a message to see if it is '),
                   TextSpan(text: 'safe', style: bold),
                   TextSpan(text: '.'),
                 ],
@@ -603,12 +704,17 @@ class _MonitoringCard extends StatelessWidget {
 }
 
 class _AttentionCard extends StatelessWidget {
-  const _AttentionCard({required this.scans});
-  final List<SavedScan> scans;
+  const _AttentionCard({
+    required this.count,
+    required this.items,
+    required this.onOpen,
+  });
+  final int count;
+  final List<SavedScan> items;
+  final ValueChanged<SavedScan> onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final shown = scans.take(3).toList();
     return _SoftCard(
       borderColor: AppColors.dangerRed.withValues(alpha: 0.5),
       child: Column(
@@ -620,7 +726,7 @@ class _AttentionCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '${scans.length} ${scans.length == 1 ? 'message needs' : 'messages need'} your attention',
+                  '$count ${count == 1 ? 'message needs' : 'messages need'} your attention',
                   style: const TextStyle(
                     fontSize: AppTypography.emphasis,
                     color: AppColors.dangerRed,
@@ -630,61 +736,75 @@ class _AttentionCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          for (final s in shown) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0x80FFFFFF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0x330B718E)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '"${s.description}"',
-                          style: const TextStyle(
-                            fontSize: AppTypography.body,
-                            color: AppColors.primaryBlue,
+          for (final s in items) ...[
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => onOpen(s),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0x80FFFFFF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0x330B718E)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '"${s.description}"',
+                            style: const TextStyle(
+                              fontSize: AppTypography.body,
+                              color: AppColors.primaryBlue,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          s.result.summary,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: AppTypography.caption,
-                            color: AppColors.text,
+                          const SizedBox(height: 4),
+                          Text(
+                            s.result.summary,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: AppTypography.caption,
+                              color: AppColors.text,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.dangerRed,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Text(
-                      'Likely scam',
-                      style: TextStyle(
-                        fontSize: AppTypography.caption,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                          const SizedBox(height: 4),
+                          Text(
+                            _scanTime(s.createdAt),
+                            style: const TextStyle(
+                              fontSize: AppTypography.caption,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.dangerRed,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Text(
+                        'Likely scam',
+                        style: TextStyle(
+                          fontSize: AppTypography.caption,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right, color: AppColors.muted),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 10),
