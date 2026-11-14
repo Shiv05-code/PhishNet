@@ -75,7 +75,10 @@ void main() {
     test('entry is fresh within the TTL and stale after it', () {
       final t0 = DateTime(2026, 11, 14, 12);
       HomeStatsCache.put('u1', HomeStats.empty, t0);
-      expect(HomeStatsCache.isFresh('u1', t0.add(const Duration(seconds: 30))), isTrue);
+      expect(
+        HomeStatsCache.isFresh('u1', t0.add(const Duration(seconds: 30))),
+        isTrue,
+      );
       expect(HomeStatsCache.isFresh('u1', t0.add(HomeStatsCache.ttl)), isFalse);
     });
 
@@ -134,7 +137,9 @@ void main() {
     expect(find.textContaining('Demo analysis'), findsOneWidget);
   });
 
-  testWidgets('Home uses the cached summary without a second request', (tester) async {
+  testWidgets('Home uses the cached summary without a second request', (
+    tester,
+  ) async {
     final cached = HomeStats.fromJson(_payload());
     final service = FakeScanService(cached);
     // No signed-in user, so the cache key is null and Home fetches once.

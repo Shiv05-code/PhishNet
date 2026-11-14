@@ -162,7 +162,9 @@ void main() {
       expect(find.textContaining('Good '), findsOneWidget);
       final greeting = tester.widget<Text>(
         find.byWidgetPredicate(
-          (w) => w is Text && (w.textSpan?.toPlainText().startsWith('Good ') ?? false),
+          (w) =>
+              w is Text &&
+              (w.textSpan?.toPlainText().startsWith('Good ') ?? false),
         ),
       );
       expect(greeting.textSpan!.toPlainText().endsWith('Shivansh'), isTrue);
