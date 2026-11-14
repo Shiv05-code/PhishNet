@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 16),
             _MonitoringCard(
               monitoring: _monitoring,
-              onToggle: _toggleMonitoring
+              onToggle: _toggleMonitoring,
             ),
             const SizedBox(height: 16),
             if (_monitoring) ...[
