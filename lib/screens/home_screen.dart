@@ -38,9 +38,22 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _inboxConnected = false;
   bool _monitoring = false;
 
   void _toggleMonitoring() => setState(() => _monitoring = !_monitoring);
+
+  // Simulated for now: no real inbox link exists yet, so connecting
+  // switches on the same monitoring state the demo already shows.
+  void _connectInbox() {
+    setState(() {
+      _inboxConnected = true;
+      _monitoring = true;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Yahoo inbox connected.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,67 +66,44 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
           children: [
-            const Text(
-              'Hello,',
-              style: TextStyle(
-                fontSize: AppTypography.heading,
-                color: AppColors.primaryBlue,
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(
+                  fontSize: AppTypography.heading,
+                  color: AppColors.primaryBlue,
+                ),
+                children: [
+                  const TextSpan(text: 'Hello, '),
+                  TextSpan(
+                    text: firstName ?? 'there',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Text(
-              firstName ?? 'there',
-              style: const TextStyle(
-                fontSize: AppTypography.title,
-                fontWeight: FontWeight.w700,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _MonitoringCard(
-              monitoring: _monitoring,
-              onToggle: _toggleMonitoring,
-            ),
-            const SizedBox(height: 16),
-            if (_monitoring) ...[
-              const _AttentionCard(emails: _sampleFlagged),
-              const SizedBox(height: 16),
-            ],
-            const SizedBox(height: 16),
-            const Row(
+            const SizedBox(height: 8),
+            Row(
               children: [
-                Expanded(
-                  child: _StatCard(
-                    value: '148',
-                    label: 'Emails scanned in the past week',
-                    color: AppColors.primaryBlue,
-                  ),
+                Icon(
+                  _inboxConnected ? Icons.verified_user : Icons.info_outline,
+                  size: AppTypography.emphasis,
+                  color: _inboxConnected
+                      ? AppColors.accentGreen
+                      : AppColors.cautionAmber,
                 ),
-                SizedBox(width: 14),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: _StatCard(
-                    value: '36',
-                    label: 'Emails flagged',
-                    color: AppColors.dangerRed,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            const Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    value: '112',
-                    label: 'Safe emails',
-                    color: AppColors.accentGreen,
-                  ),
-                ),
-                SizedBox(width: 14),
-                Expanded(
-                  child: _StatCard(
-                    value: '24%',
-                    label: 'Phishing rate',
-                    color: AppColors.cautionAmber,
+                  child: Text(
+                    _inboxConnected
+                        ? 'Your inbox is being watched.'
+                        : 'Connect your inbox to start protection.',
+                    style: const TextStyle(
+                      fontSize: AppTypography.label,
+                      color: AppColors.text,
+                    ),
                   ),
                 ),
               ],
@@ -131,12 +121,71 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () => Navigator.of(
                   context,
                 ).push(fadeRoute(const CaptureScreen())),
-                icon: const Icon(Icons.content_paste),
+                icon: const Icon(Icons.search),
                 label: const Text(
-                  'Check something manually',
+                  'Check a message',
                   style: TextStyle(fontSize: AppTypography.emphasis),
                 ),
               ),
+            ),
+            const SizedBox(height: 16),
+            _MonitoringCard(
+              connected: _inboxConnected,
+              monitoring: _monitoring,
+              onToggle: _toggleMonitoring,
+              onConnect: _connectInbox,
+            ),
+            const SizedBox(height: 16),
+            if (_inboxConnected && _monitoring) ...[
+              const _AttentionCard(emails: _sampleFlagged),
+              const SizedBox(height: 16),
+            ],
+            const Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    icon: Icons.mark_email_read,
+                    value: '148',
+                    boldLabel: 'Emails',
+                    restLabel: ' checked this week',
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+                SizedBox(width: 14),
+                Expanded(
+                  child: _StatCard(
+                    icon: Icons.warning_amber_rounded,
+                    value: '36',
+                    boldLabel: 'Possible scams',
+                    restLabel: ' found',
+                    color: AppColors.dangerRed,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    icon: Icons.check_circle,
+                    value: '112',
+                    boldLabel: 'Safe',
+                    restLabel: ' emails',
+                    color: AppColors.accentGreen,
+                  ),
+                ),
+                SizedBox(width: 14),
+                Expanded(
+                  child: _StatCard(
+                    icon: Icons.shield,
+                    value: '24%',
+                    boldLabel: 'Scam rate',
+                    restLabel: ' of emails',
+                    color: AppColors.cautionAmber,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -175,12 +224,32 @@ class _SoftCard extends StatelessWidget {
 }
 
 class _MonitoringCard extends StatelessWidget {
-  const _MonitoringCard({required this.monitoring, required this.onToggle});
+  const _MonitoringCard({
+    required this.connected,
+    required this.monitoring,
+    required this.onToggle,
+    required this.onConnect,
+  });
+  final bool connected;
   final bool monitoring;
   final VoidCallback onToggle;
+  final VoidCallback onConnect;
 
   @override
   Widget build(BuildContext context) {
+    final String title;
+    final String subtitle;
+    if (!connected) {
+      title = 'Inbox not connected';
+      subtitle = 'Yahoo inbox is not linked yet';
+    } else if (monitoring) {
+      title = 'Monitoring your inbox';
+      subtitle = 'Yahoo inbox is connected';
+    } else {
+      title = 'Monitoring is paused';
+      subtitle = 'Yahoo inbox is connected';
+    }
+
     return _SoftCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,9 +257,11 @@ class _MonitoringCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                monitoring ? Icons.shield : Icons.shield_outlined,
+                connected && monitoring ? Icons.shield : Icons.shield_outlined,
                 size: 44,
-                color: monitoring ? AppColors.primaryBlue : AppColors.muted,
+                color: connected && monitoring
+                    ? AppColors.primaryBlue
+                    : AppColors.muted,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -198,17 +269,16 @@ class _MonitoringCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      monitoring
-                          ? 'Monitoring your inbox'
-                          : 'Monitoring is off',
+                      title,
                       style: const TextStyle(
                         fontSize: AppTypography.emphasis,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.primaryBlue,
                       ),
                     ),
-                    const Text(
-                      'Yahoo inbox: not connected yet',
-                      style: TextStyle(
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
                         fontSize: AppTypography.label,
                         color: AppColors.text,
                       ),
@@ -218,7 +288,7 @@ class _MonitoringCard extends StatelessWidget {
               ),
             ],
           ),
-          if (monitoring) ...[
+          if (connected && monitoring) ...[
             const SizedBox(height: 6),
             const Align(
               alignment: Alignment.centerRight,
@@ -235,12 +305,24 @@ class _MonitoringCard extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             height: 52,
-            child: monitoring
+            child: !connected
+                ? FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                    ),
+                    onPressed: onConnect,
+                    icon: const Icon(Icons.link),
+                    label: const Text(
+                      'Connect inbox',
+                      style: TextStyle(fontSize: AppTypography.emphasis),
+                    ),
+                  )
+                : monitoring
                 ? OutlinedButton.icon(
                     onPressed: onToggle,
                     icon: const Icon(Icons.pause_circle_outline),
                     label: const Text(
-                      'Stop monitoring',
+                      'Pause monitoring',
                       style: TextStyle(fontSize: AppTypography.emphasis),
                     ),
                   )
@@ -251,7 +333,7 @@ class _MonitoringCard extends StatelessWidget {
                     onPressed: onToggle,
                     icon: const Icon(Icons.play_circle_outline),
                     label: const Text(
-                      'Start monitoring',
+                      'Resume monitoring',
                       style: TextStyle(fontSize: AppTypography.emphasis),
                     ),
                   ),
@@ -357,12 +439,16 @@ class _AttentionCard extends StatelessWidget {
 
 class _StatCard extends StatelessWidget {
   const _StatCard({
+    required this.icon,
     required this.value,
-    required this.label,
+    required this.boldLabel,
+    required this.restLabel,
     required this.color,
   });
+  final IconData icon;
   final String value;
-  final String label;
+  final String boldLabel;
+  final String restLabel;
   final Color color;
 
   @override
@@ -371,16 +457,30 @@ class _StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Icon(icon, size: 28, color: color),
+          const SizedBox(height: 8),
           Text(
             value,
-            style: TextStyle(fontSize: AppTypography.title, color: color),
+            style: TextStyle(
+              fontSize: AppTypography.heading,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
           ),
           const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: AppTypography.label,
-              color: AppColors.text,
+          Text.rich(
+            TextSpan(
+              style: const TextStyle(
+                fontSize: AppTypography.label,
+                color: AppColors.text,
+              ),
+              children: [
+                TextSpan(
+                  text: boldLabel,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                TextSpan(text: restLabel),
+              ],
             ),
           ),
         ],

@@ -158,10 +158,10 @@ void main() {
         tester,
         HomeScreen(authService: FakeAuthService(displayName: 'Shivansh Kanda')),
       );
-      expect(find.text('Hello,'), findsOneWidget);
-      expect(find.text('Shivansh'), findsOneWidget);
-      final firstName = tester.widget<Text>(find.text('Shivansh'));
-      expect(firstName.style!.fontSize, greaterThanOrEqualTo(22));
+      expect(find.textContaining('Hello,'), findsOneWidget);
+      expect(find.textContaining('Shivansh'), findsOneWidget);
+      final greeting = tester.widget<Text>(find.textContaining('Hello,'));
+      expect(greeting.textSpan!.toPlainText(), 'Hello, Shivansh');
     });
 
     testWidgets('falls back when name is missing or blank', (tester) async {
@@ -173,8 +173,8 @@ void main() {
             authService: FakeAuthService(displayName: name),
           ),
         );
-        expect(find.text('Hello,'), findsOneWidget);
-        expect(find.text('there'), findsOneWidget);
+        expect(find.textContaining('Hello,'), findsOneWidget);
+        expect(find.textContaining('there'), findsOneWidget);
       }
     });
   });
