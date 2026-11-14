@@ -5,6 +5,28 @@ import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../theme/app_typography.dart';
+import '../widgets/auth_widgets.dart';
+import 'capture_screen.dart';
+
+class _FlaggedEmail {
+  const _FlaggedEmail(this.subject, this.from, this.score);
+  final String subject;
+  final String from;
+  final int score;
+}
+
+const _sampleFlagged = [
+  _FlaggedEmail(
+    'Account Suspended - Action Required',
+    'security@yah00-support.com',
+    81,
+  ),
+  _FlaggedEmail(
+    "Congrats! You've won the giveaway",
+    'rewards@prize-now.net',
+    97,
+  ),
+];
 
 class HomeScreen extends StatefulWidget {
   final AuthService? authService;
@@ -52,6 +74,11 @@ class _HomeScreenState extends State<HomeScreen> {
               onToggle: _toggleMonitoring
             ),
             const SizedBox(height: 16),
+            if (_monitoring) ...[
+              const _AttentionCard(emails: _sampleFlagged),
+              const SizedBox(height: 16),
+            ],
+            const SizedBox(height: 16),
             const Row(
               children: [
                 Expanded(
@@ -91,6 +118,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 56,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: () => Navigator.of(
+                  context,
+                ).push(fadeRoute(const CaptureScreen())),
+                icon: const Icon(Icons.content_paste),
+                label: const Text(
+                  'Check something manually',
+                  style: TextStyle(fontSize: AppTypography.emphasis),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -99,8 +146,9 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _SoftCard extends StatelessWidget {
-  const _SoftCard({required this.child});
+  const _SoftCard({required this.child, this.borderColor});
   final Widget child;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +158,9 @@ class _SoftCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xD9FDFCF9),
         borderRadius: BorderRadius.circular(22),
+        border: borderColor == null
+            ? null
+            : Border.all(color: borderColor!, width: 1.2),
         boxShadow: const [
           BoxShadow(
             color: Color(0x300B718E),
@@ -172,7 +223,7 @@ class _MonitoringCard extends StatelessWidget {
             const Align(
               alignment: Alignment.centerRight,
               child: Text(
-                'Last checked: sample',
+                'Last checked: 5 minutes ago',
                 style: TextStyle(
                   fontSize: AppTypography.caption,
                   color: AppColors.muted,
@@ -205,6 +256,99 @@ class _MonitoringCard extends StatelessWidget {
                     ),
                   ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttentionCard extends StatelessWidget {
+  const _AttentionCard({required this.emails});
+  final List<_FlaggedEmail> emails;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SoftCard(
+      borderColor: AppColors.dangerRed.withValues(alpha: 0.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.mark_email_unread, color: AppColors.dangerRed),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${emails.length} emails need your attention',
+                  style: const TextStyle(
+                    fontSize: AppTypography.emphasis,
+                    color: AppColors.dangerRed,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final e in emails) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0x80FFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0x330B718E)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '"${e.subject}"',
+                          style: const TextStyle(
+                            fontSize: AppTypography.body,
+                            color: AppColors.primaryBlue,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'From: ${e.from}',
+                          style: const TextStyle(
+                            fontSize: AppTypography.caption,
+                            color: AppColors.text,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Semantics(
+                    label: 'Risk score ${e.score} percent',
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.dangerRed,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        '${e.score}%',
+                        style: const TextStyle(
+                          fontSize: AppTypography.caption,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
         ],
       ),
     );
