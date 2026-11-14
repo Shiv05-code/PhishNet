@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/scan_history_cache.dart';
 import '../models/saved_scan.dart';
 import '../screens/app_colors.dart';
 import '../services/scan_service.dart';
@@ -7,6 +8,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import 'results_screen.dart';
+import 'dart:async';
 
 List<SavedScan> filterSavedScans(List<SavedScan> scans, String query) {
   final normalizedQuery = query.trim().toLowerCase();
@@ -21,18 +23,31 @@ List<SavedScan> filterSavedScans(List<SavedScan> scans, String query) {
 }
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key, this.scanService});
+  const HistoryScreen({super.key, this.scanService, this.historyUserId});
 
   final ScanService? scanService;
+  final String? Function()? historyUserId;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
+  StreamSubscription<User?>? _authSubscription;
+  int _historyRequestGeneration = 0;
+  final ScanHistoryCache _cache = ScanHistoryCache.instance;
+  String? _historyUid;
   late final ScanService _service;
   late final bool _ownsService;
   final TextEditingController _search = TextEditingController();
+
+  String? get _currentHistoryUid {
+    if (widget.historyUserId != null) {
+      return widget.historyUserId!();
+    }
+
+    return FirebaseAuth.instance.currentUser?.uid;
+  }
 
   List<SavedScan> _scans = [];
   bool _loading = true;
@@ -42,12 +57,73 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
+
     _ownsService = widget.scanService == null;
     _service = widget.scanService ?? ScanService();
+
     _loadHistory();
+
+    if (widget.historyUserId == null) {
+      _authSubscription = FirebaseAuth.instance.authStateChanges().listen((
+        user,
+      ) {
+        if (!mounted || user?.uid == _historyUid) return;
+
+        ++_historyRequestGeneration;
+
+        setState(() {
+          _historyUid = user?.uid;
+          _scans = [];
+          _loading = true;
+          _error = null;
+        });
+
+        if (user == null) {
+          _cache.clearAll();
+
+          setState(() {
+            _loading = false;
+            _error = 'Please sign in to view your scan history.';
+          });
+
+          return;
+        }
+
+        _loadHistory(expectedUid: user.uid);
+      });
+    }
   }
 
-  Future<void> _loadHistory() async {
+  Future<void> _loadHistory({
+    bool forceRefresh = false,
+    String? expectedUid,
+    int retryCount = 0,
+  }) async {
+    final uid = expectedUid ?? _currentHistoryUid;
+    final cacheRevision = uid == null ? null : _cache.revision(uid);
+    final requestGeneration = ++_historyRequestGeneration;
+
+    // Never reuse another account's visible history.
+    if (_historyUid != uid) {
+      _historyUid = uid;
+      _scans = [];
+    }
+
+    final cached = uid == null ? null : _cache.get(uid);
+
+    if (cached != null && _scans.isEmpty) {
+      setState(() {
+        _scans = cached;
+        _loading = false;
+        _error = null;
+      });
+    }
+
+    // Fresh cached data can be displayed without another request.
+    if (!forceRefresh && uid != null && cached != null && _cache.isFresh(uid)) {
+      return;
+    }
+
     final hadScans = _scans.isNotEmpty;
 
     setState(() {
@@ -58,7 +134,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
     try {
       final scans = await _service.getScanHistory();
 
-      if (!mounted) return;
+      if (!mounted ||
+          requestGeneration != _historyRequestGeneration ||
+          uid != _currentHistoryUid) {
+        return;
+      }
+
+      if (uid != null && _cache.revision(uid) != cacheRevision) {
+        // Do not restore outdated history after cache invalidation.
+        if (retryCount < 1) {
+          await _loadHistory(
+            forceRefresh: true,
+            expectedUid: uid,
+            retryCount: retryCount + 1,
+          );
+        } else {
+          setState(() {
+            _loading = false;
+            _error = _scans.isEmpty
+                ? 'History changed while loading. Please try again.'
+                : null;
+          });
+        }
+
+        return;
+      }
+
+      if (uid != null) {
+        _cache.save(uid, scans);
+      }
 
       setState(() {
         _scans = scans;
@@ -66,7 +170,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
         _error = null;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted ||
+          requestGeneration != _historyRequestGeneration ||
+          uid != _currentHistoryUid) {
+        return;
+      }
 
       final message = error is ScanException
           ? error.message
@@ -81,7 +189,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$message Your previous scans are still available.'),
-            action: SnackBarAction(label: 'Retry', onPressed: _loadHistory),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () => _loadHistory(forceRefresh: true),
+            ),
           ),
         );
       }
@@ -125,10 +236,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _search.dispose();
+
     if (_ownsService) {
       _service.dispose();
     }
+
     super.dispose();
   }
 
@@ -187,7 +301,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     : filtered.isEmpty
                     ? _messageState('No matching scans found.')
                     : RefreshIndicator(
-                        onRefresh: _loadHistory,
+                        onRefresh: () => _loadHistory(forceRefresh: true),
                         child: ListView.builder(
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                           itemCount: filtered.length,
