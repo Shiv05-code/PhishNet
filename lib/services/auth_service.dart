@@ -3,6 +3,7 @@ import 'payment_backend_service.dart';
 import 'session_timeout.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'scan_history_cache.dart';
 
 class AuthService {
   AuthService({this._auth, SessionTimeout? sessionTimeout})
@@ -155,7 +156,10 @@ class AuthService {
     await user.delete();
   }
 
-  Future<void> signOut() => _firebaseAuth.signOut();
+  Future<void> signOut() async {
+    await _firebaseAuth.signOut();
+    ScanHistoryCache.instance.clearAll();
+  }
 
   static String messageFor(Object error) {
     if (error is! FirebaseAuthException) {
