@@ -131,19 +131,25 @@ class _ScanCard extends StatelessWidget {
   const _ScanCard({this.result, this.message = ''});
 
   @override
-  @override
   Widget build(BuildContext context) {
     final score = result?.scamPercentage ?? 85;
+
+    final riskColor = switch (result?.riskLevel) {
+      'low' => const Color(0xFF2E9E5B),
+      'medium' => const Color(0xFFE08A1E),
+      _ => const Color(0xFFD64545),
+    };
 
     final riskLabel = switch (result?.riskLevel) {
       'low' => 'Low Risk',
       'medium' => 'Medium Risk',
       _ => 'High Risk',
     };
-
-    final scanMessage = message.trim().isEmpty
-        ? 'No message text is available for this saved scan.'
-        : message.trim();
+    final scanTitle = switch (result?.riskLevel) {
+      'high' => 'This looks like a phishing attempt',
+      'medium' => 'This message may be a scam',
+      _ => 'No strong warning signs found',
+    };
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 20, 12, 14),
@@ -163,19 +169,39 @@ class _ScanCard extends StatelessWidget {
         children: [
           Column(
             children: [
-              Container(
-                width: 110,
-                height: 110,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFF04444), width: 11),
-                ),
-                child: Text(
-                  '$score/100',
-                  style: TextStyle(fontSize: 24, color: Color(0xFFF04444)),
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox.expand(
+  child: CircularProgressIndicator(
+    value: score.clamp(0, 100) / 100,
+    strokeWidth: 9,
+    color: riskColor,
+    backgroundColor: riskColor.withValues(alpha: 0.2),
+  ),
+),
+                    SizedBox(
+                      width: 95,
+                      height: 45,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '$score/100',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: riskColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
+
               const SizedBox(height: 42),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -183,13 +209,13 @@ class _ScanCard extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFFF6B6B)),
+                  border: Border.all(color: riskColor),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   riskLabel,
                   style: TextStyle(
-                    color: Color(0xFFFF4D4D),
+                    color: riskColor,
                     fontSize: AppTypography.label,
                   ),
                 ),
@@ -203,7 +229,7 @@ class _ScanCard extends StatelessWidget {
                 Text(
                   '$score% likely scam',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 29, color: Color(0xFFF04444)),
+                  style: TextStyle(fontSize: 29, color: riskColor),
                 ),
                 const SizedBox(height: 12),
                 Container(
@@ -217,7 +243,7 @@ class _ScanCard extends StatelessWidget {
                   child: Column(
                     children: [
                       Text(
-                        scanMessage,
+                        scanTitle,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 20,
@@ -272,11 +298,7 @@ class _ContactRow extends StatelessWidget {
             width: 54,
             height: 54,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.62),
-              border: Border.all(color: Colors.white, width: 1.5),
-            ),
+            decoration: BoxDecoration(shape: BoxShape.circle),
             child: Text(
               initials,
               style: const TextStyle(fontSize: 20, color: AppColors.text),

@@ -332,9 +332,14 @@ class _ResultsScreenState extends State<ResultsScreen>
                                     context,
                                     feature: 'Share with Family',
                                   )
-                                : () => Navigator.of(
-                                    context,
-                                  ).push(fadeRoute(const FamilySocialScreen())),
+                                : () => Navigator.of(context).push(
+                                    fadeRoute(
+                                      FamilySocialScreen(
+                                        result: _r,
+                                        message: widget.message,
+                                      ),
+                                    ),
+                                  ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: widget.isGuest
                                   ? AppColors.muted
