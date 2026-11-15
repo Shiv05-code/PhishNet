@@ -340,56 +340,62 @@ class _HomeScreenState extends State<HomeScreen>
               _Reveal(
                 animation: _enter,
                 start: 0.4,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.mark_email_read,
-                        value: '${stats.weekTotal}',
-                        boldLabel: 'Emails',
-                        restLabel: ' checked this week',
-                        color: AppColors.primaryBlue,
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.mark_email_read,
+                          value: '${stats.weekTotal}',
+                          boldLabel: 'Emails',
+                          restLabel: ' checked this week',
+                          color: AppColors.primaryBlue,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.warning_amber_rounded,
-                        value: '${stats.weekHigh}',
-                        boldLabel: 'Possible scams',
-                        restLabel: ' found',
-                        color: AppColors.dangerRed,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.warning_amber_rounded,
+                          value: '${stats.weekHigh}',
+                          boldLabel: 'Possible scams',
+                          restLabel: ' found',
+                          color: AppColors.dangerRed,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
               _Reveal(
                 animation: _enter,
                 start: 0.5,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.check_circle,
-                        value: '${stats.weekLow}',
-                        boldLabel: 'Safe',
-                        restLabel: ' emails',
-                        color: AppColors.accentGreen,
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.check_circle,
+                          value: '${stats.weekLow}',
+                          boldLabel: 'Safe',
+                          restLabel: ' emails',
+                          color: AppColors.accentGreen,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.shield,
-                        value: '${stats.scamRate}%',
-                        boldLabel: 'Scam rate',
-                        restLabel: ' of emails',
-                        color: AppColors.cautionAmber,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.shield,
+                          value: '${stats.scamRate}%',
+                          boldLabel: 'Scam rate',
+                          restLabel: ' of emails',
+                          color: AppColors.cautionAmber,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               if (stats.mockAnalysis) ...[
@@ -835,15 +841,25 @@ class _StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 28, color: color),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: AppTypography.heading,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
+          Row(
+            children: [
+              Icon(icon, size: 28, color: color),
+              const SizedBox(width: 10),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: AppTypography.heading,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text.rich(
