@@ -904,6 +904,10 @@ def _anonymize_and_delete_user_data(uid):
     for stat in user_ref.collection("stats").stream():
         stat.reference.delete()
 
+    # Remove trusted contacts, which can include phone numbers.
+    for contact in user_ref.collection("trustedContacts").stream():
+        contact.reference.delete()
+
     # Delete the user's profile document.
     user_ref.delete()
 
