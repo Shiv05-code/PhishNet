@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'phone_number.dart';
+
 /// Maximum number of favorites a user can keep.
 const int trustedContactsLimit = 5;
 
@@ -7,10 +9,13 @@ const int trustedContactsLimit = 5;
 const int trustedContactNameMaxLength = 40;
 
 class TrustedContact {
-  const TrustedContact({required this.id, required this.name});
+  const TrustedContact({required this.id, required this.name, this.phone});
 
   final String id;
   final String name;
+
+  /// E.164 phone number (for example +15551234567). Null when not saved.
+  final String? phone;
 }
 
 abstract interface class TrustedContactsStore {
@@ -49,6 +54,7 @@ class TrustedContactsRepository implements TrustedContactsStore {
           (doc) => TrustedContact(
             id: doc.id,
             name: (doc.data()['name'] as String?) ?? '',
+            phone: doc.data()['phone'] as String?,
           ),
         )
         .where((contact) => contact.name.isNotEmpty)
@@ -80,7 +86,18 @@ class TrustedContactsRepository implements TrustedContactsStore {
         throw ArgumentError('Invalid contact name.');
       }
 
-      batch.set(collection.doc(contact.id), {'name': name, 'order': i});
+      final phone = contact.phone == null
+          ? null
+          : normalizePhoneNumber(contact.phone);
+      if (contact.phone != null && phone == null) {
+        throw ArgumentError('Invalid phone number.');
+      }
+
+      batch.set(collection.doc(contact.id), {
+        'name': name,
+        'order': i,
+        if (phone != null) 'phone': phone,
+      });
     }
 
     await batch.commit();
