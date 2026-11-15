@@ -6,6 +6,26 @@ import '../widgets/figma_app_bar.dart';
 import '../theme/app_typography.dart';
 
 /// Shared layout for Terms & Conditions and Privacy Policy.
+/// Renders text where **double asterisks** mark bold key words.
+Text legalRichText(String raw, TextStyle style) {
+  final parts = raw.split('**');
+  return Text.rich(
+    style: style,
+    TextSpan(
+      style: style,
+      children: [
+        for (var i = 0; i < parts.length; i++)
+          TextSpan(
+            text: parts[i],
+            style: i.isOdd
+                ? const TextStyle(fontWeight: FontWeight.w700)
+                : null,
+          ),
+      ],
+    ),
+  );
+}
+
 class LegalScreen extends StatelessWidget {
   final String title;
   final LegalDocument document;
@@ -45,11 +65,23 @@ class LegalScreen extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Image.asset(
-                          'assets/images/phishnet_logo.png',
-                          width: 48,
-                          height: 48,
-                          excludeFromSemantics: true,
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0x40000000),
+                                blurRadius: 16,
+                                offset: Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            'assets/images/phishnet_logo.png',
+                            width: 48,
+                            height: 48,
+                            excludeFromSemantics: true,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -97,14 +129,30 @@ class _SectionView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(height: 36, color: Color(0x1F101D27)),
-        Semantics(
-          header: true,
-          child: Text(
-            section.title,
-            style: body.copyWith(
-              fontSize: AppTypography.title,
-              fontWeight: FontWeight.w700,
+        const SizedBox(height: 28),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Semantics(
+            header: true,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                border: Border.all(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.55),
+                  width: 1.2,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                section.title,
+                textAlign: TextAlign.center,
+                style: body.copyWith(
+                  fontSize: AppTypography.title,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1F6A92),
+                ),
+              ),
             ),
           ),
         ),
@@ -117,7 +165,7 @@ class _SectionView extends StatelessWidget {
                 block.text,
                 style: body.copyWith(fontWeight: FontWeight.w700),
               ),
-              LegalParagraph() => Text(block.text, style: body),
+              LegalParagraph() => legalRichText(block.text, body),
               LegalBullet() => Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -128,7 +176,7 @@ class _SectionView extends StatelessWidget {
                       backgroundColor: AppColors.primaryBlue,
                     ),
                   ),
-                  Expanded(child: Text(block.text, style: body)),
+                  Expanded(child: legalRichText(block.text, body)),
                 ],
               ),
             },

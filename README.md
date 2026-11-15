@@ -95,6 +95,7 @@ milestones, not features that are available today.
 | AI Chat for follow-up questions | |
 | Payment-plan backend | |
 | Guest mode with Firebase Anonymous sign-in (guest scans are not saved) | |
+| Trusted Contacts: up to 5 favorites with phone numbers, opened in Messages with the scan | |
 
 Follow day-to-day progress on the
 **[GitHub project board](https://github.com/users/Shiv05-code/projects/2)**.
@@ -203,6 +204,7 @@ flowchart LR
 - **Screenshots stay on the phone.** Text recognition runs on the device, so images are not uploaded.
 - **Verified in code (`backend/lambda/handler.py`):** the scan endpoint does not store message text or log it. It saves only the analysis result (risk level, summary, red flags, next steps) and a timestamp to the user's scans. Account deletion removes the account-linked scan records and profile, but copies each scan's analysis fields to `anonymized_training_scans` without user IDs. Those unlinked assessments remain and may contain personal details from messages. No model training code exists in this repository. The app’s Delete My Account currently removes Firestore data directly and does not call the Lambda deletion action. Guest (Anonymous) users can scan, but their scans are not saved, and history and account deletion are denied for them.
 - **Users stay in control.** Yahoo inbox access requires explicit authorization and can be disconnected at any time.
+- **Trusted Contacts are opt-in.** Phone numbers are saved only when a user picks a contact, are stored in that user's Firestore account, are readable only by that user, and are removed when the contact is deleted or the account is deleted. PhishNet never sends a message on the user's behalf; the user taps Send in Messages.
 - **Credentials stay out of the app.** The Claude API key and Firebase service account are read from AWS Secrets Manager (`phishnet/prod`) by the Lambda. They are not in the app, the repository, or environment variables, and the code never logs them.
 - **Restricted data.** Yahoo authorization data is planned to be accessible only to trusted backend services, not to other app users.
 
