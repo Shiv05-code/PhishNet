@@ -227,7 +227,12 @@ class _ResultsScreenState extends State<ResultsScreen>
 
     return Scaffold(
       appBar: const FigmaAppBar(title: 'Results'),
-      drawer: AppDrawer(currentPage: 'Results', isGuest: widget.isGuest),
+      drawer: AppDrawer(
+        currentPage: 'Results',
+        isGuest: widget.isGuest,
+        result: _r,
+        message: widget.message,
+      ),
       body: FigmaGradientBackground(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -327,9 +332,14 @@ class _ResultsScreenState extends State<ResultsScreen>
                                     context,
                                     feature: 'Share with Family',
                                   )
-                                : () => Navigator.of(
-                                    context,
-                                  ).push(fadeRoute(const FamilySocialScreen())),
+                                : () => Navigator.of(context).push(
+                                    fadeRoute(
+                                      FamilySocialScreen(
+                                        result: _r,
+                                        message: widget.message,
+                                      ),
+                                    ),
+                                  ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: widget.isGuest
                                   ? AppColors.muted
