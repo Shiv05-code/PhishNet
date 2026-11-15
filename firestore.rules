@@ -31,6 +31,22 @@ service cloud.firestore {
       match /chats/{chatId} {
         allow read, create, update, delete: if isOwner(uid);
       }
+
+      // Users can manage only their own trusted contacts (max 5 enforced
+      // by the app). Names are limited to 40 characters. Phone numbers are
+      // optional and must be in E.164 format.
+      match /trustedContacts/{contactId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['name', 'order', 'phone'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 40
+          && request.resource.data.order is int
+          && (!('phone' in request.resource.data)
+              || (request.resource.data.phone is string
+                  && request.resource.data.phone.matches('^[+][1-9][0-9]{7,14}$')));
+      }
     }
   }
 }

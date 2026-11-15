@@ -6,6 +6,7 @@ Claude Haiku (or a mock) -> save to Firestore -> JSON back to the app.
 Actions (JSON body):
   {"text": "..."}               scan a message (default)
   {"action": "chat", ...}       ask a follow-up question about a scan
+  {"action": "scan_home"}       Home screen counts and recent high-risk scans
   {"action": "delete_account"}  anonymize scans and delete the account
 
 Free accounts, including guests, get FREE_DAILY_LIMIT scans and chat questions
@@ -23,6 +24,7 @@ import base64
 import json
 import os
 import random
+
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -30,6 +32,7 @@ import anthropic
 import boto3
 import firebase_admin
 from firebase_admin import auth, credentials, firestore
+from google.cloud.firestore_v1 import Increment
 
 MODEL = "claude-haiku-5-5"
 CHAT_MODEL = os.environ.get("CHAT_MODEL", "claude-sonnet-5-5")
@@ -1037,6 +1040,14 @@ def _anonymize_and_delete_user_data(uid):
     if pending_operations:
         batch.commit()
 
+    # Remove daily stat counters so no per-user totals survive deletion.
+    for stat in user_ref.collection("stats").stream():
+        stat.reference.delete()
+
+    # Remove trusted contacts, which can include phone numbers.
+    for contact in user_ref.collection("trustedContacts").stream():
+        contact.reference.delete()
+
     # Delete the user's profile document.
     user_ref.delete()
 
@@ -1088,6 +1099,150 @@ def _get_scan_history(uid):
 
 
 
+def _valid_scan_id(value):
+    return (
+        isinstance(value, str)
+        and 0 < len(value) <= 128
+        and "/" not in value
+    )
+
+
+def _mark_scan_reviewed(uid, scan_id):
+    """Set reviewed_at on one of the user's scans. False if it doesn't exist."""
+    db = firestore.client()
+    ref = (
+        db.collection("users").document(uid).collection("scans").document(scan_id)
+    )
+    if not ref.get().exists:
+        return False
+    ref.update({"reviewed_at": firestore.SERVER_TIMESTAMP})
+    return True
+
+
+HOME_WINDOW_DAYS = 7
+ATTENTION_WINDOW = timedelta(hours=48)
+ATTENTION_SCAN_LIMIT = 50
+RISK_KEYS = ("high", "medium", "low")
+
+
+def _day_key(moment):
+    """UTC day label used as the document id for daily counters."""
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _recent_day_keys(now, days=HOME_WINDOW_DAYS):
+    return [_day_key(now - timedelta(days=i)) for i in range(days)]
+
+
+def _save_scan(uid, result):
+    """Save a scan and bump today's counters in one atomic batch."""
+    db = firestore.client()
+    user_ref = db.collection("users").document(uid)
+    now = datetime.now(timezone.utc)
+
+    batch = db.batch()
+    batch.set(
+        user_ref.collection("scans").document(),
+        {**result, "createdAt": firestore.SERVER_TIMESTAMP},
+    )
+
+    counts = {"total": Increment(1)}
+    if result.get("risk_level") in RISK_KEYS:
+        counts[result["risk_level"]] = Increment(1)
+    batch.set(
+        user_ref.collection("stats").document(_day_key(now)),
+        counts,
+        merge=True,
+    )
+    batch.set(
+        user_ref,
+        {"last_checked_at": firestore.SERVER_TIMESTAMP},
+        merge=True,
+    )
+    batch.commit()
+
+
+def _scan_json(scan_id, data):
+    """Scan in the same shape as the history list, so the app can reuse it."""
+    created_at = data.get("createdAt")
+    return {
+        "id": scan_id,
+        "brief_description": data.get("brief_description"),
+        "scam_percentage": data.get("scam_percentage"),
+        "risk_level": data.get("risk_level"),
+        "summary": data.get("summary"),
+        "red_flags": data.get("red_flags", []),
+        "next_steps": data.get("next_steps", []),
+        "createdAt": created_at.isoformat() if created_at is not None else None,
+    }
+
+
+def _build_home_stats(day_docs, recent_scans, last_checked, mock):
+    """Pure summary for the Home screen. No Firestore calls here.
+
+    day_docs: one dict per day in the window (missing days may be {}).
+    recent_scans: dicts {"reviewed": bool, "item": <scan json>}, newest
+    first, from the last 48 hours.
+    """
+    totals = {key: 0 for key in ("total",) + RISK_KEYS}
+    for doc in day_docs:
+        for key in totals:
+            totals[key] += int(doc.get(key) or 0)
+
+    total = totals["total"]
+    # Attention = high-risk, from the last 48 hours, not yet reviewed.
+    attention = [
+        s for s in recent_scans
+        if s["item"].get("risk_level") == "high" and not s["reviewed"]
+    ]
+
+    return {
+        "week_total": total,
+        "week_high": totals["high"],
+        "week_medium": totals["medium"],
+        "week_low": totals["low"],
+        "scam_rate": (totals["high"] * 100 // total) if total else 0,
+        "attention_48h": len(attention),
+        "recent_high": [s["item"] for s in attention[:3]],
+        "last_checked_at": (
+            last_checked.isoformat() if last_checked is not None else None
+        ),
+        "data_source": "mock_analysis" if mock else "claude",
+    }
+
+
+def _get_home_stats(uid):
+    """Home screen summary: 7 small counter reads plus one bounded scan query."""
+    db = firestore.client()
+    user_ref = db.collection("users").document(uid)
+    now = datetime.now(timezone.utc)
+
+    day_refs = [
+        user_ref.collection("stats").document(key)
+        for key in _recent_day_keys(now)
+    ]
+    day_docs = [snap.to_dict() or {} for snap in db.get_all(day_refs)]
+
+    profile = user_ref.get().to_dict() or {}
+    last_checked = profile.get("last_checked_at")
+
+    recent_query = (
+        user_ref.collection("scans")
+        .where("createdAt", ">=", now - ATTENTION_WINDOW)
+        .order_by("createdAt", direction=firestore.Query.DESCENDING)
+        .limit(ATTENTION_SCAN_LIMIT)
+    )
+    recent_scans = []
+    for scan in recent_query.stream():
+        data = scan.to_dict() or {}
+        recent_scans.append({
+            "reviewed": bool(data.get("reviewed_at")),
+            "item": _scan_json(scan.id, data),
+        })
+
+    return _build_home_stats(day_docs, recent_scans, last_checked, MOCK)
+
+
 def handler(event, context):
     try:
         secrets = _init()
@@ -1112,6 +1267,8 @@ def handler(event, context):
 
         if is_anonymous and payload.get("action") in (
             "scan_history",
+            "scan_home",
+            "mark_reviewed",
             "delete_account",
         ):
             return _resp(403, {"error": "account_required"})
@@ -1165,6 +1322,42 @@ def handler(event, context):
                     },
                 )
 
+        if payload.get("action") == "mark_reviewed":
+            if not _db_ready:
+                return _resp(
+                    503,
+                    {"error": "history_unavailable", "retryable": True},
+                )
+            scan_id = payload.get("scan_id")
+            if not _valid_scan_id(scan_id):
+                return _resp(400, {"error": "invalid_scan_id"})
+            try:
+                found = _mark_scan_reviewed(uid, scan_id)
+            except Exception as e:
+                print(f"mark reviewed error: {type(e).__name__}")
+                return _resp(
+                    503,
+                    {"error": "history_unavailable", "retryable": True},
+                )
+            if not found:
+                return _resp(404, {"error": "scan_not_found"})
+            return _resp(200, {"reviewed": True})
+
+        if payload.get("action") == "scan_home":
+            if not _db_ready:
+                return _resp(
+                    503,
+                    {"error": "history_unavailable", "retryable": True},
+                )
+            try:
+                return _resp(200, _get_home_stats(uid))
+            except Exception as e:
+                print(f"home stats error: {type(e).__name__}")
+                return _resp(
+                    503,
+                    {"error": "history_unavailable", "retryable": True},
+                )
+
         if payload.get("action") == "chat":
             return _handle_chat(payload, secrets, uid, is_anonymous)
         if payload.get("action") == "chat_title":
@@ -1195,9 +1388,7 @@ def handler(event, context):
 
         if _db_ready and not is_anonymous:
             try:
-                firestore.client().collection("users").document(uid).collection(
-                    "scans"
-                ).add({**result, "createdAt": firestore.SERVER_TIMESTAMP})
+                _save_scan(uid, result)
             except Exception as e:
                 # The user still gets their result if saving fails.
                 print(f"firestore write failed: {type(e).__name__}")

@@ -371,8 +371,12 @@ class AnonymizationTests(unittest.TestCase):
         scan.reference = object()
         scans_ref = mock.Mock()
         scans_ref.stream.return_value = [scan]
+        stats_ref = mock.Mock()
+        stats_ref.stream.return_value = []
         user_ref = mock.Mock()
-        user_ref.collection.return_value = scans_ref
+        user_ref.collection.side_effect = lambda name: (
+            scans_ref if name == "scans" else stats_ref
+        )
         anonymous_ref = mock.Mock()
         anonymous_doc_ref = object()
         anonymous_ref.document.return_value = anonymous_doc_ref

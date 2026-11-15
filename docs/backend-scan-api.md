@@ -103,6 +103,28 @@ Guests get a token from `AuthService.signInAsGuest()`, used by both the Login an
 
 Claude's output is validated before it is returned. Missing fields, wrong types, a score out of range, a risk level that does not match the score, or no tool output all produce the error below.
 
+## Home summary: `scan_home`
+
+Request: `{"action": "scan_home"}` with a Firebase ID token (guests get `403 account_required`).
+
+Response `200`:
+
+```json
+{
+  "week_total": 12, "week_high": 3, "week_medium": 4, "week_low": 5,
+  "scam_rate": 25, "attention_48h": 1,
+  "recent_high": [{"id": "abc", "description": "...", "summary": "..."}],
+  "last_checked_at": "2026-11-14T12:00:00+00:00",
+  "data_source": "claude"
+}
+```
+
+- Counts come from daily counters at `users/{uid}/stats/{YYYY-MM-DD}` (UTC), written in the same batch as each saved scan. The window is the last 7 UTC days.
+- `attention_48h` counts high-risk scans from the last 48 hours (looks at up to 50 scans). `recent_high` holds up to 3.
+- `data_source` is `mock_analysis` when `MOCK_CLAUDE=true`, otherwise `claude`.
+- Errors: `503 {"error": "history_unavailable", "retryable": true}`.
+- Scans saved before counters existed: run `backend/scripts/backfill_scan_stats.py` once.
+
 ## Retryable error (`502`)
 
 ```json
