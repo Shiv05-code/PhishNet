@@ -80,10 +80,22 @@ class _LoadingScreenState extends State<LoadingScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Image.asset(
-                  'assets/images/phishnet_logo.png',
-                  width: 155,
-                  height: 155,
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x40000000),
+                        blurRadius: 16,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/images/phishnet_logo.png',
+                    width: 155,
+                    height: 155,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 const Text(

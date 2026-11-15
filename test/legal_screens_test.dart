@@ -11,8 +11,8 @@ import 'support/test_helpers.dart';
 void main() {
   group('Legal screens', () {
     for (final (label, screen, updated) in [
-      ('Terms & Conditions', TermsConditionsScreen, 'September 5, 2026'),
-      ('Privacy Policy', PrivacyPolicyScreen, 'October 20, 2026'),
+      ('Terms & Conditions', TermsConditionsScreen, 'November 14, 2026'),
+      ('Privacy Policy', PrivacyPolicyScreen, 'November 14, 2026'),
     ]) {
       testWidgets('$label scrolls, is 18pt, and Back keeps form', (
         tester,
@@ -44,20 +44,15 @@ void main() {
           .map((block) => block.text)
           .join('\n');
       expect(bullets, contains('Transient processing:'));
-      expect(bullets, contains('does not save the message text'));
+      expect(bullets, contains('does not save or log the message text'));
       expect(bullets, contains('Stored results:'));
       expect(bullets, contains('timestamp are saved to your account'));
       expect(bullets, contains('brief description, scam-risk score'));
       expect(bullets, contains('Delete My Account'));
       expect(bullets, contains('your name, email address, and password'));
-      expect(bullets, contains('the scan records linked to your account'));
-      expect(
-        bullets,
-        contains(
-          'Copies of each scan\'s derived assessment remain after deletion',
-        ),
-      );
-      expect(bullets, contains('may still contain identifying information'));
+      expect(bullets, contains('scan records'));
+      expect(bullets, contains('A copy of each scan\'s analysis remains'));
+      expect(bullets, contains('may still contain identifying details'));
       expect(bullets, contains('The full message text is not stored'));
       expect(bullets, contains('Model training is not currently implemented'));
       expect(
@@ -84,7 +79,10 @@ void main() {
       expect(bullets, isNot(contains('Claude Sonnet 4')));
       expect(bullets, isNot(contains('scanned messages, links')));
       // Email retention must be stated as undefined, not implied.
-      expect(bullets, contains('have not yet set how long email content'));
+      expect(
+        bullets,
+        contains('have not yet set how long Live Monitoring email content'),
+      );
       // Any bullet that mentions training must say it is not in place or future.
       for (final text in bullets.split('\n')) {
         if (text.contains('train')) {

@@ -1,8 +1,33 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:phishnet_app/models/scan_result.dart';
 import 'package:phishnet_app/screens/family_social_screen.dart';
+import 'package:phishnet_app/services/message_composer.dart';
+import 'package:phishnet_app/services/phone_number.dart';
 import 'package:phishnet_app/services/trusted_contacts_store.dart';
+
+class FakeMessageComposer implements MessageComposer {
+  FakeMessageComposer({this.result = MessageComposeResult.sent});
+
+  MessageComposeResult result;
+  int calls = 0;
+  String? recipient;
+  String? body;
+
+  @override
+  Future<MessageComposeResult> compose({
+    required String recipient,
+    required String body,
+    Uint8List? logo,
+  }) async {
+    calls++;
+    this.recipient = recipient;
+    this.body = body;
+    return result;
+  }
+}
 
 class FakeTrustedContactsStore implements TrustedContactsStore {
   FakeTrustedContactsStore({
@@ -53,7 +78,8 @@ Future<void> _pump(
   DateTime? receivedAt,
   String? userId = 'user-1',
   FakeTrustedContactsStore? store,
-  Future<String?> Function()? pickContact,
+  Future<({String name, String? phone})?> Function()? pickContact,
+  FakeMessageComposer? composer,
 }) async {
   // Tall viewport so the lazy list builds every favorite row.
   tester.view.physicalSize = const Size(800, 2400);
@@ -70,16 +96,31 @@ Future<void> _pump(
         userId: userId,
         contactsStore: store ?? FakeTrustedContactsStore(),
         pickContact: pickContact ?? () async => null,
+        messageComposer: composer ?? FakeMessageComposer(),
       ),
     ),
   );
   await tester.pumpAndSettle();
 }
 
-TrustedContact _contact(String id, String name) =>
-    TrustedContact(id: id, name: name);
+TrustedContact _contact(String id, String name, {String? phone}) =>
+    TrustedContact(id: id, name: name, phone: phone);
 
 void main() {
+  group('phone numbers', () {
+    test('normalizes common formats to E.164', () {
+      expect(normalizePhoneNumber('(555) 123-4567'), '+15551234567');
+      expect(normalizePhoneNumber('1 555 123 4567'), '+15551234567');
+      expect(normalizePhoneNumber('+44 20 7946 0958'), '+442079460958');
+    });
+
+    test('rejects numbers that cannot be messaged', () {
+      expect(normalizePhoneNumber(null), isNull);
+      expect(normalizePhoneNumber('123'), isNull);
+      expect(normalizePhoneNumber('hello'), isNull);
+    });
+  });
+
   test('defangLinks makes addresses non-clickable', () {
     expect(
       defangLinks('Go to citibank-verification.com now'),
@@ -306,13 +347,15 @@ void main() {
       await _pump(
         tester,
         store: store,
-        pickContact: () async => '  Payton Curry  ',
+        pickContact: () async =>
+            (name: '  Payton Curry  ', phone: '(555) 123-4567'),
       );
 
       await tester.tap(find.text('Add favorite'));
       await tester.pumpAndSettle();
 
       expect(store.contacts.map((c) => c.name), ['Payton Curry']);
+      expect(store.contacts.first.phone, '+15551234567');
       expect(find.text('Payton Curry'), findsOneWidget);
     });
 
@@ -328,7 +371,11 @@ void main() {
 
     testWidgets('picked contact without a name is rejected', (tester) async {
       final store = FakeTrustedContactsStore();
-      await _pump(tester, store: store, pickContact: () async => '   ');
+      await _pump(
+        tester,
+        store: store,
+        pickContact: () async => (name: '   ', phone: '+15551234567'),
+      );
 
       await tester.tap(find.text('Add favorite'));
       await tester.pumpAndSettle();
@@ -339,7 +386,11 @@ void main() {
 
     testWidgets('duplicate names are not added twice', (tester) async {
       final store = FakeTrustedContactsStore(initial: [_contact('a', 'Dhara')]);
-      await _pump(tester, store: store, pickContact: () async => 'dhara');
+      await _pump(
+        tester,
+        store: store,
+        pickContact: () async => (name: 'dhara', phone: '+15551234567'),
+      );
 
       await tester.tap(find.text('Add favorite'));
       await tester.pumpAndSettle();
@@ -364,21 +415,19 @@ void main() {
       );
     });
 
-    testWidgets('Move down via menu reorders and saves', (tester) async {
+    testWidgets('Move down with the arrow reorders and saves', (tester) async {
       final store = FakeTrustedContactsStore(
         initial: [_contact('a', 'Ada'), _contact('b', 'Ben')],
       );
       await _pump(tester, store: store);
 
-      await tester.tap(find.byTooltip('More options for Ada'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Move down'));
+      await tester.tap(find.byTooltip('Move Ada down'));
       await tester.pumpAndSettle();
 
       expect(store.contacts.map((c) => c.name), ['Ben', 'Ada']);
     });
 
-    testWidgets('Remove then Undo restores the favorite at its position', (
+    testWidgets('swipe left, confirm Remove, deletes and shows a message', (
       tester,
     ) async {
       final store = FakeTrustedContactsStore(
@@ -386,17 +435,31 @@ void main() {
       );
       await _pump(tester, store: store);
 
-      await tester.tap(find.byTooltip('More options for Ada'));
+      await tester.drag(find.text('Ada'), const Offset(-600, 0));
       await tester.pumpAndSettle();
+      expect(
+        find.text('Would you like to remove this Contact?'),
+        findsOneWidget,
+      );
+
       await tester.tap(find.text('Remove'));
       await tester.pumpAndSettle();
 
       expect(store.contacts.map((c) => c.name), ['Ben']);
+      expect(find.text('Contact removed.'), findsOneWidget);
+    });
 
-      await tester.tap(find.text('Undo'));
+    testWidgets('swipe left then Cancel keeps the contact', (tester) async {
+      final store = FakeTrustedContactsStore(initial: [_contact('a', 'Ada')]);
+      await _pump(tester, store: store);
+
+      await tester.drag(find.text('Ada'), const Offset(-600, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
-      expect(store.contacts.map((c) => c.name), ['Ada', 'Ben']);
+      expect(store.saveCalls, 0);
+      expect(find.text('Ada'), findsOneWidget);
     });
 
     testWidgets('failed save rolls back and shows an error', (tester) async {
@@ -406,7 +469,7 @@ void main() {
       );
       await _pump(tester, store: store);
 
-      await tester.tap(find.byTooltip('More options for Ada'));
+      await tester.drag(find.text('Ada'), const Offset(-600, 0));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Remove'));
       await tester.pumpAndSettle();
@@ -431,6 +494,105 @@ void main() {
         ),
       );
       expect(button.onPressed, isNull);
+    });
+  });
+
+  group('messaging a trusted contact', () {
+    testWidgets('a contact with a number is messaged with the scan', (
+      tester,
+    ) async {
+      final composer = FakeMessageComposer();
+      await _pump(
+        tester,
+        result: _highRisk,
+        message: 'Verify now',
+        store: FakeTrustedContactsStore(
+          initial: [_contact('a', 'Ada', phone: '+15551234567')],
+        ),
+        composer: composer,
+      );
+
+      await tester.tap(find.text('Message'));
+      await tester.pumpAndSettle();
+
+      expect(composer.calls, 1);
+      expect(composer.recipient, '+15551234567');
+      expect(composer.body, contains(boldUnicode('PhishNet Scan Result')));
+      expect(composer.body, contains('Verify now'));
+    });
+
+    testWidgets('after sending, the row shows Resend and a checkmark', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        result: _highRisk,
+        message: 'Verify now',
+        store: FakeTrustedContactsStore(
+          initial: [_contact('a', 'Ada', phone: '+15551234567')],
+        ),
+        composer: FakeMessageComposer(),
+      );
+
+      await tester.tap(find.text('Message'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Resend'), findsOneWidget);
+      expect(find.byIcon(Icons.check), findsOneWidget);
+    });
+
+    testWidgets('cancelling Messages leaves the row unchanged', (tester) async {
+      await _pump(
+        tester,
+        result: _highRisk,
+        message: 'Verify now',
+        store: FakeTrustedContactsStore(
+          initial: [_contact('a', 'Ada', phone: '+15551234567')],
+        ),
+        composer: FakeMessageComposer(result: MessageComposeResult.cancelled),
+      );
+
+      await tester.tap(find.text('Message'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Message'), findsOneWidget);
+      expect(find.text('Resend'), findsNothing);
+    });
+
+    testWidgets('a contact without a number cannot be messaged', (
+      tester,
+    ) async {
+      final composer = FakeMessageComposer();
+      await _pump(
+        tester,
+        result: _highRisk,
+        message: 'Verify now',
+        store: FakeTrustedContactsStore(initial: [_contact('a', 'Ada')]),
+        composer: composer,
+      );
+
+      await tester.tap(find.text('Message'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(composer.calls, 0);
+    });
+
+    testWidgets('picking a contact with no number is rejected', (tester) async {
+      final store = FakeTrustedContactsStore();
+      await _pump(
+        tester,
+        store: store,
+        pickContact: () async => (name: 'Ada', phone: null),
+      );
+
+      await tester.tap(find.text('Add favorite'));
+      await tester.pumpAndSettle();
+
+      expect(store.saveCalls, 0);
+      expect(
+        find.text('That contact needs a valid phone number to message.'),
+        findsOneWidget,
+      );
     });
   });
 }
