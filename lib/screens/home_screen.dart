@@ -64,42 +64,44 @@ String _greetingForHour(int hour) {
   return 'Good evening, ';
 }
 
-HomeStats _demoStats() {
+HomeStats _demoStats(Set<String> reviewed) {
   final now = DateTime.now();
+  final items = [
+    SavedScan(
+      id: 'demo-1',
+      description: 'Account Suspended - Action Required',
+      createdAt: now.subtract(const Duration(hours: 3)),
+      result: const ScanResult(
+        riskLevel: 'high',
+        scamPercentage: 81,
+        summary:
+            'Fake account warning from a look-alike address (yah00-support.com).',
+        redFlags: ['The sender address imitates Yahoo.'],
+        nextSteps: ['Do not click any links.'],
+      ),
+    ),
+    SavedScan(
+      id: 'demo-2',
+      description: "Congrats! You've won the giveaway",
+      createdAt: now.subtract(const Duration(hours: 9)),
+      result: const ScanResult(
+        riskLevel: 'high',
+        scamPercentage: 97,
+        summary: 'Prize scam that pushes you to act quickly.',
+        redFlags: ['Unexpected prize offer.'],
+        nextSteps: ['Delete the email.'],
+      ),
+    ),
+  ].where((s) => !reviewed.contains(s.id)).toList();
+
   return HomeStats(
     weekTotal: 148,
     weekHigh: 36,
     weekMedium: 0,
     weekLow: 112,
     scamRate: 24,
-    attention48h: 2,
-    recentHigh: [
-      SavedScan(
-        id: 'demo-1',
-        description: 'Account Suspended - Action Required',
-        createdAt: now.subtract(const Duration(hours: 3)),
-        result: const ScanResult(
-          riskLevel: 'high',
-          scamPercentage: 81,
-          summary:
-              'Fake account warning from a look-alike address (yah00-support.com).',
-          redFlags: ['The sender address imitates Yahoo.'],
-          nextSteps: ['Do not click any links.'],
-        ),
-      ),
-      SavedScan(
-        id: 'demo-2',
-        description: "Congrats! You've won the giveaway",
-        createdAt: now.subtract(const Duration(hours: 9)),
-        result: const ScanResult(
-          riskLevel: 'high',
-          scamPercentage: 97,
-          summary: 'Prize scam that pushes you to act quickly.',
-          redFlags: ['Unexpected prize offer.'],
-          nextSteps: ['Delete the email.'],
-        ),
-      ),
-    ],
+    attention48h: items.length,
+    recentHigh: items,
     lastCheckedAt: now.subtract(const Duration(minutes: 5)),
     mockAnalysis: true,
   );
@@ -133,6 +135,8 @@ class _HomeScreenState extends State<HomeScreen>
   // Inbox linking is not built yet: connecting is simulated in the demo.
   bool _inboxConnected = false;
   bool _monitoring = false;
+
+  static final Set<String> _reviewedDemo = {};
 
   @override
   void initState() {
@@ -244,7 +248,9 @@ class _HomeScreenState extends State<HomeScreen>
   /// list. Results opens right away; the refresh runs on return.
   Future<void> _openAttention(SavedScan scan) async {
     final service = widget.scanService ?? (_ownedService ??= ScanService());
-    if (!scan.id.startsWith('demo-')) {
+    if (scan.id.startsWith('demo-')) {
+      setState(() => _reviewedDemo.add(scan.id));
+    } else {
       service.markScanReviewed(scan.id).catchError((Object error) {
         debugPrint('Mark reviewed failed: $error');
       });
@@ -262,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final showDemo = kHomeDemo && _inboxConnected && _monitoring;
-    final stats = showDemo ? _demoStats() : _stats;
+    final stats = showDemo ? _demoStats(_reviewedDemo) : _stats;
     final hasAnyScans = stats.lastCheckedAt != null || stats.weekTotal > 0;
     final hasAttention = stats.attention48h > 0;
 
