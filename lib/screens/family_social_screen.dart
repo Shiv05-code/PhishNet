@@ -225,10 +225,10 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
       name: shortName,
       phone: phone,
     );
-    await _saveContacts(
-      [..._contacts, contact],
-      successText: 'Added $shortName to favorites.',
-    );
+    await _saveContacts([
+      ..._contacts,
+      contact,
+    ], successText: 'Added $shortName to favorites.');
   }
 
   void _moveContact(int index, int delta) {
@@ -468,7 +468,8 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
                   return;
                 }
                 _shareMessage(context).then((shared) {
-                  if (shared && mounted) _showShareDialog('Shared with Family.');
+                  if (shared && mounted)
+                    _showShareDialog('Shared with Family.');
                 });
               },
             ),

@@ -106,6 +106,7 @@ HomeStats _demoStats(Set<String> reviewed) {
     mockAnalysis: true,
   );
 }
+
 /// Only true when launched with `--dart-define=YAHOO_DEMO=true`. Shows the
 /// "sample data" note for Yahoo demo analysis runs.
 const bool yahooDemoMode = bool.fromEnvironment('YAHOO_DEMO');
