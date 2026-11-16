@@ -95,7 +95,7 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
               ),
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 16),
 
             Align(
               alignment: Alignment.centerLeft,
