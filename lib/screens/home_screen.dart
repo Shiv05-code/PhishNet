@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/home_stats.dart';
 import '../models/saved_scan.dart';
+import '../models/scan_result.dart';
 import '../screens/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/home_stats_cache.dart';
@@ -15,6 +16,8 @@ import '../theme/app_typography.dart';
 import '../widgets/auth_widgets.dart';
 import 'capture_screen.dart';
 import 'results_screen.dart';
+
+const bool kHomeDemo = true;
 
 String _timeAgo(DateTime? at, DateTime now) {
   if (at == null) return 'No checks yet';
@@ -59,6 +62,47 @@ String _greetingForHour(int hour) {
   if (hour < 12) return 'Good morning, ';
   if (hour < 18) return 'Good afternoon, ';
   return 'Good evening, ';
+}
+
+HomeStats _demoStats() {
+  final now = DateTime.now();
+  return HomeStats(
+    weekTotal: 148,
+    weekHigh: 36,
+    weekMedium: 0,
+    weekLow: 112,
+    scamRate: 24,
+    attention48h: 2,
+    recentHigh: [
+      SavedScan(
+        id: 'demo-1',
+        description: 'Account Suspended - Action Required',
+        createdAt: now.subtract(const Duration(hours: 3)),
+        result: const ScanResult(
+          riskLevel: 'high',
+          scamPercentage: 81,
+          summary:
+              'Fake account warning from a look-alike address (yah00-support.com).',
+          redFlags: ['The sender address imitates Yahoo.'],
+          nextSteps: ['Do not click any links.'],
+        ),
+      ),
+      SavedScan(
+        id: 'demo-2',
+        description: "Congrats! You've won the giveaway",
+        createdAt: now.subtract(const Duration(hours: 9)),
+        result: const ScanResult(
+          riskLevel: 'high',
+          scamPercentage: 97,
+          summary: 'Prize scam that pushes you to act quickly.',
+          redFlags: ['Unexpected prize offer.'],
+          nextSteps: ['Delete the email.'],
+        ),
+      ),
+    ],
+    lastCheckedAt: now.subtract(const Duration(minutes: 5)),
+    mockAnalysis: true,
+  );
 }
 
 class HomeScreen extends StatefulWidget {
@@ -200,9 +244,11 @@ class _HomeScreenState extends State<HomeScreen>
   /// list. Results opens right away; the refresh runs on return.
   Future<void> _openAttention(SavedScan scan) async {
     final service = widget.scanService ?? (_ownedService ??= ScanService());
-    service.markScanReviewed(scan.id).catchError((Object error) {
-      debugPrint('Mark reviewed failed: $error');
-    });
+    if (!scan.id.startsWith('demo-')) {
+      service.markScanReviewed(scan.id).catchError((Object error) {
+        debugPrint('Mark reviewed failed: $error');
+      });
+    }
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -215,7 +261,8 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final stats = _stats;
+    final showDemo = kHomeDemo && _inboxConnected && _monitoring;
+    final stats = showDemo ? _demoStats() : _stats;
     final hasAnyScans = stats.lastCheckedAt != null || stats.weekTotal > 0;
     final hasAttention = stats.attention48h > 0;
 
