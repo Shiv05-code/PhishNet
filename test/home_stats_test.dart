@@ -117,7 +117,7 @@ void main() {
     expect(find.textContaining('Demo analysis'), findsNothing);
   });
 
-  testWidgets('Home shows a demo caption for mock analysis', (tester) async {
+  testWidgets('Home hides the demo caption by default', (tester) async {
     final service = FakeScanService(
       HomeStats.fromJson(_payload(source: 'mock_analysis')),
     );
@@ -129,12 +129,7 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 2));
-    await tester.dragUntilVisible(
-      find.textContaining('Demo analysis'),
-      find.byType(ListView),
-      const Offset(0, -200),
-    );
-    expect(find.textContaining('Demo analysis'), findsOneWidget);
+    expect(find.textContaining('Demo analysis'), findsNothing);
   });
 
   testWidgets('Home uses the cached summary without a second request', (

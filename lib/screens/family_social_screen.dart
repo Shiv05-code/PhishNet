@@ -8,6 +8,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_glass_button.dart';
 import '../widgets/figma_gradient_background.dart';
@@ -136,11 +137,22 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
   void _showSnack(String text, {SnackBarAction? action}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(text), action: action));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            text,
+            style: const TextStyle(fontSize: AppTypography.emphasis),
+          ),
+          action: action,
+        ),
+      );
   }
 
   /// Saves [next] and shows it right away. Rolls back if the save fails.
-  Future<void> _saveContacts(List<TrustedContact> next) async {
+  Future<void> _saveContacts(
+    List<TrustedContact> next, {
+    String? successText,
+  }) async {
     final uid = _uid;
     if (uid == null) return;
 
@@ -149,6 +161,7 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
 
     try {
       await _store.save(uid, next);
+      if (mounted && successText != null) _showSnack(successText);
     } catch (_) {
       if (!mounted) return;
       setState(() => _contacts = previous);
@@ -212,7 +225,10 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
       name: shortName,
       phone: phone,
     );
-    await _saveContacts([..._contacts, contact]);
+    await _saveContacts([
+      ..._contacts,
+      contact,
+    ], successText: 'Added $shortName to favorites.');
   }
 
   void _moveContact(int index, int delta) {
@@ -228,9 +244,9 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
 
   void _removeContact(int index) {
     _swapIds = {};
+    final name = _contacts[index].name;
     final next = [..._contacts]..removeAt(index);
-    _saveContacts(next);
-    _showSnack('Contact removed.');
+    _saveContacts(next, successText: 'Removed $name from favorites.');
   }
 
   /// Asks before removing a swiped contact. Always returns false so the
@@ -297,17 +313,13 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
       isOriginalText: _messageIsOriginal,
       senderName: _senderName(),
     );
-    final logo = await _loadLogo();
-    final result = await _composer.compose(
-      recipient: phone,
-      body: body,
-      logo: logo,
-    );
+    final result = await _composer.compose(recipient: phone, body: body);
     if (!mounted) return;
 
     switch (result) {
       case MessageComposeResult.sent:
         setState(() => _sharedContactId = contact.id);
+        _showShareDialog('Shared with ${contact.name}.');
       case MessageComposeResult.unavailable:
         _showSnack('Messages isn’t available on this device.');
       case MessageComposeResult.failed:
@@ -317,15 +329,23 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
     }
   }
 
-  Future<Uint8List?> _loadLogo() async {
-    try {
-      final data = await rootBundle.load(
-        'assets/images/phishnet_share_logo.png',
-      );
-      return data.buffer.asUint8List();
-    } catch (_) {
-      return null;
-    }
+  /// Centered confirmation, styled like the Delete Account dialog.
+  void _showShareDialog(String text) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AppDialog(
+        icon: Icons.check_circle,
+        iconColor: AppColors.accentGreen,
+        title: text,
+        message: 'Your scan has been shared.',
+        actions: [
+          AppDialogButton(
+            label: 'OK',
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Returns true when the user picked an action in the share sheet.
@@ -343,25 +363,9 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
         ? renderObject
         : null;
 
-    // Attach the logo when it loads. Text is still shared if it doesn't.
-    final files = <XFile>[];
-    try {
-      final data = await rootBundle.load(
-        'assets/images/phishnet_share_logo.png',
-      );
-      files.add(
-        XFile.fromData(
-          data.buffer.asUint8List(),
-          mimeType: 'image/png',
-          name: 'phishnet_share_logo.png',
-        ),
-      );
-    } catch (_) {}
-
     final result = await SharePlus.instance.share(
       ShareParams(
         text: text,
-        files: files,
         sharePositionOrigin: box == null
             ? null
             : box.localToGlobal(Offset.zero) & box.size,
@@ -463,7 +467,10 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
                   _showSnack('Select a scanned message to share.');
                   return;
                 }
-                _shareMessage(context);
+                _shareMessage(context).then((shared) {
+                  if (shared && mounted)
+                    _showShareDialog('Shared with Family.');
+                });
               },
             ),
 
@@ -616,15 +623,15 @@ String buildFamilyShareText({
 }) {
   final text = message.trim();
   final name = senderName?.trim() ?? '';
-  final lines = <String>['🛡️ ${boldUnicode('PhishNet Scan Result')}', ''];
-
-  lines.add(
+  final lines = <String>[
     name.isEmpty
         ? 'Id like a second opinion on this message.'
         : '$name wants a second opinion on this message.',
-  );
-  lines.add('Does it look safe to you? PhishNet\'s analysis is below');
-  lines.add('');
+    'Does it look safe to you? PhishNet\'s analysis is below',
+    '',
+    '🛡️ ${boldUnicode('PhishNet Scan Result')}',
+    '',
+  ];
 
   if (result == null) {
     lines.add('❔ ${boldUnicode('NOT SCORED')}');

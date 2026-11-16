@@ -107,6 +107,10 @@ HomeStats _demoStats(Set<String> reviewed) {
   );
 }
 
+/// Only true when launched with `--dart-define=YAHOO_DEMO=true`. Shows the
+/// "sample data" note for Yahoo demo analysis runs.
+const bool yahooDemoMode = bool.fromEnvironment('YAHOO_DEMO');
+
 class HomeScreen extends StatefulWidget {
   final AuthService? authService;
   final ScanService? scanService;
@@ -267,7 +271,8 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final showDemo = kHomeDemo && _inboxConnected && _monitoring;
+    final showDemo =
+        yahooDemoMode && kHomeDemo && _inboxConnected && _monitoring;
     final stats = showDemo ? _demoStats(_reviewedDemo) : _stats;
     final hasAnyScans = stats.lastCheckedAt != null || stats.weekTotal > 0;
     final hasAttention = stats.attention48h > 0;
@@ -451,7 +456,7 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
-              if (stats.mockAnalysis) ...[
+              if (yahooDemoMode && stats.mockAnalysis) ...[
                 const SizedBox(height: 10),
                 const Text(
                   'Demo analysis: results are sample data.',
