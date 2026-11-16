@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -19,6 +18,7 @@ import '../services/trusted_contacts_store.dart';
 import 'package:share_plus/share_plus.dart';
 import 'history_screen.dart';
 import '../models/saved_scan.dart';
+import '../services/auth_service.dart';
 
 class FamilySocialScreen extends StatefulWidget {
   final ScanResult? result;
@@ -91,6 +91,15 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
   String? _currentUserId() {
     try {
       return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The signed-in user's first name for the share text, or null.
+  String? _senderName() {
+    try {
+      return AuthService().firstName;
     } catch (_) {
       return null;
     }
@@ -286,6 +295,7 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
       result: _selectedResult,
       message: _selectedMessage,
       isOriginalText: _messageIsOriginal,
+      senderName: _senderName(),
     );
     final logo = await _loadLogo();
     final result = await _composer.compose(
@@ -324,6 +334,7 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
       result: _selectedResult,
       message: _selectedMessage,
       isOriginalText: _messageIsOriginal,
+      senderName: _senderName(),
     );
 
     // The context may belong to a list sliver rather than a box, so check the type.
@@ -601,9 +612,19 @@ String buildFamilyShareText({
   ScanResult? result,
   required String message,
   required bool isOriginalText,
+  String? senderName,
 }) {
   final text = message.trim();
+  final name = senderName?.trim() ?? '';
   final lines = <String>['🛡️ ${boldUnicode('PhishNet Scan Result')}', ''];
+
+  lines.add(
+    name.isEmpty
+        ? 'Id like a second opinion on this message.'
+        : '$name wants a second opinion on this message.',
+  );
+  lines.add('Does it look safe to you? PhishNet\'s analysis is below');
+  lines.add('');
 
   if (result == null) {
     lines.add('❔ ${boldUnicode('NOT SCORED')}');
