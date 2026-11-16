@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/home_stats.dart';
 import '../models/saved_scan.dart';
+import '../models/scan_result.dart';
 import '../screens/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/home_stats_cache.dart';
@@ -15,6 +16,8 @@ import '../theme/app_typography.dart';
 import '../widgets/auth_widgets.dart';
 import 'capture_screen.dart';
 import 'results_screen.dart';
+
+const bool kHomeDemo = true;
 
 String _timeAgo(DateTime? at, DateTime now) {
   if (at == null) return 'No checks yet';
@@ -61,6 +64,49 @@ String _greetingForHour(int hour) {
   return 'Good evening, ';
 }
 
+HomeStats _demoStats(Set<String> reviewed) {
+  final now = DateTime.now();
+  final items = [
+    SavedScan(
+      id: 'demo-1',
+      description: 'Account Suspended - Action Required',
+      createdAt: now.subtract(const Duration(hours: 3)),
+      result: const ScanResult(
+        riskLevel: 'high',
+        scamPercentage: 81,
+        summary:
+            'Fake account warning from a look-alike address (yah00-support.com).',
+        redFlags: ['The sender address imitates Yahoo.'],
+        nextSteps: ['Do not click any links.'],
+      ),
+    ),
+    SavedScan(
+      id: 'demo-2',
+      description: "Congrats! You've won the giveaway",
+      createdAt: now.subtract(const Duration(hours: 9)),
+      result: const ScanResult(
+        riskLevel: 'high',
+        scamPercentage: 97,
+        summary: 'Prize scam that pushes you to act quickly.',
+        redFlags: ['Unexpected prize offer.'],
+        nextSteps: ['Delete the email.'],
+      ),
+    ),
+  ].where((s) => !reviewed.contains(s.id)).toList();
+
+  return HomeStats(
+    weekTotal: 148,
+    weekHigh: 36,
+    weekMedium: 0,
+    weekLow: 112,
+    scamRate: 24,
+    attention48h: items.length,
+    recentHigh: items,
+    lastCheckedAt: now.subtract(const Duration(minutes: 5)),
+    mockAnalysis: true,
+  );
+}
+
 class HomeScreen extends StatefulWidget {
   final AuthService? authService;
   final ScanService? scanService;
@@ -89,6 +135,8 @@ class _HomeScreenState extends State<HomeScreen>
   // Inbox linking is not built yet: connecting is simulated in the demo.
   bool _inboxConnected = false;
   bool _monitoring = false;
+
+  static final Set<String> _reviewedDemo = {};
 
   @override
   void initState() {
@@ -200,9 +248,13 @@ class _HomeScreenState extends State<HomeScreen>
   /// list. Results opens right away; the refresh runs on return.
   Future<void> _openAttention(SavedScan scan) async {
     final service = widget.scanService ?? (_ownedService ??= ScanService());
-    service.markScanReviewed(scan.id).catchError((Object error) {
-      debugPrint('Mark reviewed failed: $error');
-    });
+    if (scan.id.startsWith('demo-')) {
+      setState(() => _reviewedDemo.add(scan.id));
+    } else {
+      service.markScanReviewed(scan.id).catchError((Object error) {
+        debugPrint('Mark reviewed failed: $error');
+      });
+    }
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -215,7 +267,8 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final stats = _stats;
+    final showDemo = kHomeDemo && _inboxConnected && _monitoring;
+    final stats = showDemo ? _demoStats(_reviewedDemo) : _stats;
     final hasAnyScans = stats.lastCheckedAt != null || stats.weekTotal > 0;
     final hasAttention = stats.attention48h > 0;
 
@@ -340,56 +393,62 @@ class _HomeScreenState extends State<HomeScreen>
               _Reveal(
                 animation: _enter,
                 start: 0.4,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.mark_email_read,
-                        value: '${stats.weekTotal}',
-                        boldLabel: 'Emails',
-                        restLabel: ' checked this week',
-                        color: AppColors.primaryBlue,
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.mark_email_read,
+                          value: '${stats.weekTotal}',
+                          boldLabel: 'Emails',
+                          restLabel: ' checked this week',
+                          color: AppColors.primaryBlue,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.warning_amber_rounded,
-                        value: '${stats.weekHigh}',
-                        boldLabel: 'Possible scams',
-                        restLabel: ' found',
-                        color: AppColors.dangerRed,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.warning_amber_rounded,
+                          value: '${stats.weekHigh}',
+                          boldLabel: 'Possible scams',
+                          restLabel: ' found',
+                          color: AppColors.dangerRed,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
               _Reveal(
                 animation: _enter,
                 start: 0.5,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.check_circle,
-                        value: '${stats.weekLow}',
-                        boldLabel: 'Safe',
-                        restLabel: ' emails',
-                        color: AppColors.accentGreen,
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.check_circle,
+                          value: '${stats.weekLow}',
+                          boldLabel: 'Safe',
+                          restLabel: ' emails',
+                          color: AppColors.accentGreen,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.shield,
-                        value: '${stats.scamRate}%',
-                        boldLabel: 'Scam rate',
-                        restLabel: ' of emails',
-                        color: AppColors.cautionAmber,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.shield,
+                          value: '${stats.scamRate}%',
+                          boldLabel: 'Scam rate',
+                          restLabel: ' of emails',
+                          color: AppColors.cautionAmber,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               if (stats.mockAnalysis) ...[
@@ -835,15 +894,25 @@ class _StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 28, color: color),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: AppTypography.heading,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
+          Row(
+            children: [
+              Icon(icon, size: 28, color: color),
+              const SizedBox(width: 10),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: AppTypography.heading,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text.rich(
