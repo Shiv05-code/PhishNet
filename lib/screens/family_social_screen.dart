@@ -605,6 +605,25 @@ String boldUnicode(String text) {
   return buffer.toString();
 }
 
+/// Messages up to this many characters are shared in full.
+const shareFullMessageLimit = 500;
+
+/// Longer messages are cut to about this many characters.
+const shareExcerptLength = 300;
+
+/// Returns [text] unchanged when short, otherwise its opening, cut at a word
+/// boundary and ending in an ellipsis. Counts characters by code point so
+/// emoji are never split.
+String shareExcerpt(String text) {
+  final runes = text.runes.toList();
+  if (runes.length <= shareFullMessageLimit) return text;
+
+  var cut = String.fromCharCodes(runes.take(shareExcerptLength));
+  final lastSpace = cut.lastIndexOf(RegExp(r'\s'));
+  if (lastSpace > shareExcerptLength ~/ 2) cut = cut.substring(0, lastSpace);
+  return '${cut.trimRight()}...';
+}
+
 /// Builds the text shared with family: a status icon, PhishNet's verdict and
 /// details, then the message. Live scans show the original message; History
 /// scans show a summary.
@@ -620,12 +639,29 @@ String buildFamilyShareText({
 
   lines.add(
     name.isEmpty
-        ? 'Id like a second opinion on this message.'
+        ? 'I\'d like a second opinion on this message.'
         : '$name wants a second opinion on this message.',
   );
-  lines.add('Does it look safe to you? PhishNet\'s analysis is below');
+  lines.add('Does it look safe to you? PhishNet\'s analysis is below.');
   lines.add('');
 
+  if (text.isNotEmpty) {
+    lines.add('');
+    if (isOriginalText) {
+      final shown = shareExcerpt(text);
+      final shortened = shown != text;
+      lines.add('💬 ${boldUnicode(shortened ? 'Message (first part):' : 'Message:')}',);
+      lines.add('"$shown"');
+      if (shortened) {
+        lines.add('(Long message shortened.)');
+      }
+    } else {
+      lines.add('📝 ${boldUnicode('Summary:')}');
+      lines.add(text);
+    }
+  }
+  lines.add('');
+  
   if (result == null) {
     lines.add('❔ ${boldUnicode('NOT SCORED')}');
     lines.add('PhishNet has not scored this message.');
@@ -662,17 +698,6 @@ String buildFamilyShareText({
       lines.add('');
       lines.add('⚠️ ${boldUnicode('Warning Signs:')}');
       lines.addAll(flags.map((f) => '• ${f.trim()}'));
-    }
-  }
-
-  if (text.isNotEmpty) {
-    lines.add('');
-    if (isOriginalText) {
-      lines.add('💬 ${boldUnicode('Message:')}');
-      lines.add('"$text"');
-    } else {
-      lines.add('📝 ${boldUnicode('Summary:')}');
-      lines.add(text);
     }
   }
 
