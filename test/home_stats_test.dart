@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:phishnet_app/models/home_stats.dart';
 import 'package:phishnet_app/screens/home_screen.dart';
@@ -45,12 +46,21 @@ class FakeScanService extends Fake implements ScanService {
   @override
   Future<HomeStats> getHomeStats() async {
     calls++;
+    if (transientFailuresRemaining > 0) {
+      transientFailuresRemaining--;
+      throw const ScanException('Temporary stats failure', retryable: true);
+    }
     return stats;
   }
+
+  int transientFailuresRemaining = 0;
 }
 
 void main() {
-  setUp(HomeStatsCache.clear);
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    HomeStatsCache.clear();
+  });
 
   group('HomeStats.fromJson', () {
     test('parses counts, attention items, and mock flag', () {
@@ -72,9 +82,9 @@ void main() {
   });
 
   group('HomeStatsCache', () {
-    test('entry is fresh within the TTL and stale after it', () {
+    test('entry is fresh within the TTL and stale after it', () async {
       final t0 = DateTime(2026, 11, 14, 12);
-      HomeStatsCache.put('u1', HomeStats.empty, t0);
+      await HomeStatsCache.put('u1', HomeStats.empty, t0);
       expect(
         HomeStatsCache.isFresh('u1', t0.add(const Duration(seconds: 30))),
         isTrue,
@@ -82,14 +92,30 @@ void main() {
       expect(HomeStatsCache.isFresh('u1', t0.add(HomeStatsCache.ttl)), isFalse);
     });
 
-    test('invalidate removes the entry and other users are unaffected', () {
-      final t0 = DateTime(2026, 11, 14, 12);
-      HomeStatsCache.put('u1', HomeStats.empty, t0);
-      HomeStatsCache.put('u2', HomeStats.empty, t0);
-      HomeStatsCache.invalidate('u1');
-      expect(HomeStatsCache.peek('u1'), isNull);
-      expect(HomeStatsCache.peek('u2'), isNotNull);
-    });
+    test(
+      'invalidate removes the entry and other users are unaffected',
+      () async {
+        final t0 = DateTime(2026, 11, 14, 12);
+        await HomeStatsCache.put('u1', HomeStats.empty, t0);
+        await HomeStatsCache.put('u2', HomeStats.empty, t0);
+        HomeStatsCache.invalidate('u1');
+        expect(HomeStatsCache.peek('u1'), isNull);
+        expect(HomeStatsCache.peek('u2'), isNotNull);
+      },
+    );
+
+    test(
+      'restores a saved summary after the in-memory cache is cleared',
+      () async {
+        final stats = HomeStats.fromJson(_payload(attention: 1));
+        await HomeStatsCache.put('u1', stats, DateTime.now());
+        HomeStatsCache.clear();
+
+        final restored = await HomeStatsCache.restore('u1');
+        expect(restored?.weekTotal, stats.weekTotal);
+        expect(restored?.recentHigh.single.description, 'Prize notice');
+      },
+    );
   });
 
   testWidgets('Home shows counts from the summary service', (tester) async {
@@ -144,5 +170,27 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 2));
     expect(service.calls, 1);
+  });
+
+  testWidgets('Home automatically retries a transient stats failure', (
+    tester,
+  ) async {
+    final service = FakeScanService(HomeStats.fromJson(_payload()));
+    service.transientFailuresRemaining = 1;
+    await pumpScreen(
+      tester,
+      HomeScreen(authService: FakeAuthService(), scanService: service),
+    );
+    await tester.pump();
+    expect(service.calls, 1);
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+
+    expect(service.calls, 2);
+    expect(
+      find.text('Hooray! No messages need your attention.'),
+      findsOneWidget,
+    );
   });
 }

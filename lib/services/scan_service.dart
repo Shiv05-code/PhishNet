@@ -294,7 +294,7 @@ class ScanService {
             },
             body: jsonEncode({'action': 'scan_home'}),
           )
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 20));
     } on TimeoutException {
       throw const ScanException(
         'Loading your stats took too long.',
