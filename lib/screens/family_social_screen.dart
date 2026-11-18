@@ -647,7 +647,7 @@ String buildFamilyShareText({
         ? 'I\'d like a second opinion on this message.'
         : '$name wants a second opinion on this message.',
     '',
-    'Does it look safe to you? PhishNet\'s analysis is below',
+    'Does it look safe to you? PhishNet\'s analysis is below.',
     '',
     '🛡️ ${boldUnicode('PhishNet Scan Result')}',
     '',
