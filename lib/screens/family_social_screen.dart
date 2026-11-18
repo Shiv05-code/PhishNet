@@ -2,7 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 
 import 'app_colors.dart';
@@ -468,8 +467,9 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
                   return;
                 }
                 _shareMessage(context).then((shared) {
-                  if (shared && mounted)
+                  if (shared && mounted) {
                     _showShareDialog('Shared with Family.');
+                  }
                 });
               },
             ),
@@ -612,6 +612,25 @@ String boldUnicode(String text) {
   return buffer.toString();
 }
 
+/// Messages up to this many characters are shared in full.
+const shareFullMessageLimit = 500;
+
+/// Longer messages are cut to about this many characters.
+const shareExcerptLength = 300;
+
+/// Returns [text] unchanged when short, otherwise its opening, cut at a word
+/// boundary and ending in an ellipsis. Counts characters by code point so
+/// emoji are never split.
+String shareExcerpt(String text) {
+  final runes = text.runes.toList();
+  if (runes.length <= shareFullMessageLimit) return text;
+
+  var cut = String.fromCharCodes(runes.take(shareExcerptLength));
+  final lastSpace = cut.lastIndexOf(RegExp(r'\s'));
+  if (lastSpace > shareExcerptLength ~/ 2) cut = cut.substring(0, lastSpace);
+  return '${cut.trimRight()}...';
+}
+
 /// Builds the text shared with family: a status icon, PhishNet's verdict and
 /// details, then the message. Live scans show the original message; History
 /// scans show a summary.
@@ -625,13 +644,32 @@ String buildFamilyShareText({
   final name = senderName?.trim() ?? '';
   final lines = <String>[
     name.isEmpty
-        ? 'Id like a second opinion on this message.'
+        ? 'I\'d like a second opinion on this message.'
         : '$name wants a second opinion on this message.',
-    'Does it look safe to you? PhishNet\'s analysis is below',
+    '',
+    'Does it look safe to you? PhishNet\'s analysis is below.',
     '',
     '🛡️ ${boldUnicode('PhishNet Scan Result')}',
     '',
   ];
+
+  if (text.isNotEmpty) {
+    if (isOriginalText) {
+      final shown = shareExcerpt(text);
+      final shortened = shown != text;
+      lines.add(
+        '💬 ${boldUnicode(shortened ? 'Message (first part):' : 'Message:')}',
+      );
+      lines.add('"$shown"');
+      if (shortened) {
+        lines.add('(Long message shortened.)');
+      }
+    } else {
+      lines.add('📝 ${boldUnicode('Summary:')}');
+      lines.add(text);
+    }
+  }
+  lines.add('');
 
   if (result == null) {
     lines.add('❔ ${boldUnicode('NOT SCORED')}');
@@ -669,17 +707,6 @@ String buildFamilyShareText({
       lines.add('');
       lines.add('⚠️ ${boldUnicode('Warning Signs:')}');
       lines.addAll(flags.map((f) => '• ${f.trim()}'));
-    }
-  }
-
-  if (text.isNotEmpty) {
-    lines.add('');
-    if (isOriginalText) {
-      lines.add('💬 ${boldUnicode('Message:')}');
-      lines.add('"$text"');
-    } else {
-      lines.add('📝 ${boldUnicode('Summary:')}');
-      lines.add(text);
     }
   }
 
