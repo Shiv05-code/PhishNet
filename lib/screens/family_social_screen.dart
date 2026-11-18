@@ -411,11 +411,31 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Up to $trustedContactsLimit favorites. Hold and drag to reorder.',
-              style: TextStyle(
-                fontSize: AppTypography.caption,
-                color: AppColors.muted,
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(
+                  fontSize: AppTypography.caption,
+                  color: AppColors.muted,
+                ),
+                children: [
+                  TextSpan(text: 'Up to $trustedContactsLimit favorites. '),
+                  const TextSpan(
+                    text: 'Hold and drag',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const TextSpan(text: ' to reorder; '),
+                  const TextSpan(
+                    text: 'swipe left to delete',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const TextSpan(text: '.'),
+                ],
               ),
             ),
             const SizedBox(height: 12),
