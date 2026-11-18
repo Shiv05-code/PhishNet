@@ -67,4 +67,16 @@ class HomeStats {
       mockAnalysis: json['data_source'] == 'mock_analysis',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'week_total': weekTotal,
+    'week_high': weekHigh,
+    'week_medium': weekMedium,
+    'week_low': weekLow,
+    'scam_rate': scamRate,
+    'attention_48h': attention48h,
+    'recent_high': recentHigh.map((scan) => scan.toJson()).toList(),
+    'last_checked_at': lastCheckedAt?.toIso8601String(),
+    'data_source': mockAnalysis ? 'mock_analysis' : 'claude',
+  };
 }

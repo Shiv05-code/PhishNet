@@ -332,6 +332,22 @@ void main() {
       expect(find.text('Dhara'), findsOneWidget);
       expect(find.text('JF'), findsOneWidget);
       expect(find.text('D'), findsOneWidget);
+      expect(
+        find.text(
+          'Up to 5 favorites. Hold and drag to reorder; swipe left to delete.',
+        ),
+        findsOneWidget,
+      );
+      final helperText = tester.widget<Text>(
+        find.text(
+          'Up to 5 favorites. Hold and drag to reorder; swipe left to delete.',
+        ),
+      );
+      final helperSpans = (helperText.textSpan! as TextSpan).children!
+          .whereType<TextSpan>()
+          .toList();
+      expect(helperSpans[1].style?.fontWeight, FontWeight.w700);
+      expect(helperSpans[3].style?.fontWeight, FontWeight.w700);
     });
 
     testWidgets('load failure shows retry', (tester) async {

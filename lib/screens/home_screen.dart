@@ -18,6 +18,12 @@ import 'capture_screen.dart';
 import 'results_screen.dart';
 
 const bool kHomeDemo = true;
+const _statsRetryDelays = [
+  Duration(seconds: 3),
+  Duration(seconds: 10),
+  Duration(seconds: 30),
+  Duration(minutes: 1),
+];
 
 String _timeAgo(DateTime? at, DateTime now) {
   if (at == null) return 'No checks yet';
@@ -132,6 +138,8 @@ class _HomeScreenState extends State<HomeScreen>
   bool _started = false;
   bool _loadingStats = false;
   Timer? _autoRefresh;
+  Timer? _retryTimer;
+  int _statsFailures = 0;
 
   ScanService? _ownedService;
   HomeStats _stats = HomeStats.empty;
@@ -145,15 +153,23 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    // Paint the last known numbers at once, then refresh in the background.
     final key = _cacheKey();
     if (key != null) _stats = HomeStatsCache.peek(key) ?? HomeStats.empty;
-    _loadStats(force: true);
+    unawaited(_restoreStatsAndRefresh(key));
     _autoRefresh = Timer.periodic(
       const Duration(minutes: 2),
       (_) => _loadStats(force: true),
     );
     _restoreMonitoring();
+  }
+
+  Future<void> _restoreStatsAndRefresh(String? key) async {
+    if (key != null) {
+      final cached = await HomeStatsCache.restore(key);
+      if (!mounted) return;
+      if (cached != null) setState(() => _stats = cached);
+    }
+    if (mounted) await _loadStats(force: true);
   }
 
   Future<void> _restoreMonitoring() async {
@@ -191,6 +207,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     _autoRefresh?.cancel();
+    _retryTimer?.cancel();
     _enter.dispose();
     _ownedService?.dispose();
     super.dispose();
@@ -208,6 +225,8 @@ class _HomeScreenState extends State<HomeScreen>
   /// numbers already on screen, so Home never breaks when offline.
   Future<void> _loadStats({bool force = false}) async {
     if (_loadingStats) return;
+    _retryTimer?.cancel();
+    _retryTimer = null;
     final key = _cacheKey();
     final now = DateTime.now();
     if (!force && key != null && HomeStatsCache.isFresh(key, now)) return;
@@ -216,14 +235,32 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final service = widget.scanService ?? (_ownedService ??= ScanService());
       final fresh = await service.getHomeStats();
-      if (key != null) HomeStatsCache.put(key, fresh, DateTime.now());
+      if (key != null) {
+        unawaited(HomeStatsCache.put(key, fresh, DateTime.now()));
+      }
+      _statsFailures = 0;
       if (mounted) setState(() => _stats = fresh);
     } catch (error) {
       // Keep the last known numbers.
       debugPrint('Home stats failed: $error');
+      if (error is ScanException && error.retryable) _scheduleStatsRetry();
     } finally {
       _loadingStats = false;
     }
+  }
+
+  void _scheduleStatsRetry() {
+    if (!mounted) return;
+    final delay =
+        _statsRetryDelays[_statsFailures.clamp(
+          0,
+          _statsRetryDelays.length - 1,
+        )];
+    _statsFailures++;
+    _retryTimer = Timer(delay, () {
+      _retryTimer = null;
+      _loadStats(force: true);
+    });
   }
 
   void _toggleMonitoring() {

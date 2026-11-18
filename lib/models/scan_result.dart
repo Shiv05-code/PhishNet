@@ -65,4 +65,19 @@ class ScanResult {
       nextSteps: List<String>.from(steps),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'risk_level': riskLevel,
+    'summary': summary,
+    'scam_percentage': scamPercentage,
+    'red_flags': [
+      for (var index = 0; index < redFlags.length; index++)
+        {
+          'description': redFlags[index],
+          'label': index < redFlagLabels.length ? redFlagLabels[index] : '',
+          'icon': index < redFlagIcons.length ? redFlagIcons[index] : '',
+        },
+    ],
+    'next_steps': nextSteps,
+  };
 }
