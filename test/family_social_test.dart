@@ -446,7 +446,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(store.contacts.map((c) => c.name), ['Ben']);
-      expect(find.text('Contact removed.'), findsOneWidget);
+      expect(find.text('Removed Ada from favorites.'), findsOneWidget);
     });
 
     testWidgets('swipe left then Cancel keeps the contact', (tester) async {

@@ -85,7 +85,7 @@ const privacyPolicyDocument = LegalDocument(
           'Before you share, we show exactly what will be shared: the message you flagged and PhishNet\'s analysis of it',
         ),
         LegalBullet(
-          'When you tap "Message" on a Trusted Contact, PhishNet opens Messages to that contact\'s number with the scan filled in and the PhishNet logo attached. You tap Send yourself. PhishNet **never sends a message** for you.',
+          'When you tap "Message" on a Trusted Contact, PhishNet opens Messages to that contact\'s number with the scan filled in. You tap Send yourself. PhishNet **never sends a message** for you.',
         ),
         LegalBullet(
           'When you tap "Share," your device\'s share sheet opens, so you choose who receives it and how (text, email, etc.)',
