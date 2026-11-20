@@ -42,4 +42,11 @@ class SavedScan {
       result: ScanResult.fromJson(json),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'brief_description': description,
+    'createdAt': createdAt?.toIso8601String(),
+    ...result.toJson(),
+  };
 }

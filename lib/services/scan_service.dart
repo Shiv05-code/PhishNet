@@ -1,17 +1,22 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import '../models/home_stats.dart';
 import '../models/saved_scan.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/scan_result.dart';
+import 'daily_limit.dart';
 
 class ScanException implements Exception {
   final String message;
   final bool retryable;
 
-  const ScanException(this.message, {this.retryable = false});
+  /// Set when a free user has used up today's requests.
+  final DailyLimitInfo? dailyLimit;
+
+  const ScanException(this.message, {this.retryable = false, this.dailyLimit});
 
   @override
   String toString() => message;
@@ -93,6 +98,13 @@ class ScanService {
         'We could not reach PhishNet. Please try again.',
         retryable: true,
       );
+    }
+
+    if (response.statusCode == 429) {
+      final limit = DailyLimitInfo.fromBody(response.body);
+      if (limit != null) {
+        throw ScanException(limit.message(), dailyLimit: limit);
+      }
     }
 
     if (response.statusCode == 401 || response.statusCode == 403) {
@@ -215,6 +227,105 @@ class ScanService {
       throw const ScanException(
         'The scan service returned invalid history data.',
       );
+    }
+  }
+
+  /// Marks one scan as reviewed so it leaves the Home attention list.
+  Future<void> markScanReviewed(String scanId) async {
+    final uri = Uri.tryParse(_endpoint);
+    final user = _auth.currentUser;
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        user == null ||
+        user.isAnonymous) {
+      throw const ScanException('Please sign in to update this scan.');
+    }
+    final token = await user.getIdToken();
+    if (token == null || token.isEmpty) {
+      throw const ScanException('Unable to authenticate this request.');
+    }
+    final response = await _client
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'action': 'mark_reviewed', 'scan_id': scanId}),
+        )
+        .timeout(const Duration(seconds: 8));
+    if (response.statusCode != 200) {
+      throw const ScanException('Unable to update this scan.', retryable: true);
+    }
+  }
+
+  /// Home summary from the `scan_home` action: small, fixed-size payload.
+  Future<HomeStats> getHomeStats() async {
+    final uri = Uri.tryParse(_endpoint);
+
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      throw const ScanException('The scan service is not configured.');
+    }
+
+    final user = _auth.currentUser;
+
+    if (user == null || user.isAnonymous) {
+      throw const ScanException('Please sign in to view your stats.');
+    }
+
+    final token = await user.getIdToken();
+
+    if (token == null || token.isEmpty) {
+      throw const ScanException('Unable to authenticate your stats request.');
+    }
+
+    late final http.Response response;
+
+    try {
+      response = await _client
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'action': 'scan_home'}),
+          )
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      throw const ScanException(
+        'Loading your stats took too long.',
+        retryable: true,
+      );
+    } on SocketException {
+      throw const ScanException('No internet connection.', retryable: true);
+    } catch (_) {
+      throw const ScanException('Unable to load your stats.', retryable: true);
+    }
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw const ScanException(
+        'Your session could not be verified. Please sign in again.',
+      );
+    }
+
+    if (response.statusCode != 200) {
+      throw const ScanException('Unable to load your stats.', retryable: true);
+    }
+
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Invalid stats response');
+      }
+      return HomeStats.fromJson(decoded);
+    } on FormatException {
+      throw const ScanException('The scan service returned invalid stats.');
+    } on TypeError {
+      throw const ScanException('The scan service returned invalid stats.');
     }
   }
 

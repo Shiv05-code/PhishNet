@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:math';
 import 'chat_history_repository.dart';
+import 'daily_limit.dart';
 
 import '../models/scan_result.dart';
 import 'image_text_reader.dart';
@@ -273,6 +274,21 @@ class ChatService extends ChangeNotifier {
   /// Plain-language error for the last failed question, or null.
   String? get error => _error;
   bool get canRetry => _error != null && _pendingQuestion != null;
+
+  /// Set while the last request was refused because the free daily limit is
+  /// used up. [error] then says when usage resets.
+  DailyLimitInfo? get dailyLimit => _dailyLimit;
+  DailyLimitInfo? _dailyLimit;
+
+  String? _unsentQuestion;
+
+  /// The question that was refused because of the daily limit, once. The chat
+  /// screen puts it back in the input box so nothing the user typed is lost.
+  String? takeUnsentQuestion() {
+    final question = _unsentQuestion;
+    _unsentQuestion = null;
+    return question;
+  }
 
   String? _currentUserId;
   int _requestGeneration = 0;
@@ -550,6 +566,8 @@ class ChatService extends ChangeNotifier {
     _activeConversationId = null;
     _scan = null;
     _error = null;
+    _dailyLimit = null;
+    _unsentQuestion = null;
     _pendingQuestion = null;
 
     notifyListeners();
@@ -747,6 +765,7 @@ class ChatService extends ChangeNotifier {
     _messages.add(shown);
     _sending = true;
     _error = null;
+    _dailyLimit = null;
     _pendingQuestion = null;
     notifyListeners();
     try {
@@ -762,7 +781,7 @@ class ChatService extends ChangeNotifier {
       try {
         result = await _analyze(text);
       } on ScanException catch (e) {
-        throw _ChatFailure(e.message);
+        throw _ChatFailure(e.message, dailyLimit: e.dailyLimit);
       }
       // Signed out, or a different user signed in, while the photo was read.
       if (generation != _requestGeneration) return false;
@@ -782,6 +801,7 @@ class ChatService extends ChangeNotifier {
     } on _ChatFailure catch (e) {
       _messages.remove(shown);
       _error = e.message;
+      _dailyLimit = e.dailyLimit;
     } finally {
       if (generation == _requestGeneration) _sending = false;
       notifyListeners();
@@ -843,6 +863,7 @@ class ChatService extends ChangeNotifier {
 
     _sending = true;
     _error = null;
+    _dailyLimit = null;
     _pendingQuestion = question;
     notifyListeners();
 
@@ -868,12 +889,55 @@ class ChatService extends ChangeNotifier {
     } on _ChatFailure catch (e) {
       if (generation != _requestGeneration) return;
       _error = e.message;
+      _dailyLimit = e.dailyLimit;
+      if (e.dailyLimit != null) _takeBackRefusedQuestion(question);
     } finally {
       if (generation == _requestGeneration) {
         _sending = false;
         notifyListeners();
       }
     }
+  }
+
+  /// A question refused for the daily limit was never answered, so it comes
+  /// back out of the conversation and is kept in [takeUnsentQuestion] for the
+  /// input box. A photo's own message stays, because its scan already happened.
+  void _takeBackRefusedQuestion(String question) {
+    if (_messages.isEmpty) return;
+    final last = _messages.last;
+    if (!last.fromUser || last.imagePath != null || last.text != question) {
+      return;
+    }
+    _messages.removeLast();
+    _pendingQuestion = null;
+    _unsentQuestion = question;
+    if (_messages.isEmpty) {
+      _discardActiveConversation();
+    } else {
+      _saveCurrentConversation();
+    }
+  }
+
+  /// Removes the open conversation, saved copy included. Used when nothing is
+  /// left in it.
+  void _discardActiveConversation() {
+    final id = _activeConversationId;
+    if (id == null) return;
+    _conversations.removeWhere((conversation) => conversation.id == id);
+    _activeConversationId = null;
+
+    final repository = _historyRepository;
+    final uid = _currentUserId;
+    if (repository == null || uid == null) return;
+
+    _pendingChatSave = _pendingChatSave
+        .then((_) async {
+          if (_currentUserId != uid) return;
+          await repository.deleteChat(uid: uid, conversationId: id);
+        })
+        .catchError((Object error) {
+          debugPrint('Could not remove empty chat: $error');
+        });
   }
 
   // Turns before the question being asked (it is the last message in the
@@ -928,6 +992,12 @@ class ChatService extends ChangeNotifier {
       throw const _ChatFailure(offlineError);
     }
 
+    if (response.statusCode == 429) {
+      final limit = DailyLimitInfo.fromBody(response.body);
+      if (limit != null) {
+        throw _ChatFailure(limit.message(), dailyLimit: limit);
+      }
+    }
     if (response.statusCode == 401) throw const _ChatFailure(signInError);
     if (response.statusCode != 200) throw const _ChatFailure(genericError);
     try {
@@ -942,6 +1012,7 @@ class ChatService extends ChangeNotifier {
 }
 
 class _ChatFailure implements Exception {
-  const _ChatFailure(this.message);
+  const _ChatFailure(this.message, {this.dailyLimit});
   final String message;
+  final DailyLimitInfo? dailyLimit;
 }

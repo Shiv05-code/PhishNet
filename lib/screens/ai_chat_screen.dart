@@ -141,7 +141,25 @@ class _AiChatScreenState extends State<AiChatScreen> {
     if (text.trim().isNotEmpty) {
       _controller.clear();
       await _chat.ask(text);
+      _restoreUnsentQuestion();
     }
+  }
+
+  Future<void> _retry() async {
+    await _chat.retry();
+    _restoreUnsentQuestion();
+  }
+
+  /// When the free daily limit stopped a question, put it back in the input
+  /// box so the user does not have to type it again after usage resets.
+  void _restoreUnsentQuestion() {
+    final question = _chat.takeUnsentQuestion();
+    if (question == null || !mounted) return;
+    if (_controller.text.trim().isNotEmpty) return;
+    _controller.value = TextEditingValue(
+      text: question,
+      selection: TextSelection.collapsed(offset: question.length),
+    );
   }
 
   /// Follows the newest text only while the user is at the bottom. Scrolling
@@ -361,7 +379,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
               if (_chat.error != null)
                 _ErrorBanner(
                   message: _chat.error!,
-                  onRetry: _chat.canRetry ? _chat.retry : null,
+                  onRetry: _chat.canRetry ? _retry : null,
                 ),
               _InputBar(
                 controller: _controller,
