@@ -10,9 +10,10 @@ spec.loader.exec_module(handler)
 NOW = datetime(2026, 11, 14, 12, 0, tzinfo=timezone.utc)
 
 
-def _scan(scan_id, risk="high", reviewed=False):
+def _scan(scan_id, risk="high", reviewed=False, monitored=True):
     return {
         "reviewed": reviewed,
+        "monitored": monitored,
         "item": {
             "id": scan_id,
             "risk_level": risk,
@@ -83,3 +84,10 @@ def test_scan_id_validation():
     assert not handler._valid_scan_id(None)
     assert not handler._valid_scan_id("a/b")
     assert not handler._valid_scan_id("x" * 129)
+
+
+def test_manual_high_risk_scans_are_not_attention():
+    recent = [_scan("manual", monitored=False), _scan("live")]
+    stats = handler._build_home_stats([{}] * 7, recent, NOW, mock=False)
+    assert stats["attention_48h"] == 1
+    assert [item["id"] for item in stats["recent_high"]] == ["live"]

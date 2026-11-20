@@ -1,337 +1,241 @@
-"""PhishNet Yahoo connection endpoint (AWS Lambda, Python 3.12).
+"""Gmail connection endpoint (AWS Lambda, Python 3.12). Function: phishnet-monitor-connect.
 
-Function: phishnet-monitor-connect (Function URL, auth type NONE).
-
-Flow:
-  POST (Firebase ID token) {"action": "start"}   -> Yahoo authorization URL
-  GET  ?code=...&state=...  (Yahoo redirect)     -> exchange code, store tokens
-  GET  ?error=access_denied (Yahoo redirect)     -> monitoring stays off
+  POST (Firebase ID token) {"action": "start"}   -> Google authorization URL
+  GET  ?code=...&state=...  (Google redirect)    -> exchange code, store refresh token
+  GET  ?error=access_denied (Google redirect)    -> monitoring stays off
   POST {"action": "status"}                      -> connection status only
-  POST {"action": "disconnect"}                  -> delete tokens, stop monitoring
+  POST {"action": "disconnect"}                  -> revoke, delete token, stop monitoring
 
-Tokens are stored only in Secrets Manager (one secret per user,
-phishnet/monitor/<uid>). Firestore holds a status string and a timestamp.
-Tokens and the client secret are never returned, logged, or written to
-Firestore.
+Refresh tokens live only in the phishnet/monitor-tokens secret (see store.py).
+Firestore holds only a status string. Tokens and client secrets are never
+returned, logged, or written to Firestore.
 
-Environment variables (all optional):
-  SECRET_ID=phishnet/prod        holds yahoo_client_id, yahoo_client_secret,
-                                 monitor_state_key
-  YAHOO_REDIRECT_URI             this function's Function URL (required)
-  FIREBASE_PROJECT_ID            defaults to phishnet-b93e0
+Environment (optional unless noted):
+  SECRET_ID=phishnet/prod          gmail_client_id, gmail_client_secret, monitor_state_key
+  GMAIL_REDIRECT_URI               this function's Function URL (required)
+  FIREBASE_PROJECT_ID              defaults to phishnet-b93e0
 """
 
 import base64
 import hashlib
 import hmac
+import html
 import json
 import os
 import re
 import secrets as pysecrets
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 
 import boto3
 import firebase_admin
 from firebase_admin import auth, credentials, firestore
 
+import gmail
+from store import MonitorStore
+
 SECRET_ID = os.environ.get("SECRET_ID", "phishnet/prod")
 PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "phishnet-b93e0")
-REDIRECT_URI = os.environ.get("YAHOO_REDIRECT_URI", "")
-MONITOR_SECRET_PREFIX = "phishnet/monitor/"
-YAHOO_AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
-YAHOO_TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
-# Yahoo Mail scope. Confirm it is approved for the app before going live.
-YAHOO_SCOPE = "mail-r"
+REDIRECT_URI = os.environ.get("GMAIL_REDIRECT_URI", "")
 PENDING_TTL_SECONDS = 600
 UID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 _secrets = None
-_db_ready = False
+_db = None
 _sm = None
 
 
 def _resp(code, body):
     return {
         "statusCode": code,
-        "headers": {"Content-Type": "application/json"},
+        "headers": {"Content-Type": "application/json", "Cache-Control": "no-store"},
         "body": json.dumps(body),
     }
 
 
 def _html(code, title, message):
-    # Only fixed strings are rendered here. No request data is echoed.
-    body = (
-        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-        f"<title>{title}</title></head><body>"
-        f"<h2>{title}</h2><p>{message}</p></body></html>"
+    page = (
+        "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'>"
+        f"<title>{html.escape(title)}</title>"
+        "<body style='font-family:system-ui;font-size:20px;padding:24px'>"
+        f"<h2>{html.escape(title)}</h2><p>{html.escape(message)}</p></body>"
     )
-    return {
-        "statusCode": code,
-        "headers": {"Content-Type": "text/html; charset=utf-8"},
-        "body": body,
-    }
-
-
-def _sm_client():
-    global _sm
-    if _sm is None:
-        _sm = boto3.client("secretsmanager")
-    return _sm
+    return {"statusCode": code, "headers": {"Content-Type": "text/html; charset=utf-8",
+                                             "Cache-Control": "no-store"}, "body": page}
 
 
 def _init():
     """Load app secrets and initialize Firebase once per cold start."""
-    global _secrets, _db_ready
-    if _secrets is not None:
-        return _secrets
-
-    raw = _sm_client().get_secret_value(SecretId=SECRET_ID)["SecretString"]
-    secrets_map = json.loads(raw)
-
-    try:
-        sa = secrets_map["firebase_service_account"]
-        if isinstance(sa, str):
-            sa = json.loads(sa)
-        firebase_admin.initialize_app(credentials.Certificate(sa))
-        _db_ready = True
-    except Exception:
-        firebase_admin.initialize_app(options={"projectId": PROJECT_ID})
-        print("firestore disabled: no usable service account")
-
-    _secrets = secrets_map
-    return secrets_map
+    global _secrets, _db, _sm
+    if _secrets is None:
+        _sm = boto3.client("secretsmanager")
+        raw = _sm.get_secret_value(SecretId=SECRET_ID)["SecretString"]
+        _secrets = json.loads(raw)
+        if not firebase_admin._apps:
+            sa = _secrets["firebase_service_account"]
+            if isinstance(sa, str):
+                sa = json.loads(sa)
+            cred = credentials.Certificate(sa)
+            firebase_admin.initialize_app(cred, {"projectId": PROJECT_ID})
+        _db = firestore.client()
+    return _secrets
 
 
-# ---------- state (CSRF protection for the OAuth redirect) ----------
+# ---------- state (CSRF protection for the redirect) ----------
 
 
 def _sign_state(uid, nonce, key):
-    mac = hmac.new(key.encode(), f"{uid}.{nonce}".encode(), hashlib.sha256)
-    return f"{uid}.{nonce}.{mac.hexdigest()}"
+    payload = f"{uid}.{nonce}"
+    sig = hmac.new(key.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return base64.urlsafe_b64encode(f"{payload}.{sig}".encode()).decode().rstrip("=")
 
 
 def _parse_state(state, key):
-    """Return (uid, nonce) if the state was issued by us, else None."""
-    parts = (state or "").split(".")
-    if len(parts) != 3:
+    """Return (uid, nonce) when the signature is valid, else None."""
+    if not state:
         return None
-    uid, nonce, sig = parts
-    if not UID_PATTERN.match(uid):
+    try:
+        raw = base64.urlsafe_b64decode(state + "=" * (-len(state) % 4)).decode()
+        uid, nonce, sig = raw.rsplit(".", 2)
+    except (ValueError, UnicodeDecodeError):
         return None
-    expected = _sign_state(uid, nonce, key).rsplit(".", 1)[1]
-    if not hmac.compare_digest(sig, expected):
+    expected = hmac.new(key.encode(), f"{uid}.{nonce}".encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected) or not UID_PATTERN.match(uid):
         return None
     return uid, nonce
-
-
-# ---------- per-user secret storage ----------
-
-
-def _secret_name(uid):
-    if not UID_PATTERN.match(uid or ""):
-        raise ValueError("invalid uid")
-    return f"{MONITOR_SECRET_PREFIX}{uid}"
-
-
-def _load_monitor(uid):
-    try:
-        raw = _sm_client().get_secret_value(SecretId=_secret_name(uid))
-    except _sm_client().exceptions.ResourceNotFoundException:
-        return None
-    return json.loads(raw["SecretString"])
-
-
-def _save_monitor(uid, data):
-    name = _secret_name(uid)
-    value = json.dumps(data)
-    try:
-        _sm_client().put_secret_value(SecretId=name, SecretString=value)
-    except _sm_client().exceptions.ResourceNotFoundException:
-        _sm_client().create_secret(Name=name, SecretString=value)
-
-
-def _delete_monitor(uid):
-    """Delete the user's token secret. Missing secret counts as deleted."""
-    try:
-        _sm_client().delete_secret(
-            SecretId=_secret_name(uid),
-            ForceDeleteWithoutRecovery=True,
-        )
-    except _sm_client().exceptions.ResourceNotFoundException:
-        return
-
-
-# ---------- Firestore status ----------
-
-
-def _set_status(uid, status):
-    if not _db_ready:
-        return
-    firestore.client().collection("users").document(uid).collection(
-        "monitoring"
-    ).document("status").set(
-        {"status": status, "updatedAt": firestore.SERVER_TIMESTAMP},
-        merge=True,
-    )
-
-
-def _get_status(uid):
-    if not _db_ready:
-        return "unavailable"
-    snap = (
-        firestore.client()
-        .collection("users")
-        .document(uid)
-        .collection("monitoring")
-        .document("status")
-        .get()
-    )
-    if not snap.exists:
-        return "disconnected"
-    return snap.to_dict().get("status", "disconnected")
-
-
-# ---------- Yahoo ----------
-
-
-def _yahoo_token_request(form, client_id, client_secret):
-    basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
-    data = urllib.parse.urlencode(form).encode()
-    req = urllib.request.Request(
-        YAHOO_TOKEN_URL,
-        data=data,
-        headers={
-            "Authorization": f"Basic {basic}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        return json.loads(resp.read().decode())
 
 
 def _b64url(raw):
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
+# ---------- Firestore status and plan ----------
+
+
+def _set_status(db, uid, status):
+    db.collection("users").document(uid).collection("monitoring").document("status").set(
+        {"status": status, "updatedAt": firestore.SERVER_TIMESTAMP}
+    )
+
+
+def _get_status(db, uid):
+    snap = (db.collection("users").document(uid)
+            .collection("monitoring").document("status").get())
+    if not snap.exists:
+        return "disconnected"
+    return snap.to_dict().get("status", "disconnected")
+
+
+def _has_plus(db, uid, now):
+    """Same rule as handler._has_active_plus. Keep the two in sync."""
+    snap = (db.collection("users").document(uid)
+            .collection("subscriptions").document("current").get())
+    data = (snap.to_dict() or {}) if snap.exists else {}
+    expires_at = data.get("expiresAt")
+    return (
+        data.get("plan") == "plus"
+        and data.get("status") == "active"
+        and data.get("environment") == "production"
+        and hasattr(expires_at, "timestamp")
+        and expires_at.timestamp() > now
+    )
+
+
 # ---------- actions ----------
 
 
-def start(uid, secrets_map):
-    """Create a one-time state and PKCE verifier and return the Yahoo URL."""
+def start(uid, secrets_map, store, db):
     if not REDIRECT_URI:
         return _resp(503, {"error": "monitoring_unavailable", "retryable": True})
+    if not _has_plus(db, uid, time.time()):
+        return _resp(403, {"error": "plus_required"})
     nonce = pysecrets.token_urlsafe(16)
     verifier = pysecrets.token_urlsafe(48)
     challenge = _b64url(hashlib.sha256(verifier.encode()).digest())
     state = _sign_state(uid, nonce, secrets_map["monitor_state_key"])
 
-    existing = _load_monitor(uid) or {}
-    existing["pending"] = {
-        "nonce": nonce,
-        "verifier": verifier,
-        "exp": int(time.time()) + PENDING_TTL_SECONDS,
-    }
-    _save_monitor(uid, existing)
+    entry = store.get(uid)
+    entry["pending"] = {"nonce": nonce, "verifier": verifier,
+                        "exp": int(time.time()) + PENDING_TTL_SECONDS}
+    store.put(uid, entry)
 
-    url = YAHOO_AUTH_URL + "?" + urllib.parse.urlencode(
-        {
-            "client_id": secrets_map["yahoo_client_id"],
-            "redirect_uri": REDIRECT_URI,
-            "response_type": "code",
-            "scope": YAHOO_SCOPE,
-            "state": state,
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-        }
-    )
+    url = gmail.auth_url(secrets_map["gmail_client_id"], REDIRECT_URI, state, challenge)
     return _resp(200, {"authorizationUrl": url})
 
 
-def callback(params, secrets_map):
-    """Handle Yahoo's redirect. Returns a page, never a token."""
-    if params.get("error"):
-        # The user denied or cancelled consent. Keep monitoring off and
-        # drop any pending state for that user, if the state is valid.
-        print("yahoo consent not granted")
-        parsed = _parse_state(params.get("state"), secrets_map["monitor_state_key"])
-        if parsed:
-            uid = parsed[0]
-            monitor = _load_monitor(uid) or {}
-            if "pending" in monitor:
-                monitor.pop("pending")
-                _save_monitor(uid, monitor)
-            _set_status(uid, "disconnected")
-        return _html(
-            200,
-            "Monitoring needs access",
-            "PhishNet needs permission to read new emails to check them. "
-            "Monitoring stays off until you connect again.",
-        )
-
+def callback(params, secrets_map, store, db):
+    """Handle Google's redirect. Returns a page, never a token."""
     parsed = _parse_state(params.get("state"), secrets_map["monitor_state_key"])
+
+    if params.get("error"):
+        # Consent denied or cancelled. Keep monitoring off.
+        if parsed:
+            uid, _ = parsed
+            entry = store.get(uid)
+            if entry.pop("pending", None) is not None:
+                store.put(uid, entry)
+            _set_status(db, uid, "disconnected")
+        return _html(200, "Monitoring needs access",
+                     "PhishNet needs permission to read new emails to check them. "
+                     "Monitoring stays off until you connect again.")
+
     code = params.get("code")
     if not parsed or not code:
         return _html(400, "Connection failed", "Please try connecting again.")
     uid, nonce = parsed
 
-    monitor = _load_monitor(uid) or {}
-    pending = monitor.get("pending") or {}
-    if (
-        not hmac.compare_digest(str(pending.get("nonce", "")), nonce)
-        or int(pending.get("exp", 0)) < int(time.time())
-    ):
+    entry = store.get(uid)
+    pending = entry.get("pending") or {}
+    if (not hmac.compare_digest(str(pending.get("nonce", "")), nonce)
+            or int(pending.get("exp", 0)) < int(time.time())):
         return _html(400, "Connection expired", "Please try connecting again.")
 
     try:
-        token = _yahoo_token_request(
-            {
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": REDIRECT_URI,
-                "code_verifier": pending["verifier"],
-            },
-            secrets_map["yahoo_client_id"],
-            secrets_map["yahoo_client_secret"],
-        )
-        refresh = token["refresh_token"]
-    except (urllib.error.URLError, KeyError, ValueError) as e:
-        print(f"yahoo token exchange failed: {type(e).__name__}")
-        _set_status(uid, "error")
+        refresh = gmail.exchange_code(code, pending["verifier"], REDIRECT_URI,
+                                      secrets_map["gmail_client_id"],
+                                      secrets_map["gmail_client_secret"])
+    except (gmail.AuthError, gmail.TransientError, gmail.PermanentError):
+        _set_status(db, uid, "error")
         return _html(502, "Connection failed", "Please try connecting again.")
 
-    # Store only what the worker needs. The pending state is cleared.
-    _save_monitor(
-        uid,
-        {
-            "refresh_token": refresh,
-            "access_token": token.get("access_token", ""),
-            "expires_at": int(time.time()) + int(token.get("expires_in", 3600)),
-        },
-    )
-    _set_status(uid, "connected")
+    # New connection: no checkpoint yet, so the first check looks back one day only.
+    store.put(uid, {"refresh_token": refresh, "history_id": None,
+                    "lease_until": 0, "status": "ok"})
+    _set_status(db, uid, "connected")
     return _html(200, "Monitoring connected", "You can return to PhishNet.")
 
 
-def status(uid):
-    return _resp(200, {"status": _get_status(uid)})
+def status(uid, db):
+    return _resp(200, {"status": _get_status(db, uid)})
 
 
-def disconnect(uid):
-    """Delete stored tokens, then mark disconnected. Idempotent.
+def register_device(uid, token, platform, db):
+    """Store one push token for the user. Doc ID is a hash, so the raw token is never a key."""
+    if not isinstance(token, str) or not (20 <= len(token) <= 4096):
+        return _resp(400, {"error": "invalid_token"})
+    if platform not in ("ios", "android"):
+        return _resp(400, {"error": "invalid_platform"})
+    doc_id = hashlib.sha256(token.encode()).hexdigest()[:32]
+    (db.collection("users").document(uid).collection("devices").document(doc_id)
+     .set({"token": token, "platform": platform,
+           "updatedAt": firestore.SERVER_TIMESTAMP}))
+    return _resp(200, {"registered": True})
 
-    If deletion fails, the status is NOT changed and the caller is told to
+
+def disconnect(uid, store, db):
+    """Revoke at Google, delete the stored token, then mark disconnected. Idempotent.
+
+    If the local delete fails, status is NOT changed and the caller is asked to
     retry, so the app never reports a disconnect that did not happen.
     """
+    entry = store.get(uid)
+    if entry.get("refresh_token"):
+        gmail.revoke(entry["refresh_token"])  # best effort; local delete still runs
     try:
-        _delete_monitor(uid)
+        store.delete(uid)
     except Exception as e:
-        print(f"monitor secret delete failed: {type(e).__name__}")
+        print(f"monitor store delete failed: {type(e).__name__}")
         return _resp(503, {"error": "disconnect_failed", "retryable": True})
-    _set_status(uid, "disconnected")
+    _set_status(db, uid, "disconnected")
     return _resp(200, {"status": "disconnected"})
 
 
@@ -355,15 +259,14 @@ def _verify_uid(event):
 def handler(event, context):
     try:
         secrets_map = _init()
+        store = MonitorStore(_sm)
         method = (
             (event.get("requestContext") or {}).get("http", {}).get("method")
-            or event.get("httpMethod")
-            or "POST"
+            or event.get("httpMethod") or "POST"
         ).upper()
 
-        # Yahoo redirects the browser back here with GET query parameters.
         if method == "GET":
-            return callback(event.get("queryStringParameters") or {}, secrets_map)
+            return callback(event.get("queryStringParameters") or {}, secrets_map, store, _db)
 
         uid, err = _verify_uid(event)
         if err:
@@ -372,14 +275,17 @@ def handler(event, context):
         body = event.get("body") or "{}"
         if event.get("isBase64Encoded"):
             body = base64.b64decode(body).decode("utf-8")
-        action = json.loads(body).get("action")
+        payload = json.loads(body)
+        action = payload.get("action")
 
+        if action == "register_device":
+            return register_device(uid, payload.get("token"), payload.get("platform"), _db)
         if action == "start":
-            return start(uid, secrets_map)
+            return start(uid, secrets_map, store, _db)
         if action == "status":
-            return status(uid)
+            return status(uid, _db)
         if action == "disconnect":
-            return disconnect(uid)
+            return disconnect(uid, store, _db)
         return _resp(400, {"error": "unknown_action"})
     except Exception as e:
         print(f"unhandled error: {type(e).__name__}")

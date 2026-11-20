@@ -1,223 +1,258 @@
-import importlib.util
-import logging
+"""Tests for the Gmail poll core and poll configuration.
+
+Run from backend/: .venv-test/bin/python -m pytest -q tests/test_monitor_worker.py
+"""
+
+import copy
+import os
+import sys
+from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-WORKER_PATH = Path(__file__).resolve().parents[1] / "monitor" / "worker.py"
-spec = importlib.util.spec_from_file_location("phishnet_worker", WORKER_PATH)
-worker = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(worker)
+MONITOR_DIR = Path(__file__).resolve().parents[1] / "monitor"
+LAMBDA_DIR = Path(__file__).resolve().parents[1] / "lambda"
+sys.path[:0] = [str(MONITOR_DIR), str(LAMBDA_DIR)]
 
-SECRET_TEXT = "pay the fee at http://evil.example now SECRET-TOKEN-123"
+import gmail  # noqa: E402
+import poll  # noqa: E402
+import worker  # noqa: E402
+
+UID = "user_abc123"
+SECRET_BODY = "pay the fee at http://evil.example now SECRET-BODY-123"
 
 
 class FakeStore:
-    def __init__(self):
-        self.states = {}
+    def __init__(self, state=None):
+        self.state = state or worker.State()
         self.saves = 0
 
     def load(self, uid):
-        import copy
-        return copy.deepcopy(self.states.get(uid, worker.State()))
+        return copy.deepcopy(self.state)
 
     def save(self, uid, state):
-        import copy
         self.saves += 1
-        self.states[uid] = copy.deepcopy(state)
+        self.state = copy.deepcopy(state)
 
 
 class FakeMail:
-    """messages: list of (message_id, text) indexed by IMAP-style uid 1..n."""
+    def __init__(self, ids=(), labels=None, unread=None, bulk=(), changes=None,
+                 recent=None, full_error=None):
+        self.ids = list(ids)
+        self.labels = labels or {}
+        self.unread = set(unread or [])
+        self.bulk = set(bulk)
+        self._changes = changes  # callable or None
+        self._recent = recent or ("H-RECENT", self.ids)
+        self.full_error = full_error
+        self.full_calls = []
+        self.recent_calls = 0
 
-    def __init__(self, messages, validity=7, errors=None):
-        self.messages = {i + 1: m for i, m in enumerate(messages)}
-        self.validity = validity
-        self.errors = errors or {}  # uid -> exception to raise on fetch
-        self.fetched = []
+    def changes(self, history_id):
+        if self._changes:
+            return self._changes(history_id)
+        return ("H-NEW", self.ids)
 
-    def list_uids(self, after_uid, limit):
-        uids = sorted(u for u in self.messages if u > after_uid)[:limit]
-        return self.validity, uids
+    def recent(self, limit):
+        self.recent_calls += 1
+        return self._recent
 
-    def fetch(self, uid):
-        self.fetched.append(uid)
-        if uid in self.errors:
-            err = self.errors[uid]
-            if isinstance(err, list):
-                raise err.pop(0)
-            raise err
-        mid, text = self.messages[uid]
-        return worker.Message(mid, text)
+    def metadata(self, mid):
+        return {
+            "labels": set(self.labels.get(mid, {"INBOX"})),
+            "unread": mid in self.unread,
+            "bulk": mid in self.bulk,
+        }
 
-
-class Recorder:
-    def __init__(self, risk="low", fail=None):
-        self.calls = []
-        self.risk = risk
-        self.fail = fail or []  # list of exceptions raised in order first
-
-    def analyze(self, text):
-        if self.fail:
-            raise self.fail.pop(0)
-        return {"risk_level": self.risk, "scam_percentage": 10}
-
-
-class SaveLog:
-    def __init__(self):
-        self.docs = {}
-        self.writes = 0
-
-    def __call__(self, uid, key, assessment):
-        self.writes += 1
-        self.docs[key] = assessment  # idempotent on key
+    def full(self, mid):
+        self.full_calls.append(mid)
+        if self.full_error:
+            raise self.full_error
+        return {"subject": "Hello", "from": "a@example.com", "text": SECRET_BODY}
 
 
-def _run(store, mail, rec, saves, now=lambda: 1000.0):
-    return worker.run_once("u1", store, mail, rec.analyze, saves,
-                           now=now, sleep=lambda s: None)
+def _run(store, mail, risk="low", save=None, scanned=(), alerts=None,
+         analyze=None, cap=1):
+    saved = save if save is not None else []
+    alerted = alerts if alerts is not None else []
+    analyze = analyze or (lambda text: {"risk_level": risk})
+    summary = worker.run_once(
+        UID, store, mail, analyze,
+        save_scan=lambda u, k, a: saved.append((k, a["risk_level"])),
+        already_scanned=lambda u, k: k in scanned,
+        alert=lambda u, keys: alerted.append(list(keys)),
+        cap=cap, now=lambda: 1000.0, sleep=lambda s: None,
+    )
+    return summary, saved, alerted
 
 
-def test_new_messages_are_saved_and_checkpoint_advances():
-    store, saves = FakeStore(), SaveLog()
-    mail = FakeMail([("<a@x>", "one"), ("<b@x>", "two")])
-    out = _run(store, mail, Recorder(), saves)
-    assert out["result"] == "ok" and out["saved"] == 2
-    assert store.states["u1"].last_uid == 2
-    assert store.states["u1"].lease_until == 0.0
+def test_first_run_resyncs_recent_mail_and_sets_checkpoint():
+    store, mail = FakeStore(), FakeMail(ids=["m1"])
+    summary, saved, _ = _run(store, mail)
+    assert mail.recent_calls == 1
+    assert summary["result"] == "ok" and summary["saved"] == 1
+    assert store.state.history_id == "H-RECENT"
 
 
-def test_second_run_with_no_new_mail_is_a_noop():
-    store, saves = FakeStore(), SaveLog()
-    mail = FakeMail([("<a@x>", "one")])
-    _run(store, mail, Recorder(), saves)
-    out = _run(store, mail, Recorder(), saves)
-    assert out["saved"] == 0 and saves.writes == 1
+def test_safe_email_is_saved_but_never_alerted():
+    store, mail = FakeStore(), FakeMail(ids=["m1"])
+    summary, saved, alerted = _run(store, mail, risk="low")
+    assert len(saved) == 1 and alerted == []
+    assert summary["high_risk"] == 0
 
 
-def test_same_message_id_in_two_places_is_saved_once():
-    store, saves = FakeStore(), SaveLog()
-    mail = FakeMail([("<dup@x>", "one"), ("<dup@x>", "one again")])
-    out = _run(store, mail, Recorder(), saves)
-    assert out["saved"] == 1 and out["duplicates"] == 1
-    assert saves.writes == 1
+def test_high_risk_is_batched_into_one_alert_per_run():
+    store = FakeStore(worker.State(history_id="H0"))
+    mail = FakeMail(ids=["m1", "m2"])
+    _, saved, alerted = _run(store, mail, risk="high", cap=3)
+    assert len(saved) == 2
+    assert len(alerted) == 1 and len(alerted[0]) == 2
 
 
-def test_overlapping_run_is_rejected_while_lease_is_held():
-    store, saves = FakeStore(), SaveLog()
-    store.states["u1"] = worker.State(lease_until=2000.0)
-    out = _run(store, FakeMail([("<a@x>", "one")]), Recorder(), saves,
-               now=lambda: 1000.0)
-    assert out["result"] == "busy" and saves.writes == 0
+def test_already_scanned_message_is_not_analyzed_again():
+    key = worker.dedupe_key(UID, "m1")
+    store, mail = FakeStore(worker.State(history_id="H0")), FakeMail(ids=["m1"])
+    summary, saved, _ = _run(store, mail, scanned={key})
+    assert summary["duplicates"] == 1
+    assert saved == [] and mail.full_calls == []
 
 
-def test_expired_lease_is_taken_over():
-    store, saves = FakeStore(), SaveLog()
-    store.states["u1"] = worker.State(lease_until=500.0)
-    out = _run(store, FakeMail([("<a@x>", "one")]), Recorder(), saves,
-               now=lambda: 1000.0)
-    assert out["result"] == "ok"
+def test_cap_limits_analyses_and_extra_mail_is_counted_not_scanned():
+    store = FakeStore(worker.State(history_id="H0"))
+    mail = FakeMail(ids=["m1", "m2", "m3"])
+    summary, saved, _ = _run(store, mail, cap=1)
+    assert len(saved) == 1
+    assert summary["skipped_over_cap"] == 2
+    assert store.state.history_id == "H-NEW"  # checkpoint still advances
 
 
-def test_lease_is_released_even_when_run_fails():
-    store, saves = FakeStore(), SaveLog()
-    mail = FakeMail([("<a@x>", "one")], errors={1: worker.AuthError()})
-    _run(store, mail, Recorder(), saves)
-    assert store.states["u1"].lease_until == 0.0
+def test_unread_first_and_bulk_last_before_the_cap():
+    store = FakeStore(worker.State(history_id="H0"))
+    mail = FakeMail(ids=["bulk", "read", "unread"], unread=["unread"], bulk=["bulk"])
+    _run(store, mail, cap=1)
+    assert mail.full_calls == ["unread"]
 
 
-def test_transient_error_is_retried_then_succeeds():
-    store, saves = FakeStore(), SaveLog()
-    rec = Recorder(fail=[worker.TransientError(), worker.TransientError()])
-    out = _run(store, FakeMail([("<a@x>", "one")]), rec, saves)
-    assert out["result"] == "ok" and out["saved"] == 1
+def test_sent_mail_is_ignored():
+    store = FakeStore(worker.State(history_id="H0"))
+    mail = FakeMail(ids=["sent"], labels={"sent": {"SENT"}})
+    summary, saved, _ = _run(store, mail)
+    assert saved == [] and mail.full_calls == []
 
 
-def test_exhausted_transient_error_stops_without_skipping_message():
-    store, saves = FakeStore(), SaveLog()
-    rec = Recorder(fail=[worker.TransientError()] * worker.MAX_ATTEMPTS)
-    mail = FakeMail([("<a@x>", "one"), ("<b@x>", "two")])
-    out = _run(store, mail, rec, saves)
-    assert out["result"] == "retry" and saves.writes == 0
-    assert store.states["u1"].last_uid == 0  # next run starts from here
+def test_expired_checkpoint_resyncs_recent_mail():
+    def expired(_):
+        raise gmail.HistoryExpired()
+
+    store = FakeStore(worker.State(history_id="OLD"))
+    mail = FakeMail(ids=["m1"], changes=expired)
+    _run(store, mail)
+    assert mail.recent_calls == 1
+    assert store.state.history_id == "H-RECENT"
 
 
-def test_permanent_error_skips_only_that_message():
-    store, saves = FakeStore(), SaveLog()
-    rec = Recorder(fail=[worker.PermanentError()])
-    out = _run(store, FakeMail([("<a@x>", "one"), ("<b@x>", "two")]), rec, saves)
-    assert out["skipped"] == 1 and out["saved"] == 1
-    assert store.states["u1"].last_uid == 2
+def test_transient_error_keeps_checkpoint_so_next_run_retries():
+    def flaky(_):
+        raise gmail.TransientError()
+
+    store = FakeStore(worker.State(history_id="H0"))
+    summary, _, _ = _run(store, FakeMail(ids=["m1"], changes=flaky))
+    assert summary["result"] == "retry"
+    assert store.state.history_id == "H0"
 
 
-def test_auth_error_marks_reauth_needed_and_later_runs_stop():
-    store, saves = FakeStore(), SaveLog()
-    mail = FakeMail([("<a@x>", "one")], errors={1: worker.AuthError()})
-    out = _run(store, mail, Recorder(), saves)
-    assert out["result"] == "reauth_needed"
-    fetched_before = len(mail.fetched)
-    out2 = _run(store, mail, Recorder(), saves)
-    assert out2["result"] == "reauth_needed"
-    assert len(mail.fetched) == fetched_before
+def test_auth_error_marks_reauth_and_stops():
+    def revoked(_):
+        raise gmail.AuthError()
+
+    store = FakeStore(worker.State(history_id="H0"))
+    summary, saved, _ = _run(store, FakeMail(changes=revoked))
+    assert summary["result"] == "reauth_needed"
+    assert store.state.status == "reauth_needed" and saved == []
 
 
-def test_pagination_is_bounded_per_run_and_continues_next_run(monkeypatch):
-    monkeypatch.setattr(worker, "MAX_MESSAGES_PER_RUN", 3)
-    store, saves = FakeStore(), SaveLog()
-    mail = FakeMail([(f"<m{i}@x>", f"t{i}") for i in range(5)])
-    out = _run(store, mail, Recorder(), saves)
-    assert out["saved"] == 3 and store.states["u1"].last_uid == 3
-    out2 = _run(store, mail, Recorder(), saves)
-    assert out2["saved"] == 2 and store.states["u1"].last_uid == 5
+def test_reauth_state_is_not_polled_again():
+    store = FakeStore(worker.State(history_id="H0", status="reauth_needed"))
+    mail = FakeMail(ids=["m1"])
+    summary, saved, _ = _run(store, mail)
+    assert summary["result"] == "reauth_needed" and mail.full_calls == []
 
 
-def test_uid_validity_change_resets_checkpoint_without_duplicate_saves():
-    store, saves = FakeStore(), SaveLog()
-    _run(store, FakeMail([("<a@x>", "one")], validity=7), Recorder(), saves)
-    out = _run(store, FakeMail([("<a@x>", "one")], validity=9), Recorder(), saves)
-    assert out["duplicates"] == 1 and saves.writes == 1
-    assert store.states["u1"].uid_validity == 9
+def test_permanent_message_error_is_skipped_and_run_continues():
+    store = FakeStore(worker.State(history_id="H0"))
+    mail = FakeMail(ids=["m1"], full_error=gmail.PermanentError())
+    summary, saved, _ = _run(store, mail)
+    assert summary["failed"] == 1 and saved == []
+    assert store.state.history_id == "H-NEW"
 
 
-def test_high_risk_keys_are_reported_for_alerts():
-    store, saves = FakeStore(), SaveLog()
-    out = _run(store, FakeMail([("<a@x>", "one")]),
-               Recorder(risk="high"), saves)
-    assert out["high_risk"] == [worker.dedupe_key(worker.Message("<a@x>", ""), 1)]
+def test_transient_analysis_error_retries_then_gives_up_without_checkpoint_move():
+    calls = []
+
+    def analyze(text):
+        calls.append(text)
+        raise gmail.TransientError()
+
+    store = FakeStore(worker.State(history_id="H0"))
+    summary, saved, _ = _run(store, FakeMail(ids=["m1"]), analyze=analyze)
+    assert len(calls) == worker.MAX_ATTEMPTS
+    assert summary["result"] == "retry" and store.state.history_id == "H0"
 
 
-def test_seen_window_is_capped(monkeypatch):
-    monkeypatch.setattr(worker, "SEEN_LIMIT", 2)
-    monkeypatch.setattr(worker, "MAX_MESSAGES_PER_RUN", 10)
-    store, saves = FakeStore(), SaveLog()
-    mail = FakeMail([(f"<m{i}@x>", "t") for i in range(4)])
-    _run(store, mail, Recorder(), saves)
-    assert len(store.states["u1"].seen) == 2
+def test_busy_lease_skips_the_run():
+    store = FakeStore(worker.State(history_id="H0", lease_until=2000.0))
+    summary, _, _ = _run(store, FakeMail(ids=["m1"]))
+    assert summary["result"] == "busy"
 
 
-def test_logs_never_contain_message_text_or_tokens(caplog):
-    caplog.set_level(logging.DEBUG, logger="monitor.worker")
-    store, saves = FakeStore(), SaveLog()
-    mail = FakeMail([("<secret-id@x>", SECRET_TEXT)],
-                    errors={})
-    rec = Recorder(fail=[worker.PermanentError("boom " + SECRET_TEXT)])
-    _run(store, mail, rec, saves)
-    logged = " ".join(r.getMessage() for r in caplog.records)
-    assert "SECRET-TOKEN-123" not in logged
-    assert "evil.example" not in logged
-    assert "secret-id" not in logged
+def test_logs_and_summaries_never_contain_content():
+    store = FakeStore(worker.State(history_id="H0"))
+    with patch.object(worker.log, "info") as info, patch.object(worker.log, "warning") as warn:
+        summary, _, _ = _run(store, FakeMail(ids=["m1"]))
+    text = repr(info.call_args_list) + repr(warn.call_args_list) + repr(summary)
+    assert "SECRET-BODY" not in text and "m1" not in text
 
 
-@pytest.mark.parametrize("mid,expected_same", [
-    ("<a@x>", True), ("<a@x>", True),
+# ---------- poll configuration ----------
+
+
+@pytest.mark.parametrize("env,today,expected", [
+    ({}, date(2026, 11, 20), (False, 0)),                                   # off by default
+    ({"MONITOR_ENABLED": "true"}, date(2026, 11, 20), (False, 0)),           # no end date: fail closed
+    ({"MONITOR_ENABLED": "true", "MONITOR_UNTIL": "2026-12-19"},
+     date(2026, 12, 20), (False, 0)),                                       # past the window
+    ({"MONITOR_ENABLED": "true", "MONITOR_UNTIL": "2026-12-19"},
+     date(2026, 11, 20), (True, 1)),                                        # default cap is 1
+    ({"MONITOR_ENABLED": "true", "MONITOR_UNTIL": "2026-12-19",
+      "MONITOR_MAX_PER_RUN": "9"}, date(2026, 11, 20), (True, 3)),          # hard ceiling 3
+    ({"MONITOR_ENABLED": "true", "MONITOR_UNTIL": "2026-12-19",
+      "MONITOR_MAX_PER_RUN": "0"}, date(2026, 11, 20), (True, 1)),          # floor 1
+    ({"MONITOR_ENABLED": "TRUE", "MONITOR_UNTIL": "not-a-date"},
+     date(2026, 11, 20), (False, 0)),                                       # bad date: fail closed
 ])
-def test_dedupe_key_is_stable_for_same_message_id(mid, expected_same):
-    k1 = worker.dedupe_key(worker.Message(mid, "x"), 1)
-    k2 = worker.dedupe_key(worker.Message(mid, "y"), 99)
-    assert (k1 == k2) is expected_same
+def test_poll_config_fails_closed(env, today, expected):
+    with patch.dict(os.environ, env, clear=True):
+        assert poll._config(today) == expected
 
 
-def test_dedupe_key_falls_back_to_uid_without_message_id():
-    k1 = worker.dedupe_key(worker.Message(None, "x"), 1)
-    k2 = worker.dedupe_key(worker.Message(None, "x"), 2)
-    assert k1 != k2
+# ---------- retry safety in the poll wiring ----------
+
+
+class AlreadyExists(Exception):
+    pass
+
+
+def test_retry_of_an_already_saved_scan_is_not_an_error():
+    with patch.object(poll.handler, "_save_scan", side_effect=AlreadyExists()):
+        poll._save_scan(UID, "k" * 64, {"risk_level": "high"})  # must not raise
+
+
+def test_repeat_alert_for_same_scans_is_not_written_twice():
+    from unittest.mock import MagicMock
+    db = MagicMock()
+    ref = db.collection.return_value.document.return_value.collection.return_value.document.return_value
+    ref.get.return_value.exists = True  # already written on a previous attempt
+    poll._write_alert(db, UID, ["a" * 64])
+    ref.set.assert_not_called()
