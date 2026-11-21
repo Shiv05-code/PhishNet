@@ -153,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _loadingStats = false;
   Timer? _autoRefresh;
   Timer? _retryTimer;
+  Timer? _dwellTimer;
   int _statsFailures = 0;
 
   ScanService? _ownedService;
@@ -168,6 +169,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isPlus = false;
   StreamSubscription<Map<String, dynamic>?>? _plusSub;
   StreamSubscription<void>? _alertSub;
+  bool _reloadAfterLoad = false;
 
   static final Set<String> _reviewedDemo = {};
 
@@ -251,6 +253,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     _autoRefresh?.cancel();
+    _dwellTimer?.cancel();
     _retryTimer?.cancel();
     _plusSub?.cancel();
     _alertSub?.cancel();
@@ -271,7 +274,11 @@ class _HomeScreenState extends State<HomeScreen>
   /// Fetches the summary unless a fresh copy is cached. Failures keep the
   /// numbers already on screen, so Home never breaks when offline.
   Future<void> _loadStats({bool force = false}) async {
-    if (_loadingStats) return;
+    // A forced refresh that arrives mid-load (for example, a new alert) runs once more after it.
+    if (_loadingStats) {
+      if (force) _reloadAfterLoad = true;
+      return;
+    }
     _retryTimer?.cancel();
     _retryTimer = null;
     final key = _cacheKey();
@@ -296,6 +303,10 @@ class _HomeScreenState extends State<HomeScreen>
       if (error is ScanException && error.retryable) _scheduleStatsRetry();
     } finally {
       _loadingStats = false;
+      if (_reloadAfterLoad && mounted) {
+        _reloadAfterLoad = false;
+        unawaited(_loadStats(force: true));
+      }
     }
   }
 
@@ -407,12 +418,24 @@ class _HomeScreenState extends State<HomeScreen>
       });
     }
     if (!mounted) return;
+    // Clear the menu dot and the card after 5 seconds on Results, without
+    // waiting for a server refresh. Returning clears them right away too.
+    _dwellTimer?.cancel();
+    _dwellTimer = Timer(const Duration(seconds: 5), () => _markLocallyReviewed(scan.id));
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ResultsScreen(result: scan.result),
       ),
     );
+    _dwellTimer?.cancel();
+    _markLocallyReviewed(scan.id);
     if (mounted) _loadStats(force: true);
+  }
+
+  void _markLocallyReviewed(String scanId) {
+    if (!mounted) return;
+    setState(() => _stats = _stats.withReviewed(scanId));
+    _publishAttention();
   }
 
   @override

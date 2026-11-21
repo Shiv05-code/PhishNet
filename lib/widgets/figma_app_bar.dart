@@ -54,22 +54,35 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
                     width: 53,
                     height: 44,
                     child: Stack(
+                      clipBehavior: Clip.none,
                       children: [
                         const CustomPaint(
                           size: Size(53, 44),
                           painter: _MenuPainter(),
                         ),
-                        // Red dot for unread alerts, except on Home where they show.
+                        // Unread count badge, except on Home where alerts show.
+                        // Vertically centered and just outside the right edge.
                         if (count > 0 && title != 'Home')
-                          const Positioned(
-                            top: 6,
-                            right: 4,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
+                          Positioned(
+                            top: 7,
+                            right: -5,
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              alignment: Alignment.center,
+                              decoration: const BoxDecoration(
                                 color: Color(0xFFD95E65),
                                 shape: BoxShape.circle,
                               ),
-                              child: SizedBox(width: 12, height: 12),
+                              child: Text(
+                                count > 9 ? '9+' : '$count',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1,
+                                ),
+                              ),
                             ),
                           ),
                       ],

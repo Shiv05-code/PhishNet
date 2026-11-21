@@ -52,7 +52,12 @@ class MonitoringService {
        _tokenProvider = tokenProvider ?? _firebaseToken,
        _endpoint = endpoint ?? _defaultEndpoint;
 
-  static const _defaultEndpoint = String.fromEnvironment('MONITOR_API_URL');
+  // Connect Function URL. Not a secret: every request needs a Firebase ID token.
+  // The --dart-define still overrides it when set.
+  static const _defaultEndpoint = String.fromEnvironment(
+    'MONITOR_API_URL',
+    defaultValue: 'https://vgnizq3oywbsr2rdjvu6hrs4yi0djeyn.lambda-url.us-east-2.on.aws/',
+  );
 
   final http.Client _client;
   final Future<String?> Function() _tokenProvider;

@@ -8,7 +8,9 @@ import 'package:flutter/material.dart';
 
 import '../screens/home_screen.dart';
 import '../widgets/auth_widgets.dart';
+import 'attention_state.dart';
 import 'monitoring_service.dart';
+import 'scan_service.dart';
 
 /// Shared with MaterialApp so a notification tap can open Home from anywhere.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
@@ -23,6 +25,16 @@ class PushService {
   /// Fires when an alert arrives while the app is open. Home refreshes on it.
   static final StreamController<void> _alerts = StreamController<void>.broadcast();
   static Stream<void> get alerts => _alerts.stream;
+
+  /// Updates the menu badge from any screen, not only Home.
+  static Future<void> _refreshAttentionCount() async {
+    try {
+      final stats = await ScanService().getHomeStats();
+      attentionCount.value = stats.attention48h;
+    } catch (_) {
+      // The badge catches up on the next Home load.
+    }
+  }
 
   static bool _isAlert(RemoteMessage message) => message.data['type'] == 'monitor_alert';
 
@@ -44,6 +56,7 @@ class PushService {
     // Only open Home for a signed-in user. Otherwise the alert shows next time.
     if (_currentUserOrNull() == null) return;
     _alerts.add(null);
+    unawaited(_refreshAttentionCount());
     appNavigatorKey.currentState?.pushAndRemoveUntil(
       fadeRoute(const HomeScreen()),
       (_) => false,
@@ -80,7 +93,10 @@ class PushService {
       _refreshSub ??= messaging.onTokenRefresh.listen((t) => _register(monitor, t));
 
       FirebaseMessaging.onMessage.listen((message) {
-        if (_isAlert(message)) _alerts.add(null);
+        if (_isAlert(message)) {
+          _alerts.add(null);
+          unawaited(_refreshAttentionCount());
+        }
       });
     } catch (e) {
       // Push is a convenience. Failing here must never break Home.
