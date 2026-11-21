@@ -68,7 +68,7 @@ EventBridge Scheduler (one schedule, daily 12:00 Pacific) ──▶ poll Lambda
 
 ## 3. Phased plan
 
-Phase 4 (provenance badges) is deferred. History filtering is out of scope.
+Phase 4 (provenance badges) is partly done: History badges are built (Plus only). The Results badge is still open. History filtering was approved 2026-11-21 and is built (Plus only).
 
 ### Phase 0 — Google Cloud setup (manual, team)
 - Create a Google Cloud project. Enable the Gmail API.
@@ -94,17 +94,38 @@ Phase 4 (provenance badges) is deferred. History filtering is out of scope.
 - **Pause for review.**
 
 ### Phase 2 — App flow
-- Remove the monitoring card from History (`history_screen.dart:149`).
+- Status: built in code, not yet verified on device.
+- Remove the monitoring card from History. Done (card and local prefs removed).
 - Use the Home card as the only entry point. States: Off, Connected, Checking,
-  **Paused — reconnect needed (token expired)**, Error. Tap to connect or
-  reconnect.
+  **Paused — reconnect needed (token expired)**, Error, Unavailable. Tap to
+  connect or reconnect. Done.
 - Home attention cards for high-risk alerts. Tap opens that analysis in
-  Results.
-- Large tap targets, plain language, status announced to screen readers.
+  Results. Done.
+- Large tap targets (48pt buttons), plain language, status announced to screen
+  readers.
+- Status comes from the backend (`status` action), never from local prefs.
+  Done. Yahoo wording removed from the Home card and monitoring service.
+- Non-Plus users see generic copy and never trigger a status call. Done.
+- Turning off asks for confirmation. Done.
+- Known bug, fix pending: a build without `--dart-define=MONITOR_API_URL` left
+  the card on "Checking" forever. The app should show Unavailable instead.
+- Loading state: show the existing `SwimmingFish` animation with short rotating
+  phrases (for example "Casting a line…", "Reeling in your inbox…",
+  "Checking the waters…", "Scanning the depths…"). Approved idea, not built yet.
 - **Pause for review.**
 
 ### Phase 3 — Notifications
-- Add `firebase_messaging`. Configure Android and iOS (APNs).
+- Status: code written and analyzed, not yet verified on device. Needs Xcode,
+  APNs, and a backend deploy (see section 9).
+- Add `firebase_messaging`. Configure iOS (APNs). Android deferred: the app is
+  iOS-only for now.
+- Device tokens are stored by the backend (`register_device` action) under
+  `users/{uid}/devices`, hashed doc IDs. Client rules are unchanged, and the
+  client never reads that path.
+- Push text is generic ("Possible scam found") and never includes email content.
+  Sent only for new high-risk alerts, one per run. Dead tokens are removed.
+- The menu and Home show the unread count only for Plus users, and only for
+  live-monitoring alerts. Manual checks never count toward it.
 - Persisted unread count. Red menu badge when unread and not on Home. Drawer
   emphasizes Home. Selecting Home shows status and the attention card.
 - System notification tap → Home → alert card → Results.
@@ -329,3 +350,58 @@ Set in Lambda environment config, same style as `MOCK_CLAUDE`:
 
 Given per phase, after implementation. Phase 0 is the setup checklist in
 `docs/live-monitoring-setup.md`.
+
+## 9. Approved decisions and progress log (running)
+
+Updated as work lands. Items marked "approved" were agreed in conversation.
+
+### Decisions
+- Architecture and schedule: unchanged from sections 1 to 3.4.
+- Google redirect URI: the Function URL with trailing slash is registered in the
+  Google console, and the test account is added (approved).
+- Platform: iOS only for now. Android push is deferred (approved).
+- Attention cards and the Home alert count are Plus-only and cover live-monitoring
+  alerts only (approved).
+- Non-Plus Home status: positive phrases ("Hooray! No messages need your
+  attention.") and a neutral pointer to Results when a recent manual check was
+  high risk. No alert styling or attention cards (approved).
+- Locked Live Monitoring card for non-Plus users: generic copy, grayed out, tap
+  opens the upgrade popup that links to the plans page (approved).
+- PLUS badge: plain text pill in the app bar, on the right. No star icon
+  (star was tried and rejected). Title shrinks only when space is short
+  (approved).
+- Loading state: fish animation plus rotating short phrases (approved in idea,
+  not built).
+- Privacy: no email content in logs or push text. Tokens are never printed.
+
+### Progress (as of 2026-11-21)
+- Commits: `99cca91` backend (Phase 1). `f575e6f` app, Phases 2 and 3 together (the files depend on each other). `4122c98` loading state.
+- Verified on iPhone: Home card states, device registration, in-app banner, background banner, closed-app tap opens PhishNet, attention card opens Results, one real high-risk alert from one manual run (3 checked, 1 high-risk), menu badge.
+- Built, not yet on device: menu badge (26px, centered on the icon's right edge, slightly outside it). Attention clears after 5s on Results, or on return, without waiting for a server refresh. History source badges ("Live Monitor" / "In-app check") and a filter (All / Live Monitor / In-app check), both Plus only. Backend history now returns `source`. `phishnet-scan` was updated with only `handler.py` swapped into the existing zip.
+- Fixed: alert text now says "1 message ... looks dangerous" or "N messages ... look dangerous." Poll redeployed; still off.
+- Not verified yet: closed-app tap to Home, card, Results (via a Console test with `type` = `monitor_alert`, which needs no scan). Locked phone (via `flutter run --profile`). Safe emails produce no alert. Duplicate check (needs a second run). Turn Off and reconnect. Token expiry.
+- Still open: Results badge (Phase 4). Android is deferred. Schedule stays off until Phase 5 passes.
+
+### Verified 2026-11-21 (final batch)
+- Locked phone and signed out: lock-screen banner, tap opens sign-in, sign-in shows Home at 3, menu badge 3.
+- Scan run: 3 checked, 1 high-risk. Polling turned off afterward.
+- Commits: `bfd5ea5`, `85ee788`, `79bb237`.
+
+### Open bugs (retest later)
+- **Home stays stale after an alert push.** Fix written: a forced reload that arrives mid-load runs once more. Sign-in case verified 2026-11-21. Live case (Home open while a push arrives) not yet verified.
+- **Menu count lags on non-Home screens.** Verified fixed 2026-11-21 (menu showed 2 on tap). A live alert that arrives while the user is on Capture (or a tap that opens Home) does not update the menu badge until Home finishes loading. Fix written (`push_service.dart` refreshes the count on every alert push), not yet verified on device. Retest with a real push on Capture (lock-screen or closed-app batch steps).
+- **Retest path:** the gcloud account lacks `cloudmessaging.messages.create`, so manual FCM sends via curl are blocked. Options: grant "Firebase Cloud Messaging Admin" to that account, or re-run a monitored check with a new email.
+
+### Ideas (not approved)
+- Show the same source badge on the Results page (Plus only).
+- Optional: make the 5-second clear instant when the user opens the card.
+
+### Deploy notes
+- `backend/scripts/deploy_monitor.sh` (connect and poll functions): required
+  for device registration, push sending, and any status change to take effect
+  live. Run it before testing.
+- `backend/lambda/handler.py` (`phishnet-scan`): deploy last, at the end of the
+  project.
+- Builds that test Live Monitoring need `--dart-define=MONITOR_API_URL=<Function
+  URL>`.
+
