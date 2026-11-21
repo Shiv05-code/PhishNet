@@ -17,6 +17,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../widgets/plus_gate.dart';
+import '../widgets/swimming_fish.dart';
 import '../theme/app_typography.dart';
 import '../widgets/auth_widgets.dart';
 import 'capture_screen.dart';
@@ -803,6 +804,51 @@ class _EmptyStateCard extends StatelessWidget {
   }
 }
 
+/// Short, friendly phrases shown while the monitoring status loads.
+class _RotatingPhrase extends StatefulWidget {
+  const _RotatingPhrase();
+
+  @override
+  State<_RotatingPhrase> createState() => _RotatingPhraseState();
+}
+
+class _RotatingPhraseState extends State<_RotatingPhrase> {
+  static const _phrases = [
+    'Casting a line…',
+    'Reeling in your inbox…',
+    'Checking the waters…',
+    'Scanning the depths…',
+  ];
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 2200), (_) {
+      if (mounted) setState(() => _index = (_index + 1) % _phrases.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: Text(
+        _phrases[_index],
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 16, color: AppColors.muted),
+      ),
+    );
+  }
+}
+
 class _MonitoringCard extends StatelessWidget {
   const _MonitoringCard({
     required this.isPlus,
@@ -889,12 +935,14 @@ class _MonitoringCard extends StatelessWidget {
           action: _Action(label: 'Connect Gmail', onPressed: onConnect, filled: true),
         );
       case MonitoringStatus.unknown:
-        return _body(
-          icon: Icons.shield_outlined,
-          iconColor: AppColors.muted,
-          title: 'Checking your inbox status',
-          subtitle: 'One moment.',
-          action: null,
+        return const _SoftCard(
+          child: Column(
+            children: [
+              SwimmingFish(size: 64),
+              SizedBox(height: 12),
+              _RotatingPhrase(),
+            ],
+          ),
         );
     }
   }
