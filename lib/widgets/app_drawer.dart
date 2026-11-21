@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../screens/app_colors.dart' as screen_colors;
+import '../services/attention_state.dart';
 import '../theme/app_colors.dart';
 import '../screens/capture_screen.dart';
 import '../screens/home_screen.dart';
@@ -58,6 +61,7 @@ class AppDrawer extends StatelessWidget {
     Widget screen, {
     bool locked = false,
     double fontSize = AppTypography.heading,
+    int badge = 0,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -68,22 +72,53 @@ class AppDrawer extends StatelessWidget {
             : () => _navigate(context, label, screen),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w700,
-              color: locked ? AppColors.muted : AppColors.primary,
-              shadows: locked
-                  ? null
-                  : const [
-                      Shadow(
-                        color: Color(0x30000000),
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w700,
+                    color: locked ? AppColors.muted : AppColors.primary,
+                    shadows: locked
+                        ? null
+                        : const [
+                            Shadow(
+                              color: Color(0x30000000),
+                              blurRadius: 2,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
+                  ),
+                ),
+              ),
+              if (badge > 0 && !locked) ...[
+                const SizedBox(width: 10),
+                Semantics(
+                  label: '$badge new ${badge == 1 ? 'alert' : 'alerts'}',
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: screen_colors.AppColors.dangerRed,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: ExcludeSemantics(
+                      child: Text(
+                        '$badge',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ],
-            ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -114,7 +149,16 @@ class AppDrawer extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _menuItem(context, 'Home', const HomeScreen(), locked: isGuest),
+                ValueListenableBuilder<int>(
+                  valueListenable: attentionCount,
+                  builder: (context, count, _) => _menuItem(
+                    context,
+                    'Home',
+                    const HomeScreen(),
+                    locked: isGuest,
+                    badge: count,
+                  ),
+                ),
                 _menuItem(context, 'Capture', CaptureScreen(isGuest: isGuest)),
                 _menuItem(context, 'Results', ResultsScreen(isGuest: isGuest)),
                 _menuItem(

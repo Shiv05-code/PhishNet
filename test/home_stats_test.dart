@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -55,6 +56,14 @@ class FakeScanService extends Fake implements ScanService {
 
   int transientFailuresRemaining = 0;
 }
+
+// Attention is Plus-only, so the Home test must provide an active Plus record.
+final _activePlus = <String, dynamic>{
+  'plan': 'plus',
+  'status': 'active',
+  'environment': 'production',
+  'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 30))),
+};
 
 void main() {
   setUp(() {
@@ -125,6 +134,7 @@ void main() {
       HomeScreen(
         authService: FakeAuthService(displayName: 'Ana Lopez'),
         scanService: service,
+        subscriptionStream: Stream.value(_activePlus),
       ),
     );
     await tester.pump(const Duration(seconds: 2));

@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
-/// Connection state for Yahoo inbox monitoring, as reported by the backend.
+/// Live Monitoring state for the Gmail inbox, as reported by the backend.
 enum MonitoringStatus {
   disconnected,
   connected,
   denied,
   error,
+  reauthNeeded,
   unavailable,
   unknown;
 
@@ -22,6 +23,8 @@ enum MonitoringStatus {
         return MonitoringStatus.denied;
       case 'error':
         return MonitoringStatus.error;
+      case 'reauth_needed':
+        return MonitoringStatus.reauthNeeded;
       case 'unavailable':
         return MonitoringStatus.unavailable;
       default:
@@ -38,7 +41,7 @@ class MonitoringException implements Exception {
   String toString() => message;
 }
 
-/// Talks to the phishnet-monitor-connect Lambda. The app never sees Yahoo
+/// Talks to the phishnet-monitor-connect Lambda. The app never sees Google
 /// tokens; it only gets a consent URL and a status string.
 class MonitoringService {
   MonitoringService({
@@ -76,7 +79,10 @@ class MonitoringService {
     return Uri.parse(_endpoint);
   }
 
-  Future<Map<String, dynamic>> _post(String action) async {
+  Future<Map<String, dynamic>> _post(
+    String action, {
+    Map<String, Object?> extra = const {},
+  }) async {
     final token = await _tokenProvider();
     if (token == null || token.isEmpty) {
       throw const MonitoringException('Please sign in to use Live Monitoring.');
@@ -90,7 +96,7 @@ class MonitoringService {
               'Authorization': 'Bearer $token',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({'action': action}),
+            body: jsonEncode({'action': action, ...extra}),
           )
           .timeout(const Duration(seconds: 20));
     } catch (_) {
@@ -123,16 +129,21 @@ class MonitoringService {
     return MonitoringStatus.fromWire(body['status'] as String?);
   }
 
-  /// Returns the Yahoo consent URL. Opening it is up to the caller.
+  /// Returns the Google consent URL. Opening it is up to the caller.
   Future<Uri> startConnect() async {
     final body = await _post('start');
     final url = Uri.tryParse(body['authorizationUrl'] as String? ?? '');
     if (url == null || url.scheme != 'https' || url.host.isEmpty) {
       throw const MonitoringException(
-        "Couldn't start the Yahoo connection. Please try again.",
+        "Couldn't start the Gmail connection. Please try again.",
       );
     }
     return url;
+  }
+
+  /// Registers this device for high-risk alert pushes. Token is never logged.
+  Future<void> registerDevice(String token, String platform) async {
+    await _post('register_device', extra: {'token': token, 'platform': platform});
   }
 
   Future<MonitoringStatus> disconnect() async {

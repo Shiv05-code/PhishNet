@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+
+import '../services/attention_state.dart';
 import '../screens/app_colors.dart';
 import 'figma_gradient_background.dart';
+import 'plus_badge.dart';
 import '../theme/app_typography.dart';
 
 class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -45,10 +48,33 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
           : Builder(
               builder: (context) => IconButton(
                 tooltip: 'Open menu',
-                icon: const SizedBox(
-                  width: 53,
-                  height: 44,
-                  child: CustomPaint(painter: _MenuPainter()),
+                icon: ValueListenableBuilder<int>(
+                  valueListenable: attentionCount,
+                  builder: (context, count, _) => SizedBox(
+                    width: 53,
+                    height: 44,
+                    child: Stack(
+                      children: [
+                        const CustomPaint(
+                          size: Size(53, 44),
+                          painter: _MenuPainter(),
+                        ),
+                        // Red dot for unread alerts, except on Home where they show.
+                        if (count > 0 && title != 'Home')
+                          const Positioned(
+                            top: 6,
+                            right: 4,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Color(0xFFD95E65),
+                                shape: BoxShape.circle,
+                              ),
+                              child: SizedBox(width: 12, height: 12),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
                 onPressed: () => Scaffold.of(context).openDrawer(),
               ),
@@ -79,23 +105,31 @@ class FigmaAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       title: Align(
         alignment: Alignment.centerRight,
-        child: Text(
-          title,
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: titleFontSize,
-            fontWeight: FontWeight.w700,
-            color: AppColors.text,
-            shadows: const [
-              Shadow(
-                color: Color(0x40000000),
-                blurRadius: 4,
-                offset: Offset(0, 2),
-              ),
-            ],
+        // Shrinks the title only when the PLUS badge (or a long title) leaves
+        // too little room. Short titles keep their full size.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(
+            title,
+            maxLines: 1,
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: titleFontSize,
+              fontWeight: FontWeight.w700,
+              color: AppColors.text,
+              shadows: const [
+                Shadow(
+                  color: Color(0x40000000),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
           ),
         ),
       ),
+      actions: const [PlusBadge()],
       centerTitle: false,
     );
   }

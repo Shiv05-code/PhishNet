@@ -2,10 +2,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'firebase_options.dart';
+import 'services/push_service.dart';
 import 'screens/loading_screen.dart';
 import 'widgets/session_timeout_guard.dart';
 import 'theme/app_colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
@@ -20,6 +23,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(PushService.backgroundHandler);
+    unawaited(PushService.attachTapHandlers());
+  }
 
   // Use local Firebase emulators only when explicitly enabled.
   const useEmulators = bool.fromEnvironment(
@@ -46,7 +53,7 @@ class PhishNetApp extends StatelessWidget {
   const PhishNetApp({super.key});
 
   /// Lets the session guard send the user to Login from outside the widget tree.
-  static final _navigatorKey = GlobalKey<NavigatorState>();
+  static final _navigatorKey = appNavigatorKey;
 
   @override
   Widget build(BuildContext context) {

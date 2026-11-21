@@ -39,7 +39,7 @@ void main() {
     expect(await service.status(), MonitoringStatus.unknown);
   });
 
-  test('startConnect returns the Yahoo https consent URL', () async {
+  test('startConnect returns the Google https consent URL', () async {
     final service = _service(
       (_) => http.Response(
         jsonEncode({
