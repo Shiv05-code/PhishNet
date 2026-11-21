@@ -1088,6 +1088,7 @@ def _get_scan_history(uid):
             "summary": data.get("summary"),
             "red_flags": data.get("red_flags", []),
             "next_steps": data.get("next_steps", []),
+            "source": data.get("source", "manual"),
             "createdAt": (
                 created_at.isoformat()
                 if created_at is not None

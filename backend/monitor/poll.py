@@ -138,13 +138,16 @@ def _push_alert(db, uid, alert_id, count):
         tokens = {k: v for k, v in tokens.items() if v}
         if not tokens:
             return
-        noun = "message" if count == 1 else "messages"
+        if count == 1:
+            body = "1 message in your inbox looks dangerous. Tap to review."
+        else:
+            body = f"{count} messages in your inbox look dangerous. Tap to review."
         messages = [
             messaging.Message(
                 token=token,
                 notification=messaging.Notification(
                     title="Possible scam found",
-                    body=f"{count} {noun} in your inbox look dangerous. Tap to review.",
+                    body=body,
                 ),
                 data={"type": "monitor_alert", "alertId": alert_id},
             )
