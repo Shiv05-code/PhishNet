@@ -3,7 +3,7 @@
 Runs only when MONITOR_ENABLED=true and today is on or before MONITOR_UNTIL.
 Each connected user gets at most MONITOR_MAX_PER_RUN analyses (1 to 3).
 Only Plus users are checked. A high-risk result writes one unread alert
-document per run. FCM push waits for Phase 3 (no device tokens yet).
+document per run. Sends one FCM push per run when new high-risk results exist.
 
 Zip layout: this file, worker.py, gmail.py, store.py, connect.py at the root,
 plus lambda/handler.py (imported for analysis, scan save, and secrets).

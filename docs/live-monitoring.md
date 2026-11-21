@@ -94,7 +94,7 @@ Phase 4 (provenance badges) is partly done: History badges are built (Plus only)
 - **Pause for review.**
 
 ### Phase 2 — App flow
-- Status: built in code, not yet verified on device.
+- Status: built and verified on iPhone (2026-11-19 to 2026-11-21). Commit `f575e6f`.
 - Remove the monitoring card from History. Done (card and local prefs removed).
 - Use the Home card as the only entry point. States: Off, Connected, Checking,
   **Paused — reconnect needed (token expired)**, Error, Unavailable. Tap to
@@ -107,16 +107,14 @@ Phase 4 (provenance badges) is partly done: History badges are built (Plus only)
   Done. Yahoo wording removed from the Home card and monitoring service.
 - Non-Plus users see generic copy and never trigger a status call. Done.
 - Turning off asks for confirmation. Done.
-- Known bug, fix pending: a build without `--dart-define=MONITOR_API_URL` left
-  the card on "Checking" forever. The app should show Unavailable instead.
+- Fixed: a build without `--dart-define=MONITOR_API_URL` now shows "Live Monitoring unavailable." The connect URL is also the default, so `flutter run` and `flutter run --profile` both connect.
 - Loading state: show the existing `SwimmingFish` animation with short rotating
   phrases (for example "Casting a line…", "Reeling in your inbox…",
   "Checking the waters…", "Scanning the depths…"). Approved idea, not built yet.
 - **Pause for review.**
 
 ### Phase 3 — Notifications
-- Status: code written and analyzed, not yet verified on device. Needs Xcode,
-  APNs, and a backend deploy (see section 9).
+- Status: verified on iPhone (2026-11-21): foreground, background, closed, locked, and signed out. Commit `f575e6f`. Android deferred.
 - Add `firebase_messaging`. Configure iOS (APNs). Android deferred: the app is
   iOS-only for now.
 - Device tokens are stored by the backend (`register_device` action) under
@@ -143,7 +141,7 @@ Phase 4 (provenance badges) is partly done: History badges are built (Plus only)
 - Enable the schedule only after this passes.
 - **Pause for review.**
 
-### Phase 6 — Yahoo cleanup, then docs
+### Phase 6 — Yahoo cleanup, then docs (done 2026-11-21: Gmail-only wording in app copy, privacy, terms, setup guide, README; sign-up still accepts Yahoo addresses)
 - Keep provider-neutral pieces (state signing, dedupe, worker loop) under
   neutral names. Remove Yahoo connect, `mail-r`, Yahoo config, and tests.
 - Replace History-based monitoring tests with Home-flow tests.
@@ -380,7 +378,7 @@ Updated as work lands. Items marked "approved" were agreed in conversation.
 - Built, not yet on device: menu badge (26px, centered on the icon's right edge, slightly outside it). Attention clears after 5s on Results, or on return, without waiting for a server refresh. History source badges ("Live Monitor" / "In-app check") and a filter (All / Live Monitor / In-app check), both Plus only. Backend history now returns `source`. `phishnet-scan` was updated with only `handler.py` swapped into the existing zip.
 - Fixed: alert text now says "1 message ... looks dangerous" or "N messages ... look dangerous." Poll redeployed; still off.
 - Not verified yet: closed-app tap to Home, card, Results (via a Console test with `type` = `monitor_alert`, which needs no scan). Locked phone (via `flutter run --profile`). Safe emails produce no alert. Duplicate check (needs a second run). Turn Off and reconnect. Token expiry.
-- Still open: Results badge (Phase 4). Android is deferred. Schedule stays off until Phase 5 passes.
+- Still open: Results badge (Phase 4). Skipped for now: Home live update while open (future refinement). Android is deferred. Schedule stays off until Phase 5 passes.
 
 ### Verified 2026-11-21 (final batch)
 - Locked phone and signed out: lock-screen banner, tap opens sign-in, sign-in shows Home at 3, menu badge 3.

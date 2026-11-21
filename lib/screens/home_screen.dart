@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/home_stats.dart';
 import '../models/saved_scan.dart';
-import '../models/scan_result.dart';
 import '../screens/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/home_stats_cache.dart';
@@ -23,7 +22,6 @@ import '../widgets/auth_widgets.dart';
 import 'capture_screen.dart';
 import 'results_screen.dart';
 
-const bool kHomeDemo = true;
 const _statsRetryDelays = [
   Duration(seconds: 3),
   Duration(seconds: 10),
@@ -76,53 +74,6 @@ String _greetingForHour(int hour) {
   return 'Good evening, ';
 }
 
-HomeStats _demoStats(Set<String> reviewed) {
-  final now = DateTime.now();
-  final items = [
-    SavedScan(
-      id: 'demo-1',
-      description: 'Account Suspended - Action Required',
-      createdAt: now.subtract(const Duration(hours: 3)),
-      result: const ScanResult(
-        riskLevel: 'high',
-        scamPercentage: 81,
-        summary:
-            'Fake account warning from a look-alike address (yah00-support.com).',
-        redFlags: ['The sender address imitates Yahoo.'],
-        nextSteps: ['Do not click any links.'],
-      ),
-    ),
-    SavedScan(
-      id: 'demo-2',
-      description: "Congrats! You've won the giveaway",
-      createdAt: now.subtract(const Duration(hours: 9)),
-      result: const ScanResult(
-        riskLevel: 'high',
-        scamPercentage: 97,
-        summary: 'Prize scam that pushes you to act quickly.',
-        redFlags: ['Unexpected prize offer.'],
-        nextSteps: ['Delete the email.'],
-      ),
-    ),
-  ].where((s) => !reviewed.contains(s.id)).toList();
-
-  return HomeStats(
-    weekTotal: 148,
-    weekHigh: 36,
-    weekMedium: 0,
-    weekLow: 112,
-    scamRate: 24,
-    attention48h: items.length,
-    recentHigh: items,
-    lastCheckedAt: now.subtract(const Duration(minutes: 5)),
-    mockAnalysis: true,
-  );
-}
-
-/// Only true when launched with `--dart-define=YAHOO_DEMO=true`. Shows the
-/// "sample data" note for Yahoo demo analysis runs.
-const bool yahooDemoMode = bool.fromEnvironment('YAHOO_DEMO');
-
 class HomeScreen extends StatefulWidget {
   final AuthService? authService;
   final ScanService? scanService;
@@ -170,8 +121,6 @@ class _HomeScreenState extends State<HomeScreen>
   StreamSubscription<Map<String, dynamic>?>? _plusSub;
   StreamSubscription<void>? _alertSub;
   bool _reloadAfterLoad = false;
-
-  static final Set<String> _reviewedDemo = {};
 
   @override
   void initState() {
@@ -410,13 +359,9 @@ class _HomeScreenState extends State<HomeScreen>
   /// list. Results opens right away; the refresh runs on return.
   Future<void> _openAttention(SavedScan scan) async {
     final service = widget.scanService ?? (_ownedService ??= ScanService());
-    if (scan.id.startsWith('demo-')) {
-      setState(() => _reviewedDemo.add(scan.id));
-    } else {
-      service.markScanReviewed(scan.id).catchError((Object error) {
-        debugPrint('Mark reviewed failed: $error');
-      });
-    }
+    service.markScanReviewed(scan.id).catchError((Object error) {
+      debugPrint('Mark reviewed failed: $error');
+    });
     if (!mounted) return;
     // Clear the menu dot and the card after 5 seconds on Results, without
     // waiting for a server refresh. Returning clears them right away too.
@@ -441,9 +386,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final showDemo =
-        yahooDemoMode && kHomeDemo && _monitorStatus == MonitoringStatus.connected;
-    final stats = showDemo ? _demoStats(_reviewedDemo) : _stats;
+    final stats = _stats;
     final hasAnyScans = stats.lastCheckedAt != null || stats.weekTotal > 0;
     // Attention alerts are Plus-only: non-Plus users never see the flagged count.
     final hasAttention = _isPlus && stats.attention48h > 0;
@@ -639,17 +582,6 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
-              if (yahooDemoMode && stats.mockAnalysis) ...[
-                const SizedBox(height: 10),
-                const Text(
-                  'Demo analysis: results are sample data.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: AppTypography.caption,
-                    color: AppColors.muted,
-                  ),
-                ),
-              ],
             ],
           ),
         ),

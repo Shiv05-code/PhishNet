@@ -37,12 +37,15 @@ Read this first next session. Full plan and progress: `docs/live-monitoring.md` 
 
 **Verified on device (2026-11-21):** Home card states; device registration; foreground banner; background banner; closed-app tap opens PhishNet; attention card to Results; 5-second clear (menu count 2 to 1); menu badge count; History badges and filter (Plus vs non-Plus); locked screen plus signed-out push, sign-in, Home and menu count at 3.
 
-**Not yet verified:** Home updates live while the app is open with a new push. Turn Off and reconnect. Token expiry reauth. Duplicate check (second run, no new alert). Results page badge (Phase 4).
+**Verified 2026-11-21:** Turn Off and reconnect.
+**Skipped for now (future refinement):** Home updates live while the app is open with a new push.
+**Not yet verified:** Duplicate check (a run with no new email after an alert already exists). Token expiry reauth. Results page badge (Phase 4).
 
 **Known cosmetic:** Home briefly shows the cached count (2) before the fresh count (3) after sign-in.
 
 **Test state:** Backend 178 passed, 2 skipped. Flutter 206 passed, 3 golden failures (expected until "update goldens").
 
+**Rule:** Live Monitoring is Gmail only. Say so wherever it's promised: plans, privacy, terms, sign-up, README.
 **Preferences:** Plain-language UI. Badges and filter are Plus-only. Generic locked copy for non-Plus. Bold title-case "Turn Off". One-sentence commits with no co-author line. Give git commands one at a time.
 
-**Next, in order:** (1) Turn Off and reconnect test. (2) Duplicate check. (3) Home live update test (one email). (4) Goldens only on "update goldens." (5) Phase 6: remove Yahoo wording from legal and setup docs, then README.
+**Next, in order:** (1) Duplicate check. (2) Token expiry reauth. (3) Goldens only on "update goldens." (4) Commit Phase 6 copy changes (Gmail-only wording in app, privacy, terms, setup guide, README; sign-up still accepts Yahoo addresses).
