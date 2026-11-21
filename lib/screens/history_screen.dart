@@ -5,6 +5,7 @@ import '../models/saved_scan.dart';
 import '../screens/app_colors.dart';
 import '../services/scan_service.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/source_badge.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import 'results_screen.dart';
@@ -260,7 +261,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ResultsScreen(result: scan.result),
+        builder: (_) => ResultsScreen(
+          result: scan.result,
+          monitored: _isPlus ? scan.monitored : null,
+        ),
       ),
     );
   }
@@ -412,7 +416,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                       ),
                                       const SizedBox(height: 8),
                                       if (_isPlus) ...[
-                                        _SourceBadge(monitored: scan.monitored),
+                                        SourceBadge(monitored: scan.monitored),
                                         const SizedBox(height: 10),
                                       ],
                                       Text(
@@ -473,34 +477,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-/// Labels where a result came from: Gmail live monitoring or an in-app check.
-class _SourceBadge extends StatelessWidget {
-  const _SourceBadge({required this.monitored});
-
-  final bool monitored;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = monitored ? AppColors.primaryBlue : AppColors.muted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color),
-      ),
-      child: Text(
-        monitored ? 'Live Monitor' : 'In-app check',
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
       ),
     );
   }
