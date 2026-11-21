@@ -369,7 +369,10 @@ class _HomeScreenState extends State<HomeScreen>
     _dwellTimer = Timer(const Duration(seconds: 5), () => _markLocallyReviewed(scan.id));
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ResultsScreen(result: scan.result),
+        builder: (_) => ResultsScreen(
+          result: scan.result,
+          monitored: _isPlus ? scan.monitored : null,
+        ),
       ),
     );
     _dwellTimer?.cancel();
