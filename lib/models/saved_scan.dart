@@ -11,6 +11,7 @@ class SavedScan {
 
   final String id;
   final String description;
+
   /// True for Gmail live-monitoring results, false for in-app checks.
   final bool monitored;
   final DateTime? createdAt;

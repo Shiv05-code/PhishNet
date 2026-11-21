@@ -13,7 +13,9 @@ Map<String, dynamic> _sub({
   'plan': plan,
   'status': status,
   'environment': environment,
-  'expiresAt': Timestamp.fromDate(expires ?? DateTime.now().add(const Duration(days: 30))),
+  'expiresAt': Timestamp.fromDate(
+    expires ?? DateTime.now().add(const Duration(days: 30)),
+  ),
 };
 
 void main() {
@@ -25,35 +27,43 @@ void main() {
     test('free, expired, inactive, or missing records are not Plus', () {
       expect(SubscriptionService.isActivePlus(null), isFalse);
       expect(SubscriptionService.isActivePlus(_sub(plan: 'free')), isFalse);
-      expect(SubscriptionService.isActivePlus(_sub(status: 'canceled')), isFalse);
+      expect(
+        SubscriptionService.isActivePlus(_sub(status: 'canceled')),
+        isFalse,
+      );
       expect(
         SubscriptionService.isActivePlus(
           _sub(expires: DateTime.now().subtract(const Duration(days: 1))),
         ),
         isFalse,
       );
-      expect(SubscriptionService.isActivePlus(_sub(environment: 'sandbox')), isFalse);
+      expect(
+        SubscriptionService.isActivePlus(_sub(environment: 'sandbox')),
+        isFalse,
+      );
     });
   });
 
   group('PlusBadge', () {
     testWidgets('shows PLUS for an active Plus member', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: PlusBadge(stream: Stream.value(_sub())),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PlusBadge(stream: Stream.value(_sub()))),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
       expect(find.text('PLUS'), findsOneWidget);
       expect(find.bySemanticsLabel('PhishNet Plus member'), findsOneWidget);
     });
 
     testWidgets('shows nothing for a free account', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: PlusBadge(stream: Stream.value(_sub(plan: 'free'))),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PlusBadge(stream: Stream.value(_sub(plan: 'free'))),
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
       expect(find.text('PLUS'), findsNothing);
     });

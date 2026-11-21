@@ -56,7 +56,8 @@ class MonitoringService {
   // The --dart-define still overrides it when set.
   static const _defaultEndpoint = String.fromEnvironment(
     'MONITOR_API_URL',
-    defaultValue: 'https://vgnizq3oywbsr2rdjvu6hrs4yi0djeyn.lambda-url.us-east-2.on.aws/',
+    defaultValue:
+        'https://vgnizq3oywbsr2rdjvu6hrs4yi0djeyn.lambda-url.us-east-2.on.aws/',
   );
 
   final http.Client _client;
@@ -148,7 +149,10 @@ class MonitoringService {
 
   /// Registers this device for high-risk alert pushes. Token is never logged.
   Future<void> registerDevice(String token, String platform) async {
-    await _post('register_device', extra: {'token': token, 'platform': platform});
+    await _post(
+      'register_device',
+      extra: {'token': token, 'platform': platform},
+    );
   }
 
   Future<MonitoringStatus> disconnect() async {

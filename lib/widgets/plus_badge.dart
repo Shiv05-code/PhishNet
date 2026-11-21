@@ -17,7 +17,8 @@ class PlusBadge extends StatefulWidget {
 }
 
 class _PlusBadgeState extends State<PlusBadge> {
-  late final Stream<Map<String, dynamic>?> _stream = widget.stream ?? _liveStream();
+  late final Stream<Map<String, dynamic>?> _stream =
+      widget.stream ?? _liveStream();
 
   /// Without Firebase (widget tests, startup races) the badge simply stays hidden.
   static Stream<Map<String, dynamic>?> _liveStream() {

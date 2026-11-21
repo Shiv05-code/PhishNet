@@ -23,7 +23,8 @@ class PushService {
   static StreamSubscription<String>? _refreshSub;
 
   /// Fires when an alert arrives while the app is open. Home refreshes on it.
-  static final StreamController<void> _alerts = StreamController<void>.broadcast();
+  static final StreamController<void> _alerts =
+      StreamController<void>.broadcast();
   static Stream<void> get alerts => _alerts.stream;
 
   /// Updates the menu badge from any screen, not only Home.
@@ -36,7 +37,8 @@ class PushService {
     }
   }
 
-  static bool _isAlert(RemoteMessage message) => message.data['type'] == 'monitor_alert';
+  static bool _isAlert(RemoteMessage message) =>
+      message.data['type'] == 'monitor_alert';
 
   /// Called once at startup. Handles taps on system notifications, including
   /// the app being opened from a terminated state.
@@ -77,8 +79,13 @@ class PushService {
     _started = true;
     try {
       final messaging = FirebaseMessaging.instance;
-      final settings = await messaging.requestPermission(alert: true, badge: true, sound: true);
-      final allowed = settings.authorizationStatus == AuthorizationStatus.authorized ||
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      final allowed =
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional;
       if (!allowed) return;
 
@@ -90,7 +97,9 @@ class PushService {
       );
       final token = await messaging.getToken();
       if (token != null) await _register(monitor, token);
-      _refreshSub ??= messaging.onTokenRefresh.listen((t) => _register(monitor, t));
+      _refreshSub ??= messaging.onTokenRefresh.listen(
+        (t) => _register(monitor, t),
+      );
 
       FirebaseMessaging.onMessage.listen((message) {
         if (_isAlert(message)) {

@@ -99,7 +99,10 @@ class AppDrawer extends StatelessWidget {
                   label: '$badge new ${badge == 1 ? 'alert' : 'alerts'}',
                   child: Container(
                     constraints: const BoxConstraints(minWidth: 24),
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: screen_colors.AppColors.dangerRed,
                       borderRadius: BorderRadius.circular(999),

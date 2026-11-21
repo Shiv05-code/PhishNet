@@ -273,13 +273,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
   /// Failing to read it (for example, no Firebase in tests) just keeps them hidden.
   void _listenForPlus() {
     try {
-      _plusSub = SubscriptionService.instance.watchEffectiveSubscription().listen(
-        (data) {
-          final isPlus = SubscriptionService.isActivePlus(data);
-          if (mounted && isPlus != _isPlus) setState(() => _isPlus = isPlus);
-        },
-        onError: (_) {},
-      );
+      _plusSub = SubscriptionService.instance
+          .watchEffectiveSubscription()
+          .listen((data) {
+            final isPlus = SubscriptionService.isActivePlus(data);
+            if (mounted && isPlus != _isPlus) setState(() => _isPlus = isPlus);
+          }, onError: (_) {});
     } catch (_) {
       // Keep Plus-only UI hidden.
     }
@@ -344,29 +343,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
               ),
               if (_isPlus)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final option in _sourceOptions)
-                      ChoiceChip(
-                        label: Text(
-                          option.$2,
-                          style: const TextStyle(fontSize: 16),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final option in _sourceOptions)
+                        ChoiceChip(
+                          label: Text(
+                            option.$2,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          selected: _source == option.$1,
+                          selectedColor: AppColors.primaryBlue,
+                          labelStyle: TextStyle(
+                            color: _source == option.$1
+                                ? Colors.white
+                                : AppColors.text,
+                          ),
+                          onSelected: (_) =>
+                              setState(() => _source = option.$1),
                         ),
-                        selected: _source == option.$1,
-                        selectedColor: AppColors.primaryBlue,
-                        labelStyle: TextStyle(
-                          color: _source == option.$1
-                              ? Colors.white
-                              : AppColors.text,
-                        ),
-                        onSelected: (_) => setState(() => _source = option.$1),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
               Expanded(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())

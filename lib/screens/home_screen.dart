@@ -152,7 +152,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _listenForPlus() {
     try {
-      final stream = widget.subscriptionStream ??
+      final stream =
+          widget.subscriptionStream ??
           SubscriptionService.instance.watchEffectiveSubscription();
       _plusSub = stream.listen(
         (data) {
@@ -286,7 +287,11 @@ class _HomeScreenState extends State<HomeScreen>
     } on MonitoringException catch (e) {
       if (mounted) setState(() => _monitorMessage = e.message);
     } catch (_) {
-      if (mounted) setState(() => _monitorMessage = "Couldn't check Live Monitoring. Please try again.");
+      if (mounted)
+        setState(
+          () => _monitorMessage =
+              "Couldn't check Live Monitoring. Please try again.",
+        );
     }
   }
 
@@ -301,12 +306,17 @@ class _HomeScreenState extends State<HomeScreen>
       final url = await _monitor.startConnect();
       final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
       if (!opened && mounted) {
-        setState(() => _monitorMessage = "Couldn't open Google. Please try again.");
+        setState(
+          () => _monitorMessage = "Couldn't open Google. Please try again.",
+        );
       }
     } on MonitoringException catch (e) {
       if (mounted) setState(() => _monitorMessage = e.message);
     } catch (_) {
-      if (mounted) setState(() => _monitorMessage = "Couldn't open Google. Please try again.");
+      if (mounted)
+        setState(
+          () => _monitorMessage = "Couldn't open Google. Please try again.",
+        );
     } finally {
       if (mounted) setState(() => _monitorBusy = false);
     }
@@ -343,7 +353,11 @@ class _HomeScreenState extends State<HomeScreen>
     } on MonitoringException catch (e) {
       if (mounted) setState(() => _monitorMessage = e.message);
     } catch (_) {
-      if (mounted) setState(() => _monitorMessage = "Couldn't turn off Live Monitoring. Please try again.");
+      if (mounted)
+        setState(
+          () => _monitorMessage =
+              "Couldn't turn off Live Monitoring. Please try again.",
+        );
     } finally {
       if (mounted) setState(() => _monitorBusy = false);
     }
@@ -366,7 +380,10 @@ class _HomeScreenState extends State<HomeScreen>
     // Clear the menu dot and the card after 5 seconds on Results, without
     // waiting for a server refresh. Returning clears them right away too.
     _dwellTimer?.cancel();
-    _dwellTimer = Timer(const Duration(seconds: 5), () => _markLocallyReviewed(scan.id));
+    _dwellTimer = Timer(
+      const Duration(seconds: 5),
+      () => _markLocallyReviewed(scan.id),
+    );
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ResultsScreen(
@@ -840,7 +857,8 @@ class _MonitoringCard extends StatelessWidget {
         icon: Icons.shield_outlined,
         iconColor: AppColors.muted,
         title: 'Live Monitoring Inbox',
-        subtitle: 'A PhishNet Plus feature. Upgrade to check your Gmail for scams automatically.',
+        subtitle:
+            'A PhishNet Plus feature. Upgrade to check your Gmail for scams automatically.',
         action: null,
       );
     }
@@ -863,8 +881,14 @@ class _MonitoringCard extends StatelessWidget {
           iconColor: AppColors.primaryBlue,
           title: 'Monitoring your Gmail',
           // lastChecked already reads "Last checked: …" (see _timeAgo).
-          subtitle: lastChecked == 'No checks yet' ? 'Waiting for the first check.' : lastChecked,
-          action: _Action(label: 'Turn Off', onPressed: onDisconnect, destructive: true),
+          subtitle: lastChecked == 'No checks yet'
+              ? 'Waiting for the first check.'
+              : lastChecked,
+          action: _Action(
+            label: 'Turn Off',
+            onPressed: onDisconnect,
+            destructive: true,
+          ),
         );
       case MonitoringStatus.reauthNeeded:
         return _body(
@@ -872,7 +896,11 @@ class _MonitoringCard extends StatelessWidget {
           iconColor: AppColors.cautionAmber,
           title: 'Paused: reconnect needed',
           subtitle: 'Google needs you to sign in again to keep checking.',
-          action: _Action(label: 'Reconnect Gmail', onPressed: onConnect, filled: true),
+          action: _Action(
+            label: 'Reconnect Gmail',
+            onPressed: onConnect,
+            filled: true,
+          ),
         );
       case MonitoringStatus.error:
       case MonitoringStatus.unavailable:
@@ -881,7 +909,11 @@ class _MonitoringCard extends StatelessWidget {
           iconColor: AppColors.dangerRed,
           title: 'Live Monitoring hit a problem',
           subtitle: 'Please try again in a moment.',
-          action: _Action(label: 'Try again', onPressed: onRefresh, filled: true),
+          action: _Action(
+            label: 'Try again',
+            onPressed: onRefresh,
+            filled: true,
+          ),
         );
       case MonitoringStatus.denied:
       case MonitoringStatus.disconnected:
@@ -890,7 +922,11 @@ class _MonitoringCard extends StatelessWidget {
           iconColor: AppColors.muted,
           title: 'Live Monitoring is off',
           subtitle: 'Connect your Gmail to check new emails for scams.',
-          action: _Action(label: 'Connect Gmail', onPressed: onConnect, filled: true),
+          action: _Action(
+            label: 'Connect Gmail',
+            onPressed: onConnect,
+            filled: true,
+          ),
         );
       case MonitoringStatus.unknown:
         return const _SoftCard(
@@ -963,13 +999,18 @@ class _MonitoringCard extends StatelessWidget {
               width: double.infinity,
               height: _buttonHeight,
               child: action.filled
-                  ? FilledButton(onPressed: action.onPressed, child: _actionText(action.label))
+                  ? FilledButton(
+                      onPressed: action.onPressed,
+                      child: _actionText(action.label),
+                    )
                   : OutlinedButton(
                       onPressed: action.onPressed,
                       style: action.destructive
                           ? OutlinedButton.styleFrom(
                               foregroundColor: AppColors.dangerRed,
-                              side: const BorderSide(color: AppColors.dangerRed),
+                              side: const BorderSide(
+                                color: AppColors.dangerRed,
+                              ),
                             )
                           : null,
                       child: _actionText(action.label),
@@ -983,12 +1024,12 @@ class _MonitoringCard extends StatelessWidget {
 }
 
 Widget _actionText(String label) => Text(
-      label,
-      style: const TextStyle(
-        fontSize: AppTypography.label,
-        fontWeight: FontWeight.w700,
-      ),
-    );
+  label,
+  style: const TextStyle(
+    fontSize: AppTypography.label,
+    fontWeight: FontWeight.w700,
+  ),
+);
 
 class _Action {
   const _Action({

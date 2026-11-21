@@ -20,6 +20,7 @@ class ResultsScreen extends StatefulWidget {
   final String message;
   final ScanResult? result;
   final Future<ScanResult>? analysis;
+
   /// Null hides the source badge. Pass it only for Plus users.
   final bool? monitored;
 
