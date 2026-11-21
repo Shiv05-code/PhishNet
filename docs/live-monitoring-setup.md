@@ -1,56 +1,51 @@
-# Live Monitoring setup (Yahoo connection)
+# Live Monitoring setup (Gmail)
 
-Status: Yahoo connection code is written and tested with mocks. Nothing is deployed yet. Connecting does not start automatic checks; scheduled scanning is not built yet.
+Status: built and verified on iPhone (connect, status, push alerts, Turn Off, reconnect, one manual check). Scheduled checks are **not** enabled. Live Monitoring works with **Gmail accounts only**. Yahoo and other providers are not supported.
 
-## Before you start: Yahoo approval
+Plan and progress: [`live-monitoring.md`](live-monitoring.md).
 
-- Yahoo needs your app to have the **mail** scope. Check this in the Yahoo developer console when you create the app. If it is not offered or needs review, the connection will fail until Yahoo approves it.
-- Yahoo app passwords are **not** a substitute. Our flow uses OAuth.
-- I could not confirm Yahoo's current approval process. Community reports are dated; see [K-9 Mail issue #1698](https://github.com/thunderbird/thunderbird-android/issues/1698). Confirm in Yahoo's developer docs.
+## Google setup (one time)
 
-## Do the keys now or later?
+1. In Google Cloud (project `phishnet-b93e0`), create a **Web application** OAuth client.
+2. Add the connect Function URL as an **Authorized redirect URI**, with the trailing slash, exactly as the deploy script prints it.
+3. Keep the consent screen in **Testing** mode. Add each tester's Gmail address under **Test users**. Testing-mode refresh tokens expire about every 7 days, so testers reconnect when prompted.
+4. Scope: `gmail.readonly` only.
 
-Later, in this order. Each step needs the one before it.
+## AWS setup
 
-1. Create the Yahoo app. You get the client ID and secret.
-2. Generate the state key (any random string, never shared):
-   `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
-3. Add three keys to `phishnet/prod` in Secrets Manager: `yahoo_client_id`, `yahoo_client_secret`, `monitor_state_key`.
-4. Create the Lambda and its Function URL (below), then put that URL into `YAHOO_REDIRECT_URI` and into the Yahoo app's redirect URI.
+Run `backend/scripts/deploy_monitor.sh`. It creates or updates:
 
-Do not paste any key into chat, code, or docs.
+- `phishnet-monitor-connect` (OAuth start and callback, device registration, status, Turn Off). Public Function URL, protected by a Firebase ID token on each request.
+- `phishnet-monitor-poll` (Gmail checks and push alerts). No public URL.
 
-## Setup, step by step
+Secrets:
 
-1. **Yahoo app:** developer.yahoo.com, create an app with the mail scope. Note the client ID and secret.
-2. **Secrets:** add the three keys above to `phishnet/prod`.
-3. **Lambda:** in us-east-2, create `phishnet-monitor-connect`, Python 3.12, handler `connect.handler`. Upload `backend/monitor/connect.py`.
-4. **Function URL:** enable it, auth type `NONE`.
-5. **Environment variable:** `YAHOO_REDIRECT_URI` = the Function URL.
-6. **Yahoo redirect:** set the Yahoo app's redirect URI to the same Function URL.
-7. **Lambda role:** allow `GetSecretValue` on `phishnet/prod`, and `CreateSecret`, `PutSecretValue`, `GetSecretValue`, `DeleteSecret` on `phishnet/monitor/*`.
+- `phishnet/prod`: `gmail_client_id`, `gmail_client_secret`, `monitor_state_key`
+- `phishnet/monitor-tokens`: one JSON map of user refresh tokens and mailbox checkpoints. Never in the app, never logged.
 
-## Manual verification
+## Poll controls (keep off by default)
 
-Run the app with `--dart-define=MONITOR_API_URL=<Function URL>`, signed in with an account (not guest).
+| Variable | Normal value | Meaning |
+| --- | --- | --- |
+| `MONITOR_ENABLED` | `false` | Master switch. Off means no Gmail checks |
+| `MONITOR_UNTIL` | a date | Last UTC date a run may happen |
+| `MONITOR_MAX_PER_RUN` | `1` | Messages analyzed per user per run (1 to 3) |
 
-The monitoring card is on the **History** screen (not Settings).
+There is no schedule. Enable for one manual run to test, then turn `MONITOR_ENABLED` back to `false` and restore the cap to `1`.
 
-1. **Without the define:** run the app without `MONITOR_API_URL`. The card should not appear on History.
-2. **Status:** after setup steps 1–7, the card shows "Check my Yahoo email for scams" with a "Connect Yahoo" button.
-3. **Deny:** tap Connect Yahoo, then deny consent in Yahoo. Return to the app. It should show "Yahoo email is not connected" with the message "Couldn't reach…" or the consent error, and Secrets Manager should have no `phishnet/monitor/<uid>` secret.
-4. **Connect:** tap Connect Yahoo again, approve, return to the app. It should show "Yahoo email is connected" and say automatic checks are not active yet. It must not say emails are being checked.
-5. **Turn off:** tap Turn off. The card returns to "Check my Yahoo email for scams", and the `phishnet/monitor/<uid>` secret should be gone.
+## App build
 
-## Failure handling
+The connect URL is built into the app. `flutter run` and `flutter run --profile` both connect without extra flags. `--dart-define=MONITOR_API_URL=...` still overrides it.
 
-- Consent denied: status becomes `disconnected`, and the screen explains access is needed.
-- Expired or forged state: the callback is rejected and nothing is stored.
-- Token exchange failure: status becomes `error`, and the user can retry.
-- Turn off: the token secret is deleted first. If that fails, status is unchanged and the app asks the user to retry.
+## Manual test checklist
 
-## Not done yet
+1. **Connect:** Home card, tap Connect Gmail, approve, return. The card says "Monitoring your Gmail."
+2. **Alert:** send a suspicious email to the Gmail account, run one check, and confirm a single notification and a Home card.
+3. **Safe email:** a normal email produces no notification.
+4. **Turn Off:** tap Turn Off, confirm. The card returns to "Live Monitoring is off."
+5. **Reconnect:** tap Connect Gmail again and confirm the card returns to monitoring.
 
-- Disconnect does not call Yahoo's revocation. Revoke the grant in Yahoo's account settings if needed.
-- Scheduled polling: `backend/monitor/worker.py` is written and mock-tested (checkpoints, retries, overlap lock, duplicate skipping, no content in logs). It is not wired to Yahoo mail, not deployed, and has no schedule. Yahoo mail access is required before it can run live.
-- "Actively monitored" and FCM alerts are not built yet (later phases). The card must not claim active checks until polling runs.
+## Notes
+
+- Turn Off revokes the token at Google (best effort), deletes the stored token, and stops monitoring. Revocation at Google is not yet verified on device, so check the Google Account's third-party access page if in doubt.
+- A signed-out device still receives alerts, because the device token stays registered until the account is deleted.

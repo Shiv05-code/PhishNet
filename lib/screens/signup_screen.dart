@@ -160,6 +160,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   AuthField(
                     label: 'Email',
                     hint: 'Gmail or Yahoo address',
+                    helper: 'Live Monitoring works with Gmail accounts only.',
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,

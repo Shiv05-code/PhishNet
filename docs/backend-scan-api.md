@@ -262,4 +262,4 @@ The schedule does **not** target `phishnet-scan`: that handler requires a Fireba
 - **Enable:** set the schedule to Enabled, only after the worker is implemented.
 - **Disable or remove:** toggle it off or delete the schedule.
 - **Overlap:** consider reserved concurrency of 1 on the worker.
-- **Out of scope for this issue:** Yahoo authorization, mailbox polling, user alerts. The future worker will need its own secrets and a narrowly scoped role.
+- **Out of scope for this issue:** Live Monitoring (Gmail). It has its own functions and status in [`docs/live-monitoring.md`](live-monitoring.md) and [`docs/live-monitoring-setup.md`](live-monitoring-setup.md).

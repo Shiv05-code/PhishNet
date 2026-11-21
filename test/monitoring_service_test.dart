@@ -44,13 +44,13 @@ void main() {
       (_) => http.Response(
         jsonEncode({
           'authorizationUrl':
-              'https://api.login.yahoo.com/oauth2/request_auth?state=x',
+              'https://accounts.google.com/o/oauth2/v2/auth?state=x',
         }),
         200,
       ),
     );
     final url = await service.startConnect();
-    expect(url.host, 'api.login.yahoo.com');
+    expect(url.host, 'accounts.google.com');
   });
 
   test('startConnect rejects a non-https or missing URL', () async {
