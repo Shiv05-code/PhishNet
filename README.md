@@ -85,7 +85,7 @@ milestones, not features that are available today.
 | ✅ Built so far | 🛠️ Planned |
 | --- | --- |
 | Firebase Email/Password authentication | History of saved scans and a Home dashboard |
-| Signup validation for Gmail and Yahoo addresses (Live Monitoring: Gmail only) | Gmail inbox monitoring is built and tested; scheduled checks not enabled |
+| Signup validation for Gmail and Yahoo addresses (Live Monitoring: Gmail only) | Gmail inbox monitoring is built and tested; always-on poll runs every 5 minutes |
 | Email verification and verified-account login checks | Family/Social sharing and scam-pattern insights |
 | Password reset by email | Saved AI Chat conversations |
 | Guest access to the capture flow | |
@@ -135,7 +135,7 @@ windows and scheduled demos, and may change as work progresses.
 **Sprint 3 — Monitoring and history**
 - History screen with saved scans and recent detections
 - Home dashboard with analytics
-- Gmail authorization, monitoring, and push alerts for flagged messages (Gmail accounts only). Built and verified on iPhone; scheduled checks not yet enabled
+- Gmail authorization, monitoring, and push alerts for flagged messages (Gmail accounts only). Built and verified on iPhone; always-on poll runs every 5 minutes
 
 **Sprint 4 — Sharing and polish**
 - Family/Social screen with sharing through the iOS Share Sheet
