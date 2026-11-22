@@ -6,10 +6,14 @@ class SavedScan {
     required this.description,
     required this.createdAt,
     required this.result,
+    this.monitored = false,
   });
 
   final String id;
   final String description;
+
+  /// True for Gmail live-monitoring results, false for in-app checks.
+  final bool monitored;
   final DateTime? createdAt;
   final ScanResult result;
 
@@ -40,6 +44,7 @@ class SavedScan {
           : 'Scanned message',
       createdAt: createdAt,
       result: ScanResult.fromJson(json),
+      monitored: json['source'] == 'gmail_monitor' || json['monitored'] == true,
     );
   }
 

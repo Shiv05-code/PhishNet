@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:phishnet_app/widgets/auth_widgets.dart';
 import '../models/scan_result.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/source_badge.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import '../theme/app_typography.dart';
@@ -20,12 +21,16 @@ class ResultsScreen extends StatefulWidget {
   final ScanResult? result;
   final Future<ScanResult>? analysis;
 
+  /// Null hides the source badge. Pass it only for Plus users.
+  final bool? monitored;
+
   const ResultsScreen({
     super.key,
     this.isGuest = false,
     this.message = '',
     this.result,
     this.analysis,
+    this.monitored,
   });
 
   static const _sample = ScanResult(
@@ -291,16 +296,20 @@ class _ResultsScreenState extends State<ResultsScreen>
                     const SizedBox(height: 8),
                     _Reveal(
                       animation: _riskLabel,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          riskLabel,
-                          style: TextStyle(
-                            fontSize: AppTypography.label,
-                            fontWeight: FontWeight.w600,
-                            color: riskColor,
+                      child: Row(
+                        children: [
+                          if (widget.monitored != null)
+                            SourceBadge(monitored: widget.monitored!),
+                          const Spacer(),
+                          Text(
+                            riskLabel,
+                            style: TextStyle(
+                              fontSize: AppTypography.label,
+                              fontWeight: FontWeight.w600,
+                              color: riskColor,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ],

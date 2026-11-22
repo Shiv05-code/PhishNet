@@ -198,6 +198,7 @@ class AuthHeader extends StatelessWidget {
 class AuthField extends StatelessWidget {
   final String label;
   final String hint;
+  final String? helper;
   final TextEditingController controller;
   final bool obscureText;
   final TextInputType keyboardType;
@@ -213,6 +214,7 @@ class AuthField extends StatelessWidget {
     super.key,
     required this.label,
     required this.hint,
+    this.helper,
     required this.controller,
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
@@ -245,6 +247,8 @@ class AuthField extends StatelessWidget {
           style: AuthTheme.fieldText,
           decoration: InputDecoration(
             hintText: hint,
+            helperText: helper,
+            helperMaxLines: 2,
             hintStyle: AuthTheme.fieldText.copyWith(color: AuthTheme.muted),
             filled: true,
             fillColor: AuthTheme.fieldFill,
