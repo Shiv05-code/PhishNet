@@ -272,7 +272,7 @@ Goal: robust analysis for real phishing signals, with predictable cost.
 
 Set in Lambda environment config, same style as `MOCK_CLAUDE`:
 - `MONITOR_ENABLED` (`true`/`false`): turns scheduled runs off with no code
-  change. Default `false`.
+  change. Set to `true` for the always-on poller (2026-11-22).
 - `MONITOR_MAX_PER_RUN` (1–3, default 1): per-user cap on messages analyzed
   per run.
 - `MONITOR_UNTIL` (date, UTC): each run checks it and stops itself after that
@@ -283,10 +283,12 @@ Set in Lambda environment config, same style as `MOCK_CLAUDE`:
 
 ## 3.5 Schedule and demo plan
 
-- Daily run at 12:00 Pacific, EventBridge Scheduler, enabled only after Phase 5.
-- For the demo: send a test email before noon, let the run happen, and show
-  the Home card and the alert. Or run the admin trigger for that user.
-- Schedule stays off in code until verified. Don't leave it on by default.
+- EventBridge schedule `phishnet-monitor-daily` runs every 5 minutes, always
+  on, for all connected Gmail accounts (cap 1 per account). Enabled 2026-11-22.
+- Live Monitoring is turned off in the app UI, so no monitoring runs for users
+  who have it off. Only the owner's account is Plus today.
+- For a manual check: send a test email, wait for the next 5-minute run, and
+  show the Home card and the alert. Or run the admin trigger for that user.
 
 ## 4. Acceptance (issue #70, Gmail)
 

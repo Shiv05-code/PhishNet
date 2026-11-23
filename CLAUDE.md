@@ -19,7 +19,7 @@ Read this file before starting any task in this repository.
 - Implement in phases. After each phase: pause, share work completed and work remaining, and give simple, step-by-step manual tests. Wait for approval before committing.
 - Phase order: (1) backend, (2) app flow, (3) notifications, (4) provenance badges (Plus History badge done 2026-11-21; Results badge still open), (5) Gmail end-to-end verification, (6) Yahoo cleanup, then docs and legal copy last.
 - History filter (All / Live Monitor / In-app check) and source badges are Plus-only. Approved 2026-11-21.
-- Do not enable schedules until Gmail, FCM, deep-link, and disconnect flows are verified end-to-end.
+- Scheduling: the poller is always on, running every 5 minutes (approved 2026-11-22, see Work in progress, Poll). Do not turn it off unless the user asks.
 - Never store Gmail tokens on-device. Never log credentials or email content.
 - Safe emails must not alert. High-risk alerts must be deduplicated and actionable.
 - Preserve unrelated worktree changes. Inspect branch and remote state before any history rewrite.
@@ -28,12 +28,12 @@ Read this file before starting any task in this repository.
 - README status updates are allowed to keep status accurate. Mark items Done only when verified. Include no sensitive data.
 - Legal and product copy (privacy policy, Terms) changes only after Gmail verification.
 
-## Work in progress (updated 2026-11-21)
+## Work in progress (updated 2026-11-22)
 Read this first next session. Full plan and progress: `docs/live-monitoring.md` (section 9).
 
 **Branch:** Sk-live-monitoring. Commits: `99cca91` backend (Phase 1), `f575e6f` app (Phases 2 and 3), `4122c98` loading state, `bfd5ea5` history source and alert text, `85ee788` History badges and filter (Plus only), `79bb237` menu count, Home sync, 5-second review clear, default connect URL.
 **Deployed:** monitor connect and poll functions (`deploy_monitor.sh`). `phishnet-scan` (handler) updated 2026-11-21 with only `handler.py` swapped in.
-**Poll:** `MONITOR_ENABLED=false`, `MONITOR_MAX_PER_RUN=1`, `MONITOR_UNTIL=2026-12-19`. No schedule. Enable for one manual run only, then turn off and restore the cap to 1.
+**Poll (always on, set 2026-11-22):** `MONITOR_ENABLED=true`, `MONITOR_MAX_PER_RUN=1`, `MONITOR_UNTIL=2026-12-19`. EventBridge schedule `phishnet-monitor-daily` runs every 5 minutes for all connected accounts, cap 1 per account. This stays on by default. Only the owner's account is Plus today, so this is accepted. Live Monitoring is turned off in the app UI, so no monitoring runs for users who have it off. Do not set `MONITOR_ENABLED=false` or disable the schedule unless the user asks.
 
 **Verified on device (2026-11-21):** Home card states; device registration; foreground banner; background banner; closed-app tap opens PhishNet; attention card to Results; 5-second clear (menu count 2 to 1); menu badge count; History badges and filter (Plus vs non-Plus); locked screen plus signed-out push, sign-in, Home and menu count at 3.
 
