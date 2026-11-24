@@ -208,6 +208,16 @@ flowchart LR
 - **Credentials stay out of the app.** The Claude API key and Firebase service account are read from AWS Secrets Manager (`phishnet/prod`) by the Lambda. They are not in the app, the repository, or environment variables, and the code never logs them.
 - **Restricted data.** Gmail refresh tokens are stored only in the backend secret, never on the device or in the app. Monitoring status is read from the backend, and email content is never logged.
 
+### Validation requirements
+
+Anything that can change what a user is told must pass these checks before it ships. Tests for each rule live in `backend/tests` and `test`.
+
+- **Scan results (enforced in `handler.py`).** The score is a whole number from 0 to 100 and the risk level must match it (low 0-33, medium 34-66, high 67-100). The one-sentence description is 15 words or fewer, the summary is 30 words or fewer, and there are 1 to 3 next steps of 10 words or fewer. Red flags use a known category. A result that fails any check is retried once, then returns an error instead of a guess.
+- **AI Chat (enforced in `handler.py`).** A question is 1,000 characters or fewer, the backend reads only the last 10 turns, and answers are capped at 1,200 characters. Chat features that only reuse what is already on the phone, such as showing a scan or carrying a summary into a new chat, send nothing and do not count toward the daily limit.
+- **Scam-pattern insights (`backend/lambda/pattern_insights.py`).** A pattern needs an ID like `PI-001`, a known red-flag category, and short text. It may not contain an email address, link, phone number or account number. Only `approved` patterns, with a named reviewer and review date, can reach the prompt, and only when `PATTERN_INSIGHTS_ENABLED=true`. Run `python backend/scripts/check_patterns.py` before changing the library.
+- **Privacy.** Message text is never stored or logged. Insight and training data may hold analysis fields and hand-written examples only, never text copied from a user's message.
+- **Before merging.** One teammate approves the PR and the CI checks pass. Changes that touch the Lambda also need `python -m unittest discover -s tests` run from `backend/`, and a deploy is done by the owner after the merge.
+
 ---
 
 ## 🚀 Get started
