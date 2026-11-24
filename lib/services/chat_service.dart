@@ -9,6 +9,7 @@ import 'dart:math';
 import 'chat_history_repository.dart';
 import 'daily_limit.dart';
 
+import '../models/saved_scan.dart';
 import '../models/scan_result.dart';
 import 'image_text_reader.dart';
 import 'scan_service.dart';
@@ -76,10 +77,25 @@ DateTime? _parseSentAt(Object? value) {
 /// PhishNet's assessment of it. Both are optional on the backend.
 
 class ChatScanContext {
-  const ChatScanContext({required this.message, this.assessment, this.result});
+  const ChatScanContext({
+    required this.message,
+    this.assessment,
+    this.result,
+    this.scanId,
+    this.messageIsOriginal = true,
+  });
 
+  /// The text that was checked. For a scan opened from History this is the
+  /// saved short description instead, because the full text is never stored.
   final String message;
   final Map<String, dynamic>? assessment;
+
+  /// The saved scan this conversation is about, when it came from History.
+  /// Lets Chat find the conversation again instead of starting a second one.
+  final String? scanId;
+
+  /// False when [message] is only the saved description of the scan.
+  final bool messageIsOriginal;
 
   /// The scan itself, when the app has it. Chat uses it to show the summary.
   final ScanResult? result;
@@ -106,14 +122,38 @@ class ChatScanContext {
         },
       );
 
+  /// The context for a scan saved in History. Only its short description is
+  /// kept, so that stands in for the message.
+  factory ChatScanContext.fromSaved(SavedScan scan) {
+    final context = ChatScanContext.fromResult(scan.description, scan.result);
+    return ChatScanContext(
+      message: context.message,
+      assessment: context.assessment,
+      result: context.result,
+      scanId: scan.id,
+      messageIsOriginal: false,
+    );
+  }
+
+  /// Whether [other] is the same scan, so Chat can reuse its conversation.
+  bool isSameScanAs(ChatScanContext other) {
+    final a = scanId;
+    final b = other.scanId;
+    if (a != null || b != null) return a == b;
+    return message == other.message;
+  }
+
   Map<String, dynamic> toJson() => {
     'message': message,
     if (assessment != null) 'assessment': assessment,
+    if (scanId != null) 'scanId': scanId,
+    if (!messageIsOriginal) 'messageIsOriginal': false,
   };
 
   factory ChatScanContext.fromJson(Map<String, dynamic> json) {
     final message = json['message'];
     final assessment = json['assessment'];
+    final scanId = json['scanId'];
 
     if (message is! String || (assessment != null && assessment is! Map)) {
       throw const FormatException('Invalid chat scan context.');
@@ -124,6 +164,8 @@ class ChatScanContext {
       assessment: assessment == null
           ? null
           : Map<String, dynamic>.from(assessment),
+      scanId: scanId is String && scanId.isNotEmpty ? scanId : null,
+      messageIsOriginal: json['messageIsOriginal'] != false,
     );
   }
 }
@@ -700,13 +742,21 @@ class ChatService extends ChangeNotifier {
     return true;
   }
 
-  /// Call when Chat opens. Opening from a different scan starts a fresh
-  /// conversation about it; opening with no scan (e.g. from the menu) keeps
-  /// whatever conversation is already there.
+  /// Call when Chat opens. Opening about a scan that already has a
+  /// conversation continues it; a different scan starts a fresh conversation.
+  /// Opening with no scan (e.g. from the menu) keeps whatever conversation is
+  /// already there. Nothing is sent to the backend, so this never counts
+  /// toward the daily limit.
   void openFor(ChatScanContext? scan) {
     if (scan == null) return;
-    if (_scan?.message == scan.message) return;
+    final current = _scan;
+    if (current != null && current.isSameScanAs(scan)) return;
     if (_sending) return;
+
+    final existing = _conversations
+        .where((c) => c.scan?.isSameScanAs(scan) ?? false)
+        .firstOrNull;
+    if (existing != null && openConversation(existing.id)) return;
 
     _saveCurrentConversation();
     _activeConversationId = null;
@@ -716,11 +766,15 @@ class ChatService extends ChangeNotifier {
     _pendingQuestion = null;
     final result = scan.result;
     if (result != null) {
-      // Same summary as a photo scan, so every scan reads the same way in Chat.
+      // Same summary as a photo scan, with the message shown above it.
       _messages.add(
         ChatMessage(
           fromUser: false,
-          text: describeScan(result),
+          text: describeScan(
+            result,
+            message: scan.message,
+            messageIsOriginal: scan.messageIsOriginal,
+          ),
           riskLevel: result.riskLevel,
           sentAt: DateTime.now(),
         ),
@@ -835,7 +889,14 @@ class ChatService extends ChangeNotifier {
   }
 
   /// A short plain-language summary of a scan, shown as PhishNet's reply.
-  static String describeScan(ScanResult r) {
+  ///
+  /// With a [message], it is shown first: the text itself when
+  /// [messageIsOriginal], otherwise the saved description of the scan.
+  static String describeScan(
+    ScanResult r, {
+    String message = '',
+    bool messageIsOriginal = true,
+  }) {
     final level = switch (r.riskLevel) {
       'high' => 'High risk',
       'medium' => 'Medium risk',
@@ -848,7 +909,19 @@ class ChatService extends ChangeNotifier {
     };
     final pct = r.scamPercentage;
     final headline = pct == null ? level : '$level: $pct% likely a scam';
-    final b = StringBuffer('**$icon $headline**');
+    final b = StringBuffer();
+    final quoted = message.trim();
+    if (quoted.isNotEmpty) {
+      final shown = quoted.length > 300
+          ? '${quoted.substring(0, 297)}...'
+          : quoted;
+      b.write(
+        messageIsOriginal
+            ? '**📩 Your message**\n“$shown”\n\n'
+            : '**📩 About this message**\n$shown\n\n',
+      );
+    }
+    b.write('**$icon $headline**');
     b.write('\n\n${r.summary}');
     final flags = r.redFlags.take(3).toList();
     if (flags.isNotEmpty) {
