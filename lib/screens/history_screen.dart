@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/scan_history_cache.dart';
 import '../models/saved_scan.dart';
 import '../screens/app_colors.dart';
+import '../services/chat_service.dart';
 import '../services/scan_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/source_badge.dart';
@@ -264,6 +265,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         builder: (_) => ResultsScreen(
           result: scan.result,
           monitored: _isPlus ? scan.monitored : null,
+          chatScan: ChatScanContext.fromSaved(scan),
         ),
       ),
     );

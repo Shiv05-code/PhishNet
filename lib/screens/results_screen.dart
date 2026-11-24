@@ -24,6 +24,10 @@ class ResultsScreen extends StatefulWidget {
   /// Null hides the source badge. Pass it only for Plus users.
   final bool? monitored;
 
+  /// What Chat opens about when the scan came from History, which keeps only
+  /// a short description and not the original message.
+  final ChatScanContext? chatScan;
+
   const ResultsScreen({
     super.key,
     this.isGuest = false,
@@ -31,6 +35,7 @@ class ResultsScreen extends StatefulWidget {
     this.result,
     this.analysis,
     this.monitored,
+    this.chatScan,
   });
 
   static const _sample = ScanResult(
@@ -140,9 +145,11 @@ class _ResultsScreenState extends State<ResultsScreen>
   void _openChat() {
     final result = widget.result;
     final message = widget.message.trim();
-    final scan = result == null || message.isEmpty
-        ? null
-        : ChatScanContext.fromResult(message, result);
+    final scan =
+        widget.chatScan ??
+        (result == null || message.isEmpty
+            ? null
+            : ChatScanContext.fromResult(message, result));
     Navigator.of(context).push(fadeRoute(AiChatScreen(scan: scan)));
   }
 

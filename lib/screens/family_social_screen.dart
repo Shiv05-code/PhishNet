@@ -17,6 +17,9 @@ import '../services/phone_number.dart';
 import '../services/trusted_contacts_store.dart';
 import 'package:share_plus/share_plus.dart';
 import 'history_screen.dart';
+import 'ai_chat_screen.dart';
+import '../services/chat_service.dart';
+import '../widgets/auth_widgets.dart' show fadeRoute;
 import '../models/saved_scan.dart';
 import '../services/auth_service.dart';
 
@@ -43,6 +46,9 @@ class FamilySocialScreen extends StatefulWidget {
   /// Overrides how Messages is opened. Used by tests.
   final MessageComposer? messageComposer;
 
+  /// Overrides the Chat service that Ask AI Chat opens. Used by tests.
+  final ChatService? chatService;
+
   const FamilySocialScreen({
     super.key,
     this.result,
@@ -52,6 +58,7 @@ class FamilySocialScreen extends StatefulWidget {
     this.contactsStore,
     this.pickContact,
     this.messageComposer,
+    this.chatService,
   });
 
   @override
@@ -62,6 +69,10 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
   ScanResult? _selectedResult;
   String _selectedMessage = '';
   bool _messageIsOriginal = false;
+
+  /// The History scan chosen with Switch Message, so Chat can find its
+  /// conversation again.
+  String? _selectedScanId;
   DateTime? _receivedAt;
 
   late final TrustedContactsStore _store;
@@ -278,6 +289,26 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
     return false;
   }
 
+  /// Opens AI Chat about the message shown on this screen.
+  void _openChat() {
+    final result = _selectedResult;
+    final message = _selectedMessage.trim();
+    if (result == null || message.isEmpty) return;
+    final base = ChatScanContext.fromResult(message, result);
+    final scan = _messageIsOriginal
+        ? base
+        : ChatScanContext(
+            message: base.message,
+            assessment: base.assessment,
+            result: result,
+            scanId: _selectedScanId,
+            messageIsOriginal: false,
+          );
+    Navigator.of(
+      context,
+    ).push(fadeRoute(AiChatScreen(scan: scan, service: widget.chatService)));
+  }
+
   Future<void> _chooseMessage() async {
     final selected = await Navigator.of(context).push<SavedScan>(
       MaterialPageRoute(
@@ -295,6 +326,7 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
       _selectedResult = selected.result;
       _selectedMessage = selected.description;
       _messageIsOriginal = false;
+      _selectedScanId = selected.id;
       _receivedAt = selected.createdAt;
       _sharedContactId = null;
     });
@@ -399,6 +431,17 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
                 text: 'Switch Message',
               ),
             ),
+
+            if (_selectedResult != null && hasMessage) ...[
+              const SizedBox(height: 12),
+              FigmaGlassButton(
+                onPressed: _openChat,
+                child: const _GlassLabel(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  text: 'Ask AI Chat',
+                ),
+              ),
+            ],
 
             const SizedBox(height: 28),
 
