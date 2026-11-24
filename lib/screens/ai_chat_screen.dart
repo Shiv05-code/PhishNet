@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pasteboard/pasteboard.dart';
 
 import '../services/chat_service.dart';
+import '../services/chat_time.dart';
 import '../services/image_text_reader.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/chat_rich_text.dart';
@@ -358,15 +359,32 @@ class _AiChatScreenState extends State<AiChatScreen> {
                         itemBuilder: (context, index) {
                           if (index < messages.length) {
                             final m = messages[index];
-                            return _Bubble(
+                            final sent = m.sentAt;
+                            final before = index > 0
+                                ? messages[index - 1].sentAt
+                                : null;
+                            // A day heading starts each new day of messages.
+                            final newDay =
+                                sent != null &&
+                                (before == null ||
+                                    !isSameChatDay(before, sent));
+                            return Column(
                               key: ObjectKey(m),
-                              message: m,
-                              typing: _typing.contains(m),
-                              skip: _skip.contains(m),
-                              onTyped: () => _onTyped(m),
-                              onProgress: _followEnd,
-                              onShowAll: () => _showAll(m),
-                              onCopy: () => _copy(m),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (newDay)
+                                  _DayDivider(label: chatDayLabel(sent)),
+                                _Bubble(
+                                  message: m,
+                                  typing: _typing.contains(m),
+                                  skip: _skip.contains(m),
+                                  onTyped: () => _onTyped(m),
+                                  onProgress: _followEnd,
+                                  onShowAll: () => _showAll(m),
+                                  onCopy: () => _copy(m),
+                                ),
+                              ],
                             );
                           }
                           if (_chat.sending && index == messages.length) {
@@ -404,7 +422,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
 class _Bubble extends StatelessWidget {
   const _Bubble({
-    super.key,
     required this.message,
     required this.typing,
     required this.skip,
@@ -427,6 +444,7 @@ class _Bubble extends StatelessWidget {
     final mine = message.fromUser;
     final image = message.imagePath;
     final answerLabel = _verdictLabel(message.riskLevel);
+    final sent = message.sentAt;
     final bubble = Semantics(
       container: true,
       label: image != null
@@ -442,7 +460,7 @@ class _Bubble extends StatelessWidget {
         child: Align(
           alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
-            margin: EdgeInsets.only(bottom: mine ? 12 : 4),
+            margin: EdgeInsets.only(bottom: sent != null ? 2 : (mine ? 12 : 4)),
             padding: const EdgeInsets.all(14),
             constraints: BoxConstraints(
               maxWidth: MediaQuery.sizeOf(context).width * 0.85,
@@ -513,13 +531,37 @@ class _Bubble extends StatelessWidget {
         ),
       ),
     );
-    if (mine || image != null) return bubble;
+    // The time sits outside the excluded bubble so screen readers can reach it.
+    final timeLabel = sent == null
+        ? null
+        : Align(
+            alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(6, 0, 6, mine ? 12 : 2),
+              child: Text(
+                formatChatTime(sent),
+                style: const TextStyle(
+                  fontSize: AppTypography.label,
+                  color: AppColors.muted,
+                ),
+              ),
+            ),
+          );
+    if (mine || image != null) {
+      if (timeLabel == null) return bubble;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [bubble, timeLabel],
+      );
+    }
     // Actions sit outside the excluded bubble so screen readers can reach them.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         bubble,
+        ?timeLabel,
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: typing
@@ -541,6 +583,30 @@ class _Bubble extends StatelessWidget {
                 ),
         ),
       ],
+    );
+  }
+}
+
+/// The day heading above the first message sent on a given day.
+class _DayDivider extends StatelessWidget {
+  const _DayDivider({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: AppTypography.label,
+            fontWeight: FontWeight.w600,
+            color: AppColors.muted,
+          ),
+        ),
+      ),
     );
   }
 }

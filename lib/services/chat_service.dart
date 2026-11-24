@@ -22,10 +22,14 @@ class ChatMessage {
     required this.text,
     this.imagePath,
     this.riskLevel,
+    this.sentAt,
   });
 
   final bool fromUser;
   final String text;
+
+  /// When the message was sent. Null for chats saved before times were kept.
+  final DateTime? sentAt;
 
   /// A photo the user attached. Kept only on this phone.
   final String? imagePath;
@@ -37,6 +41,7 @@ class ChatMessage {
     'fromUser': fromUser,
     'text': text,
     if (riskLevel != null) 'riskLevel': riskLevel,
+    if (sentAt != null) 'sentAt': sentAt!.toUtc().toIso8601String(),
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -54,8 +59,18 @@ class ChatMessage {
       fromUser: fromUser,
       text: text,
       riskLevel: riskLevel as String?,
+      sentAt: _parseSentAt(json['sentAt']),
     );
   }
+}
+
+/// Reads a saved message time. A missing or unreadable time is null, so an
+/// old or damaged value never stops a chat from opening.
+DateTime? _parseSentAt(Object? value) {
+  if (value is Timestamp) return value.toDate().toUtc();
+  if (value is DateTime) return value.toUtc();
+  if (value is String) return DateTime.tryParse(value)?.toUtc();
+  return null;
 }
 
 /// The scan a conversation is about: the message that was checked and
@@ -761,6 +776,7 @@ class ChatService extends ChangeNotifier {
             messageIsOriginal: scan.messageIsOriginal,
           ),
           riskLevel: result.riskLevel,
+          sentAt: DateTime.now(),
         ),
       );
     }
@@ -789,7 +805,9 @@ class ChatService extends ChangeNotifier {
     final clipped = text.length > maxQuestionLength
         ? text.substring(0, maxQuestionLength)
         : text;
-    _messages.add(ChatMessage(fromUser: true, text: clipped));
+    _messages.add(
+      ChatMessage(fromUser: true, text: clipped, sentAt: DateTime.now()),
+    );
     _saveCurrentConversation();
     await _send(clipped);
     return true;
@@ -815,6 +833,7 @@ class ChatService extends ChangeNotifier {
       fromUser: true,
       text: typed.isEmpty ? photoText : typed,
       imagePath: imagePath,
+      sentAt: DateTime.now(),
     );
     _messages.add(shown);
     _sending = true;
@@ -846,6 +865,7 @@ class ChatService extends ChangeNotifier {
             fromUser: false,
             text: describeScan(result),
             riskLevel: result.riskLevel,
+            sentAt: DateTime.now(),
           ),
         );
       }
@@ -945,7 +965,9 @@ class ChatService extends ChangeNotifier {
 
       if (generation != _requestGeneration) return;
 
-      _messages.add(ChatMessage(fromUser: false, text: answer));
+      _messages.add(
+        ChatMessage(fromUser: false, text: answer, sentAt: DateTime.now()),
+      );
       _saveCurrentConversation();
 
       final conversationId = _activeConversationId;
