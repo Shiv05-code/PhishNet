@@ -18,6 +18,7 @@ import '../models/scan_result.dart';
 import '../services/mock_scans.dart';
 import '../services/scan_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/subscription_service.dart';
 
 class CaptureScreen extends StatefulWidget {
   final bool isGuest;
@@ -172,9 +173,20 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
       if (!mounted) return;
 
+      // Plus users see "In-app check" on fresh results, matching History.
+      final isPlus = await SubscriptionService.instance
+          .hasPlusAccess()
+          .catchError((_) => false);
+      if (!mounted) return;
+
       Navigator.of(context).push(
         slideRoute(
-          ResultsScreen(isGuest: widget.isGuest, message: text, result: result),
+          ResultsScreen(
+            isGuest: widget.isGuest,
+            message: text,
+            result: result,
+            monitored: isPlus ? false : null,
+          ),
         ),
       );
     } on ScanException catch (error) {

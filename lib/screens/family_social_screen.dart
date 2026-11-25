@@ -2,12 +2,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 
 import 'app_colors.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_glass_button.dart';
 import '../widgets/figma_gradient_background.dart';
@@ -17,6 +17,9 @@ import '../services/phone_number.dart';
 import '../services/trusted_contacts_store.dart';
 import 'package:share_plus/share_plus.dart';
 import 'history_screen.dart';
+import 'ai_chat_screen.dart';
+import '../services/chat_service.dart';
+import '../widgets/auth_widgets.dart' show fadeRoute;
 import '../models/saved_scan.dart';
 import '../services/auth_service.dart';
 
@@ -43,6 +46,9 @@ class FamilySocialScreen extends StatefulWidget {
   /// Overrides how Messages is opened. Used by tests.
   final MessageComposer? messageComposer;
 
+  /// Overrides the Chat service that Ask AI Chat opens. Used by tests.
+  final ChatService? chatService;
+
   const FamilySocialScreen({
     super.key,
     this.result,
@@ -52,6 +58,7 @@ class FamilySocialScreen extends StatefulWidget {
     this.contactsStore,
     this.pickContact,
     this.messageComposer,
+    this.chatService,
   });
 
   @override
@@ -62,6 +69,10 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
   ScanResult? _selectedResult;
   String _selectedMessage = '';
   bool _messageIsOriginal = false;
+
+  /// The History scan chosen with Switch Message, so Chat can find its
+  /// conversation again.
+  String? _selectedScanId;
   DateTime? _receivedAt;
 
   late final TrustedContactsStore _store;
@@ -136,11 +147,22 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
   void _showSnack(String text, {SnackBarAction? action}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(text), action: action));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            text,
+            style: const TextStyle(fontSize: AppTypography.emphasis),
+          ),
+          action: action,
+        ),
+      );
   }
 
   /// Saves [next] and shows it right away. Rolls back if the save fails.
-  Future<void> _saveContacts(List<TrustedContact> next) async {
+  Future<void> _saveContacts(
+    List<TrustedContact> next, {
+    String? successText,
+  }) async {
     final uid = _uid;
     if (uid == null) return;
 
@@ -149,6 +171,7 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
 
     try {
       await _store.save(uid, next);
+      if (mounted && successText != null) _showSnack(successText);
     } catch (_) {
       if (!mounted) return;
       setState(() => _contacts = previous);
@@ -212,7 +235,10 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
       name: shortName,
       phone: phone,
     );
-    await _saveContacts([..._contacts, contact]);
+    await _saveContacts([
+      ..._contacts,
+      contact,
+    ], successText: 'Added $shortName to favorites.');
   }
 
   void _moveContact(int index, int delta) {
@@ -228,9 +254,9 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
 
   void _removeContact(int index) {
     _swapIds = {};
+    final name = _contacts[index].name;
     final next = [..._contacts]..removeAt(index);
-    _saveContacts(next);
-    _showSnack('Contact removed.');
+    _saveContacts(next, successText: 'Removed $name from favorites.');
   }
 
   /// Asks before removing a swiped contact. Always returns false so the
@@ -263,6 +289,26 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
     return false;
   }
 
+  /// Opens AI Chat about the message shown on this screen.
+  void _openChat() {
+    final result = _selectedResult;
+    final message = _selectedMessage.trim();
+    if (result == null || message.isEmpty) return;
+    final base = ChatScanContext.fromResult(message, result);
+    final scan = _messageIsOriginal
+        ? base
+        : ChatScanContext(
+            message: base.message,
+            assessment: base.assessment,
+            result: result,
+            scanId: _selectedScanId,
+            messageIsOriginal: false,
+          );
+    Navigator.of(
+      context,
+    ).push(fadeRoute(AiChatScreen(scan: scan, service: widget.chatService)));
+  }
+
   Future<void> _chooseMessage() async {
     final selected = await Navigator.of(context).push<SavedScan>(
       MaterialPageRoute(
@@ -280,6 +326,7 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
       _selectedResult = selected.result;
       _selectedMessage = selected.description;
       _messageIsOriginal = false;
+      _selectedScanId = selected.id;
       _receivedAt = selected.createdAt;
       _sharedContactId = null;
     });
@@ -297,17 +344,13 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
       isOriginalText: _messageIsOriginal,
       senderName: _senderName(),
     );
-    final logo = await _loadLogo();
-    final result = await _composer.compose(
-      recipient: phone,
-      body: body,
-      logo: logo,
-    );
+    final result = await _composer.compose(recipient: phone, body: body);
     if (!mounted) return;
 
     switch (result) {
       case MessageComposeResult.sent:
         setState(() => _sharedContactId = contact.id);
+        _showShareDialog('Shared with ${contact.name}.');
       case MessageComposeResult.unavailable:
         _showSnack('Messages isn’t available on this device.');
       case MessageComposeResult.failed:
@@ -317,15 +360,23 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
     }
   }
 
-  Future<Uint8List?> _loadLogo() async {
-    try {
-      final data = await rootBundle.load(
-        'assets/images/phishnet_share_logo.png',
-      );
-      return data.buffer.asUint8List();
-    } catch (_) {
-      return null;
-    }
+  /// Centered confirmation, styled like the Delete Account dialog.
+  void _showShareDialog(String text) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AppDialog(
+        icon: Icons.check_circle,
+        iconColor: AppColors.accentGreen,
+        title: text,
+        message: 'Your scan has been shared.',
+        actions: [
+          AppDialogButton(
+            label: 'OK',
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Returns true when the user picked an action in the share sheet.
@@ -343,25 +394,9 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
         ? renderObject
         : null;
 
-    // Attach the logo when it loads. Text is still shared if it doesn't.
-    final files = <XFile>[];
-    try {
-      final data = await rootBundle.load(
-        'assets/images/phishnet_share_logo.png',
-      );
-      files.add(
-        XFile.fromData(
-          data.buffer.asUint8List(),
-          mimeType: 'image/png',
-          name: 'phishnet_share_logo.png',
-        ),
-      );
-    } catch (_) {}
-
     final result = await SharePlus.instance.share(
       ShareParams(
         text: text,
-        files: files,
         sharePositionOrigin: box == null
             ? null
             : box.localToGlobal(Offset.zero) & box.size,
@@ -397,6 +432,17 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
               ),
             ),
 
+            if (_selectedResult != null && hasMessage) ...[
+              const SizedBox(height: 12),
+              FigmaGlassButton(
+                onPressed: _openChat,
+                child: const _GlassLabel(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  text: 'Ask AI Chat',
+                ),
+              ),
+            ],
+
             const SizedBox(height: 28),
 
             const Text(
@@ -408,11 +454,31 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Up to $trustedContactsLimit favorites. Hold and drag to reorder.',
-              style: TextStyle(
-                fontSize: AppTypography.caption,
-                color: AppColors.muted,
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(
+                  fontSize: AppTypography.caption,
+                  color: AppColors.muted,
+                ),
+                children: [
+                  TextSpan(text: 'Up to $trustedContactsLimit favorites. '),
+                  const TextSpan(
+                    text: 'Hold and drag',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const TextSpan(text: ' to reorder; '),
+                  const TextSpan(
+                    text: 'swipe left to delete',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const TextSpan(text: '.'),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -463,7 +529,11 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
                   _showSnack('Select a scanned message to share.');
                   return;
                 }
-                _shareMessage(context);
+                _shareMessage(context).then((shared) {
+                  if (shared && mounted) {
+                    _showShareDialog('Shared with Family.');
+                  }
+                });
               },
             ),
 
@@ -605,6 +675,25 @@ String boldUnicode(String text) {
   return buffer.toString();
 }
 
+/// Messages up to this many characters are shared in full.
+const shareFullMessageLimit = 500;
+
+/// Longer messages are cut to about this many characters.
+const shareExcerptLength = 300;
+
+/// Returns [text] unchanged when short, otherwise its opening, cut at a word
+/// boundary and ending in an ellipsis. Counts characters by code point so
+/// emoji are never split.
+String shareExcerpt(String text) {
+  final runes = text.runes.toList();
+  if (runes.length <= shareFullMessageLimit) return text;
+
+  var cut = String.fromCharCodes(runes.take(shareExcerptLength));
+  final lastSpace = cut.lastIndexOf(RegExp(r'\s'));
+  if (lastSpace > shareExcerptLength ~/ 2) cut = cut.substring(0, lastSpace);
+  return '${cut.trimRight()}...';
+}
+
 /// Builds the text shared with family: a status icon, PhishNet's verdict and
 /// details, then the message. Live scans show the original message; History
 /// scans show a summary.
@@ -616,14 +705,33 @@ String buildFamilyShareText({
 }) {
   final text = message.trim();
   final name = senderName?.trim() ?? '';
-  final lines = <String>['🛡️ ${boldUnicode('PhishNet Scan Result')}', ''];
-
-  lines.add(
+  final lines = <String>[
     name.isEmpty
-        ? 'Id like a second opinion on this message.'
+        ? 'I\'d like a second opinion on this message.'
         : '$name wants a second opinion on this message.',
-  );
-  lines.add('Does it look safe to you? PhishNet\'s analysis is below');
+    '',
+    'Does it look safe to you? PhishNet\'s analysis is below.',
+    '',
+    '🛡️ ${boldUnicode('PhishNet Scan Result')}',
+    '',
+  ];
+
+  if (text.isNotEmpty) {
+    if (isOriginalText) {
+      final shown = shareExcerpt(text);
+      final shortened = shown != text;
+      lines.add(
+        '💬 ${boldUnicode(shortened ? 'Message (first part):' : 'Message:')}',
+      );
+      lines.add('"$shown"');
+      if (shortened) {
+        lines.add('(Long message shortened.)');
+      }
+    } else {
+      lines.add('📝 ${boldUnicode('Summary:')}');
+      lines.add(text);
+    }
+  }
   lines.add('');
 
   if (result == null) {
@@ -662,17 +770,6 @@ String buildFamilyShareText({
       lines.add('');
       lines.add('⚠️ ${boldUnicode('Warning Signs:')}');
       lines.addAll(flags.map((f) => '• ${f.trim()}'));
-    }
-  }
-
-  if (text.isNotEmpty) {
-    lines.add('');
-    if (isOriginalText) {
-      lines.add('💬 ${boldUnicode('Message:')}');
-      lines.add('"$text"');
-    } else {
-      lines.add('📝 ${boldUnicode('Summary:')}');
-      lines.add(text);
     }
   }
 

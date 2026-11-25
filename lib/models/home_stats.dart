@@ -26,6 +26,23 @@ class HomeStats {
   final DateTime? lastCheckedAt;
   final bool mockAnalysis;
 
+  /// Same stats with one attention item removed, after the user opens it.
+  HomeStats withReviewed(String scanId) {
+    final rest = recentHigh.where((s) => s.id != scanId).toList();
+    if (rest.length == recentHigh.length) return this;
+    return HomeStats(
+      weekTotal: weekTotal,
+      weekHigh: weekHigh,
+      weekMedium: weekMedium,
+      weekLow: weekLow,
+      scamRate: scamRate,
+      attention48h: attention48h > 0 ? attention48h - 1 : 0,
+      recentHigh: rest,
+      lastCheckedAt: lastCheckedAt,
+      mockAnalysis: mockAnalysis,
+    );
+  }
+
   /// Shown before any data loads, and for guests or offline use.
   static const empty = HomeStats(
     weekTotal: 0,
@@ -67,4 +84,16 @@ class HomeStats {
       mockAnalysis: json['data_source'] == 'mock_analysis',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'week_total': weekTotal,
+    'week_high': weekHigh,
+    'week_medium': weekMedium,
+    'week_low': weekLow,
+    'scam_rate': scamRate,
+    'attention_48h': attention48h,
+    'recent_high': recentHigh.map((scan) => scan.toJson()).toList(),
+    'last_checked_at': lastCheckedAt?.toIso8601String(),
+    'data_source': mockAnalysis ? 'mock_analysis' : 'claude',
+  };
 }

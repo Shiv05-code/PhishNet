@@ -19,7 +19,7 @@ const privacyPolicyDocument = LegalDocument(
           'Messages, links, and files you upload or paste for scanning (Capture)',
         ),
         LegalBullet(
-          'If you connect a Yahoo or other email account for Live Monitoring, we read your inbox with read-only permission to scan incoming messages for phishing',
+          'If you connect a Gmail account for Live Monitoring, we read your inbox with read-only permission to scan incoming messages for phishing. Live Monitoring works only with Gmail accounts.',
         ),
         LegalSubheading('Usage & Detection Data:'),
         LegalBullet(
@@ -57,7 +57,7 @@ const privacyPolicyDocument = LegalDocument(
     LegalSection(
       title: 'Email Access (Live Monitoring)',
       blocks: [
-        LegalSubheading('If you connect an email account:'),
+        LegalSubheading('If you connect a Gmail account (Gmail only):'),
         LegalBullet(
           'We request **read-only access**. PhishNet **cannot send, delete, or modify** your emails.',
         ),
@@ -68,10 +68,10 @@ const privacyPolicyDocument = LegalDocument(
           'We have not yet set how long Live Monitoring email content is kept. This policy will state that period before Live Monitoring is offered.',
         ),
         LegalBullet(
-          'You can disconnect access at any time in Settings. This immediately revokes our access token.',
+          'You can turn off Live Monitoring at any time on the Home screen. This immediately revokes our access token.',
         ),
         LegalBullet(
-          'We follow Yahoo\'s (and other providers\') API developer policies for data use and retention',
+          'We follow Google\'s API Services User Data Policy, including its Limited Use requirements, for Gmail data use and retention',
         ),
       ],
     ),
@@ -85,7 +85,7 @@ const privacyPolicyDocument = LegalDocument(
           'Before you share, we show exactly what will be shared: the message you flagged and PhishNet\'s analysis of it',
         ),
         LegalBullet(
-          'When you tap "Message" on a Trusted Contact, PhishNet opens Messages to that contact\'s number with the scan filled in and the PhishNet logo attached. You tap Send yourself. PhishNet **never sends a message** for you.',
+          'When you tap "Message" on a Trusted Contact, PhishNet opens Messages to that contact\'s number with the scan filled in. You tap Send yourself. PhishNet **never sends a message** for you.',
         ),
         LegalBullet(
           'When you tap "Share," your device\'s share sheet opens, so you choose who receives it and how (text, email, etc.)',
@@ -132,7 +132,7 @@ const privacyPolicyDocument = LegalDocument(
       title: 'Third-Party Services',
       blocks: [
         LegalBullet(
-          'The Yahoo Mail API (and other email provider APIs, if applicable) is used only for Live Monitoring, under those providers\' developer terms',
+          'The Gmail API is used only for Live Monitoring, under Google\'s API terms. Live Monitoring does not support Yahoo or other email providers.',
         ),
         LegalBullet(
           'Anthropic\'s Claude models generate scam analysis results. Message text you submit is sent to Claude to produce your result (see Data Storage & Retention). Claude models also power AI Chat responses.',

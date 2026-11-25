@@ -42,7 +42,7 @@ const termsConditionsDocument = LegalDocument(
       title: 'Email Access (Live Monitoring)',
       blocks: [
         LegalBullet(
-          'If you connect a Yahoo or other email account, you grant PhishNet read-only access to scan incoming messages, as described in our Privacy Policy. You can disconnect at any time in Settings.',
+          'Live Monitoring works only with Gmail accounts. If you connect a Gmail account, you grant PhishNet read-only access to scan incoming messages, as described in our Privacy Policy. You can turn off Live Monitoring at any time on the Home screen.',
         ),
       ],
     ),

@@ -372,7 +372,7 @@ class _PaymentPlanScreenState extends State<PaymentPlanScreen> {
                 isCurrent: _onPlus,
                 features: const [
                   'Everything in Free',
-                  'Live Email Monitoring',
+                  'Live Email Monitoring (Gmail accounts only)',
                   'Full AI Chat Access',
                   'Family/Social Features',
                   'Priority Support',

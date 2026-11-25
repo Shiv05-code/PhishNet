@@ -136,29 +136,32 @@ class SubscriptionService {
   // Check whether the user has an active Plus subscription.
   Future<bool> hasPlusAccess() async {
     final subscription = await getSubscription();
+    return isActivePlus(subscription);
+  }
 
-    if (subscription == null) return false;
-
-    final isPlus = subscription['plan'] == 'plus';
-    final isActive = subscription['status'] == 'active';
+  /// The one place that decides whether a subscription record is active Plus.
+  /// Used by hasPlusAccess and the app bar badge.
+  static bool isActivePlus(Map<String, dynamic>? data, {DateTime? now}) {
+    if (data == null) return false;
 
     const useEmulators = bool.fromEnvironment(
       'USE_FIREBASE_EMULATORS',
       defaultValue: false,
     );
 
-    final environment = subscription['environment'];
-
+    final environment = data['environment'];
     final validEnvironment =
         environment == 'production' ||
         (kDebugMode && useEmulators && environment == 'local_test');
 
-    final expiresAt = subscription['expiresAt'];
-
+    final expiresAt = data['expiresAt'];
     if (expiresAt is! Timestamp) return false;
 
-    final notExpired = expiresAt.toDate().isAfter(DateTime.now());
+    final notExpired = expiresAt.toDate().isAfter(now ?? DateTime.now());
 
-    return isPlus && isActive && validEnvironment && notExpired;
+    return data['plan'] == 'plus' &&
+        data['status'] == 'active' &&
+        validEnvironment &&
+        notExpired;
   }
 }

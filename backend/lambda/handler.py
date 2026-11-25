@@ -1088,6 +1088,7 @@ def _get_scan_history(uid):
             "summary": data.get("summary"),
             "red_flags": data.get("red_flags", []),
             "next_steps": data.get("next_steps", []),
+            "source": data.get("source", "manual"),
             "createdAt": (
                 created_at.isoformat()
                 if created_at is not None
@@ -1134,17 +1135,22 @@ def _recent_day_keys(now, days=HOME_WINDOW_DAYS):
     return [_day_key(now - timedelta(days=i)) for i in range(days)]
 
 
-def _save_scan(uid, result):
-    """Save a scan and bump today's counters in one atomic batch."""
+def _save_scan(uid, result, doc_id=None, source="manual"):
+    """Save a scan and bump today's counters in one atomic batch.
+
+    doc_id (monitored scans) uses create(), so a repeat save fails the whole
+    batch with AlreadyExists and today's counters are not double counted.
+    """
     db = firestore.client()
     user_ref = db.collection("users").document(uid)
     now = datetime.now(timezone.utc)
 
     batch = db.batch()
-    batch.set(
-        user_ref.collection("scans").document(),
-        {**result, "createdAt": firestore.SERVER_TIMESTAMP},
-    )
+    scan_fields = {**result, "source": source, "createdAt": firestore.SERVER_TIMESTAMP}
+    if doc_id:
+        batch.create(user_ref.collection("scans").document(doc_id), scan_fields)
+    else:
+        batch.set(user_ref.collection("scans").document(), scan_fields)
 
     counts = {"total": Increment(1)}
     if result.get("risk_level") in RISK_KEYS:
@@ -1181,7 +1187,7 @@ def _build_home_stats(day_docs, recent_scans, last_checked, mock):
     """Pure summary for the Home screen. No Firestore calls here.
 
     day_docs: one dict per day in the window (missing days may be {}).
-    recent_scans: dicts {"reviewed": bool, "item": <scan json>}, newest
+    recent_scans: dicts {"reviewed": bool, "monitored": bool, "item": <scan json>}, newest
     first, from the last 48 hours.
     """
     totals = {key: 0 for key in ("total",) + RISK_KEYS}
@@ -1190,10 +1196,13 @@ def _build_home_stats(day_docs, recent_scans, last_checked, mock):
             totals[key] += int(doc.get(key) or 0)
 
     total = totals["total"]
-    # Attention = high-risk, from the last 48 hours, not yet reviewed.
+    # Attention = live-monitoring (Gmail) high-risk alerts from the last 48
+    # hours, not yet reviewed. Manual checks never count here.
     attention = [
         s for s in recent_scans
-        if s["item"].get("risk_level") == "high" and not s["reviewed"]
+        if s.get("monitored")
+        and s["item"].get("risk_level") == "high"
+        and not s["reviewed"]
     ]
 
     return {
@@ -1237,6 +1246,7 @@ def _get_home_stats(uid):
         data = scan.to_dict() or {}
         recent_scans.append({
             "reviewed": bool(data.get("reviewed_at")),
+            "monitored": data.get("source") == "gmail_monitor",
             "item": _scan_json(scan.id, data),
         })
 
