@@ -77,6 +77,60 @@ void main() {
       }),
     ];
 
+    test('Searches by partial date', () {
+      final scan = SavedScan.fromJson({
+        ...sampleScan(),
+        'createdAt': '2026-11-04T12:30:00',
+      });
+
+      expect(filterSavedScans([scan], '11/04'), hasLength(1));
+    });
+
+    test('Searches by full date', () {
+      final scan = SavedScan.fromJson({
+        ...sampleScan(),
+        'createdAt': '2026-11-04T12:30:00',
+      });
+
+      expect(filterSavedScans([scan], '11/04/2026'), hasLength(1));
+    });
+
+    test('Searches by time', () {
+      final scan = SavedScan.fromJson({
+        ...sampleScan(),
+        'createdAt': '2026-11-04T15:30:00',
+      });
+
+      expect(filterSavedScans([scan], '3:30 PM'), hasLength(1));
+    });
+
+    test('Returns no results for unmatched dates', () {
+      final scan = SavedScan.fromJson({
+        ...sampleScan(),
+        'createdAt': '2026-11-04T12:30:00',
+      });
+
+      expect(filterSavedScans([scan], '12/25'), isEmpty);
+    });
+
+    test('Missing timestamps do not match date searches', () {
+      final scan = SavedScan.fromJson({...sampleScan(), 'createdAt': null});
+
+      expect(filterSavedScans([scan], '11/04'), isEmpty);
+    });
+
+    test('Date searches work with cached scan lists', () {
+      final scan = SavedScan.fromJson({
+        ...sampleScan(),
+        'createdAt': '2026-11-04T12:30:00',
+      });
+
+      final cachedScans = [scan];
+
+      expect(filterSavedScans(cachedScans, '11/04'), hasLength(1));
+      expect(filterSavedScans(cachedScans, '12/25'), isEmpty);
+    });
+
     test('Filters by description', () {
       final results = filterSavedScans(scans, 'USPS');
 

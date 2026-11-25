@@ -10,15 +10,34 @@ import '../widgets/figma_gradient_background.dart';
 import 'results_screen.dart';
 import 'dart:async';
 
+String formatSavedScanDate(DateTime? date) {
+  if (date == null) return 'Date unavailable';
+
+  final local = date.toLocal();
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final year = local.year;
+  final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+
+  return '$month/$day/$year · $hour:$minute $period';
+}
+
 List<SavedScan> filterSavedScans(List<SavedScan> scans, String query) {
   final normalizedQuery = query.trim().toLowerCase();
 
   if (normalizedQuery.isEmpty) return scans;
 
   return scans.where((scan) {
+    final formattedDate = scan.createdAt == null
+        ? ''
+        : formatSavedScanDate(scan.createdAt).toLowerCase();
+
     return scan.description.toLowerCase().contains(normalizedQuery) ||
         scan.result.summary.toLowerCase().contains(normalizedQuery) ||
-        scan.result.riskLevel.toLowerCase().contains(normalizedQuery);
+        scan.result.riskLevel.toLowerCase().contains(normalizedQuery) ||
+        formattedDate.contains(normalizedQuery);
   }).toList();
 }
 
@@ -208,17 +227,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<SavedScan> get _filteredScans => filterSavedScans(_scans, _query);
 
   String _formatDate(DateTime? date) {
-    if (date == null) return 'Date unavailable';
-
-    final local = date.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    final year = local.year;
-    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    final minute = local.minute.toString().padLeft(2, '0');
-    final period = local.hour >= 12 ? 'PM' : 'AM';
-
-    return '$month/$day/$year · $hour:$minute $period';
+    return formatSavedScanDate(date);
   }
 
   Color _riskColor(String risk) {
