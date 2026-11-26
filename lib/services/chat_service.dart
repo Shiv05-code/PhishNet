@@ -707,6 +707,84 @@ class ChatService extends ChangeNotifier {
     return true;
   }
 
+  /// A chat this many messages long is more than Chat can keep in mind: the
+  /// backend reads only the last [maxHistory] turns of it.
+  static const longChatLength = 30;
+
+  /// True once the conversation is long enough to suggest a fresh start.
+  bool get isLong => _messages.length >= longChatLength;
+
+  /// Starts a new conversation about the same scan, opened with a short note
+  /// of what was asked before. The long conversation stays in Recent Chats.
+  /// Nothing is sent to the backend, so this does not count toward the
+  /// daily limit.
+  bool continueInNewChat() {
+    if (_sending || !isLong) return false;
+
+    final scan = _scan;
+    final note = describeEarlierChat(_messages);
+
+    _saveCurrentConversation();
+
+    _activeConversationId = null;
+    _messages.clear();
+    _error = null;
+    _pendingQuestion = null;
+
+    final result = scan?.result;
+    if (scan != null && result != null) {
+      _messages.add(
+        ChatMessage(
+          fromUser: false,
+          text: describeScan(
+            result,
+            message: scan.message,
+            messageIsOriginal: scan.messageIsOriginal,
+          ),
+          riskLevel: result.riskLevel,
+        ),
+      );
+    }
+    _messages.add(ChatMessage(fromUser: false, text: note));
+
+    notifyListeners();
+    return true;
+  }
+
+  /// The opening note of a continued chat: the last few questions asked, and
+  /// the last one on its own. Plain text built on this phone, so it needs no
+  /// request and never counts toward the daily limit.
+  static String describeEarlierChat(List<ChatMessage> messages) {
+    String clip(String text) =>
+        text.length > 120 ? '${text.substring(0, 117)}...' : text;
+
+    final asked = [
+      for (final m in messages)
+        if (m.fromUser && m.imagePath == null && m.text.trim().isNotEmpty)
+          m.text.trim(),
+    ];
+
+    final b = StringBuffer('**🔄 Continued from an earlier chat**');
+    if (asked.isNotEmpty) {
+      final earlier = asked.sublist(0, asked.length - 1);
+      final recent = earlier.length > 4
+          ? earlier.sublist(earlier.length - 4)
+          : earlier;
+      if (recent.isNotEmpty) {
+        b.write('\n\n**You asked earlier**');
+        for (final question in recent) {
+          b.write('\n• ${clip(question)}');
+        }
+      }
+      b.write('\n\n**Your last question**\n“${clip(asked.last)}”');
+    }
+    b.write(
+      '\n\nI only remember the scan and this note, so ask again if you '
+      'need more. Your earlier chat is saved in Recent Chats.',
+    );
+    return b.toString();
+  }
+
   bool openConversation(String id) {
     if (_sending) return false;
 

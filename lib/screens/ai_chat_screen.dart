@@ -399,6 +399,12 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   message: _chat.error!,
                   onRetry: _chat.canRetry ? _retry : null,
                 ),
+              if (_chat.isLong && !_chat.sending)
+                _LongChatNotice(
+                  onNewChat: () {
+                    if (_chat.continueInNewChat()) _controller.clear();
+                  },
+                ),
               _InputBar(
                 controller: _controller,
                 hint: _hint,
@@ -753,6 +759,49 @@ class _AttachOption extends StatelessWidget {
               const Icon(Icons.chevron_right, color: AppColors.muted),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown once a chat is long enough that Chat may forget its start.
+class _LongChatNotice extends StatelessWidget {
+  const _LongChatNotice({required this.onNewChat});
+  final VoidCallback onNewChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'This chat is getting long, so I may not remember the '
+                'earliest messages.',
+                style: TextStyle(
+                  fontSize: AppTypography.body,
+                  color: AppColors.text,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: onNewChat,
+              child: const Text(
+                'Start a new chat',
+                style: TextStyle(fontSize: AppTypography.emphasis),
+              ),
+            ),
+          ],
         ),
       ),
     );
