@@ -114,6 +114,8 @@ class _ChatWelcomeState extends State<ChatWelcome>
     final visible = _greeting.substring(0, _typed);
     return Center(
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,

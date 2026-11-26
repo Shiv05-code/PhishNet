@@ -350,6 +350,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       )
                     : ListView.builder(
                         controller: _scroll,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: const EdgeInsets.all(16),
                         // Builds only the bubbles on screen, not every message.
                         itemCount:
