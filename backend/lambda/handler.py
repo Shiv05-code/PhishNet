@@ -56,6 +56,9 @@ CHAT_TITLE_SYSTEM = (
 PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "phishnet-b93e0")
 SECRET_ID = os.environ.get("SECRET_ID", "phishnet/prod")
 MOCK = os.environ.get("MOCK_CLAUDE", "false").lower() == "true"
+PATTERN_INSIGHTS_ENABLED = (
+    os.environ.get("PATTERN_INSIGHTS_ENABLED", "false").lower() == "true"
+)
 
 
 def _env_int(name, default):
@@ -480,6 +483,24 @@ def _validate_assessment(raw):
     }
 
 
+def _system_prompt():
+    """SYSTEM, plus approved pattern notes when the flag is on. Never raises."""
+    if not PATTERN_INSIGHTS_ENABLED:
+        return SYSTEM
+    try:
+        import pattern_insights as pi
+
+        extra = pi.guidance_text(pi.PATTERNS, RED_FLAG_CATEGORIES)
+        if not extra:
+            return SYSTEM
+        ids = pi.active_ids(pi.PATTERNS, RED_FLAG_CATEGORIES)
+        print("pattern insights: " + ",".join(ids))
+        return SYSTEM + "\n\n" + extra
+    except Exception as e:
+        print(f"pattern insights skipped: {type(e).__name__}")
+        return SYSTEM
+
+
 ANALYSIS_ATTEMPTS = 2  # one retry when Claude's output fails validation
 
 
@@ -500,7 +521,7 @@ def _analyze_once(text, api_key):
     msg = client.messages.create(
         model=MODEL,
         max_tokens=800,
-        system=SYSTEM,
+        system=_system_prompt(),
         tools=[TOOL],
         tool_choice={"type": "tool", "name": "report_scan"},
         messages=[{"role": "user", "content": f"<message>\n{text}\n</message>"}],
