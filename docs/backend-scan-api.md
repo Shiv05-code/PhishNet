@@ -17,6 +17,33 @@ Manual entry and OCR output send the same payload. Text is trimmed and truncated
 
 Account deletion uses `{"action": "delete_account"}` and is unchanged.
 
+## Free-tier daily limit
+
+Free accounts, including guests, can make **10 requests per day** across Capture scans and AI Chat questions. Active Plus subscribers have no limit.
+
+- A scan counts as 1 and each chat question counts as 1. A photo sent with a question in AI Chat is a scan plus a question, so it counts as 2. `chat_title` never counts.
+- The day runs midnight to midnight Pacific time (`America/Los_Angeles`, including daylight saving), so usage resets at midnight Pacific.
+- The count is checked **before** Claude is called. Requests that fail validation (`400`) do not count, and a request that fails because Claude failed (`502`) is given back.
+- Counts are stored at `users/{uid}/usage/{YYYY-MM-DD}` as `{day, count, updatedAt}`. Only the backend can reach this collection, because `firestore.rules` has no rule for it. The documents are deleted with the account.
+- A guest is counted on their anonymous Firebase account, so deleting and reinstalling the app gives a guest a fresh count.
+- Plus means `users/{uid}/subscriptions/current` has `plan == "plus"`, `status == "active"`, `environment == "production"` and an `expiresAt` in the future. Guests are never Plus.
+- If Firestore is not set up (local or placeholder service account), no limit is applied. If it is set up but the count cannot be read, the request is refused with `503 {"error": "usage_unavailable", "retryable": true}` rather than letting it through to Claude.
+- `FREE_DAILY_LIMIT` (environment variable, default `10`) changes the number without a code change.
+
+Past the limit, scans and chat questions return:
+
+```json
+{
+  "error": "daily_limit_reached",
+  "message": "You've reached today's limit of 10 free requests.",
+  "limit": 10,
+  "resets_at": "2026-11-13T08:00:00Z",
+  "retryable": false
+}
+```
+
+with status `429`. `resets_at` is the next midnight Pacific in UTC; the app shows it in the phone's own time zone.
+
 ## Who can call it
 
 Every request needs `Authorization: Bearer <Firebase ID token>`.
@@ -76,6 +103,28 @@ Guests get a token from `AuthService.signInAsGuest()`, used by both the Login an
 
 Claude's output is validated before it is returned. Missing fields, wrong types, a score out of range, a risk level that does not match the score, or no tool output all produce the error below.
 
+## Home summary: `scan_home`
+
+Request: `{"action": "scan_home"}` with a Firebase ID token (guests get `403 account_required`).
+
+Response `200`:
+
+```json
+{
+  "week_total": 12, "week_high": 3, "week_medium": 4, "week_low": 5,
+  "scam_rate": 25, "attention_48h": 1,
+  "recent_high": [{"id": "abc", "description": "...", "summary": "..."}],
+  "last_checked_at": "2026-11-14T12:00:00+00:00",
+  "data_source": "claude"
+}
+```
+
+- Counts come from daily counters at `users/{uid}/stats/{YYYY-MM-DD}` (UTC), written in the same batch as each saved scan. The window is the last 7 UTC days.
+- `attention_48h` counts high-risk scans from the last 48 hours (looks at up to 50 scans). `recent_high` holds up to 3.
+- `data_source` is `mock_analysis` when `MOCK_CLAUDE=true`, otherwise `claude`.
+- Errors: `503 {"error": "history_unavailable", "retryable": true}`.
+- Scans saved before counters existed: run `backend/scripts/backfill_scan_stats.py` once.
+
 ## Retryable error (`502`)
 
 ```json
@@ -95,6 +144,8 @@ Raw provider errors are never returned. Logs record only the error type, never t
 - `500 {"error": "server_error", "retryable": true}`: unexpected failure.
 - `403 {"error": "account_required"}`: a guest called `scan_history` or `delete_account`.
 - `502 {"error": "chat_unavailable", "retryable": true}`: chat answer failed.
+- `429 {"error": "daily_limit_reached", ...}`: a free user used all of today's requests (see Free-tier daily limit).
+- `503 {"error": "usage_unavailable", "retryable": true}`: today's count could not be read.
 
 ### How the app handles errors
 
@@ -104,6 +155,7 @@ Raw provider errors are never returned. Logs record only the error type, never t
 | Timeout (60 s client limit) | "The check is taking longer than expected. Please try again." | Yes |
 | 5xx | "PhishNet could not check this message right now. Please try again." | Yes |
 | 401 / 403 | "Your session could not be verified. Please sign in again." | No |
+| 429 `daily_limit_reached` | "You've reached today's limit of 10 free requests. It resets tomorrow at 12:00 AM." (reset time in the phone's time zone) | No |
 
 Capture keeps the submitted text on failure and offers a Retry action.
 
@@ -124,7 +176,7 @@ Checked on 11/03/26.
 | Runtime / handler | Python 3.12 / `handler.handler` |
 | Function URL auth type | `NONE` (the handler verifies the Firebase token itself) |
 | Timeout | 35 seconds. Raise it if scans start timing out |
-| Environment variables | `MOCK_CLAUDE` only. Optional: `SECRET_ID` (default `phishnet/prod`), `FIREBASE_PROJECT_ID` (default `phishnet-b93e0`), `CHAT_MODEL` (default `claude-sonnet-5-5`) |
+| Environment variables | `MOCK_CLAUDE` only. Optional: `SECRET_ID` (default `phishnet/prod`), `FIREBASE_PROJECT_ID` (default `phishnet-b93e0`), `CHAT_MODEL` (default `claude-sonnet-5-5`), `FREE_DAILY_LIMIT` (default `10`) |
 | Execution role | `phishnet-scan-execution-role` |
 
 The app uses the Function URL as the default in `lib/services/scan_service.dart` and can override it with `--dart-define=SCAN_API_URL=<url>`.
@@ -210,4 +262,4 @@ The schedule does **not** target `phishnet-scan`: that handler requires a Fireba
 - **Enable:** set the schedule to Enabled, only after the worker is implemented.
 - **Disable or remove:** toggle it off or delete the schedule.
 - **Overlap:** consider reserved concurrency of 1 on the worker.
-- **Out of scope for this issue:** Yahoo authorization, mailbox polling, user alerts. The future worker will need its own secrets and a narrowly scoped role.
+- **Out of scope for this issue:** Live Monitoring (Gmail). It has its own functions and status in [`docs/live-monitoring.md`](live-monitoring.md) and [`docs/live-monitoring-setup.md`](live-monitoring-setup.md).

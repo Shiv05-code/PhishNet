@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pasteboard/pasteboard.dart';
 
 import '../services/chat_service.dart';
+import '../services/chat_time.dart';
 import '../services/image_text_reader.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/chat_rich_text.dart';
@@ -141,7 +142,25 @@ class _AiChatScreenState extends State<AiChatScreen> {
     if (text.trim().isNotEmpty) {
       _controller.clear();
       await _chat.ask(text);
+      _restoreUnsentQuestion();
     }
+  }
+
+  Future<void> _retry() async {
+    await _chat.retry();
+    _restoreUnsentQuestion();
+  }
+
+  /// When the free daily limit stopped a question, put it back in the input
+  /// box so the user does not have to type it again after usage resets.
+  void _restoreUnsentQuestion() {
+    final question = _chat.takeUnsentQuestion();
+    if (question == null || !mounted) return;
+    if (_controller.text.trim().isNotEmpty) return;
+    _controller.value = TextEditingValue(
+      text: question,
+      selection: TextSelection.collapsed(offset: question.length),
+    );
   }
 
   /// Follows the newest text only while the user is at the bottom. Scrolling
@@ -340,15 +359,32 @@ class _AiChatScreenState extends State<AiChatScreen> {
                         itemBuilder: (context, index) {
                           if (index < messages.length) {
                             final m = messages[index];
-                            return _Bubble(
+                            final sent = m.sentAt;
+                            final before = index > 0
+                                ? messages[index - 1].sentAt
+                                : null;
+                            // A day heading starts each new day of messages.
+                            final newDay =
+                                sent != null &&
+                                (before == null ||
+                                    !isSameChatDay(before, sent));
+                            return Column(
                               key: ObjectKey(m),
-                              message: m,
-                              typing: _typing.contains(m),
-                              skip: _skip.contains(m),
-                              onTyped: () => _onTyped(m),
-                              onProgress: _followEnd,
-                              onShowAll: () => _showAll(m),
-                              onCopy: () => _copy(m),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (newDay)
+                                  _DayDivider(label: chatDayLabel(sent)),
+                                _Bubble(
+                                  message: m,
+                                  typing: _typing.contains(m),
+                                  skip: _skip.contains(m),
+                                  onTyped: () => _onTyped(m),
+                                  onProgress: _followEnd,
+                                  onShowAll: () => _showAll(m),
+                                  onCopy: () => _copy(m),
+                                ),
+                              ],
                             );
                           }
                           if (_chat.sending && index == messages.length) {
@@ -361,7 +397,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
               if (_chat.error != null)
                 _ErrorBanner(
                   message: _chat.error!,
-                  onRetry: _chat.canRetry ? _chat.retry : null,
+                  onRetry: _chat.canRetry ? _retry : null,
+                ),
+              if (_chat.isLong && !_chat.sending)
+                _LongChatNotice(
+                  onNewChat: () {
+                    if (_chat.continueInNewChat()) _controller.clear();
+                  },
                 ),
               _InputBar(
                 controller: _controller,
@@ -386,7 +428,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
 class _Bubble extends StatelessWidget {
   const _Bubble({
-    super.key,
     required this.message,
     required this.typing,
     required this.skip,
@@ -409,6 +450,7 @@ class _Bubble extends StatelessWidget {
     final mine = message.fromUser;
     final image = message.imagePath;
     final answerLabel = _verdictLabel(message.riskLevel);
+    final sent = message.sentAt;
     final bubble = Semantics(
       container: true,
       label: image != null
@@ -424,7 +466,7 @@ class _Bubble extends StatelessWidget {
         child: Align(
           alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
-            margin: EdgeInsets.only(bottom: mine ? 12 : 4),
+            margin: EdgeInsets.only(bottom: sent != null ? 2 : (mine ? 12 : 4)),
             padding: const EdgeInsets.all(14),
             constraints: BoxConstraints(
               maxWidth: MediaQuery.sizeOf(context).width * 0.85,
@@ -495,13 +537,37 @@ class _Bubble extends StatelessWidget {
         ),
       ),
     );
-    if (mine || image != null) return bubble;
+    // The time sits outside the excluded bubble so screen readers can reach it.
+    final timeLabel = sent == null
+        ? null
+        : Align(
+            alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(6, 0, 6, mine ? 12 : 2),
+              child: Text(
+                formatChatTime(sent),
+                style: const TextStyle(
+                  fontSize: AppTypography.label,
+                  color: AppColors.muted,
+                ),
+              ),
+            ),
+          );
+    if (mine || image != null) {
+      if (timeLabel == null) return bubble;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [bubble, timeLabel],
+      );
+    }
     // Actions sit outside the excluded bubble so screen readers can reach them.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         bubble,
+        ?timeLabel,
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: typing
@@ -523,6 +589,30 @@ class _Bubble extends StatelessWidget {
                 ),
         ),
       ],
+    );
+  }
+}
+
+/// The day heading above the first message sent on a given day.
+class _DayDivider extends StatelessWidget {
+  const _DayDivider({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: AppTypography.label,
+            fontWeight: FontWeight.w600,
+            color: AppColors.muted,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -669,6 +759,49 @@ class _AttachOption extends StatelessWidget {
               const Icon(Icons.chevron_right, color: AppColors.muted),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown once a chat is long enough that Chat may forget its start.
+class _LongChatNotice extends StatelessWidget {
+  const _LongChatNotice({required this.onNewChat});
+  final VoidCallback onNewChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'This chat is getting long, so I may not remember the '
+                'earliest messages.',
+                style: TextStyle(
+                  fontSize: AppTypography.body,
+                  color: AppColors.text,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: onNewChat,
+              child: const Text(
+                'Start a new chat',
+                style: TextStyle(fontSize: AppTypography.emphasis),
+              ),
+            ),
+          ],
         ),
       ),
     );

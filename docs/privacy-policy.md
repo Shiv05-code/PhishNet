@@ -11,7 +11,7 @@ Last updated: October 20, 2026
 
 **Scanned content**
 - Messages, links, and files you paste or upload for scanning (Capture feature).
-- If you connect a Yahoo (or other) email account for Live Monitoring, we read incoming messages using read-only access to check for phishing signs. See [Email Access (Live Monitoring)](#email-access-live-monitoring).
+- If you connect a Gmail account for Live Monitoring (Gmail accounts only), we read incoming messages using read-only access to check for phishing signs. See [Email Access (Live Monitoring)](#email-access-live-monitoring).
 
 **Usage and detection data**
 - Your scan history, flagged results, and risk scores (History and Results pages).
@@ -36,7 +36,7 @@ If you connect an email account:
 - We read only the message content needed to detect phishing (sender, links, subject, and body).
 - You can disconnect at any time in Settings. Disconnecting removes our stored access.
 - **Retention:** we have not yet set how long email content read for Live Monitoring is kept. This policy will state that period before Live Monitoring is offered.
-- We follow Yahoo's API developer policies for data use and retention.
+- We follow Google's API Services User Data Policy, including its Limited Use requirements, for Gmail data use and retention.
 
 ## Family/Social Sharing
 
@@ -69,7 +69,7 @@ If you connect an email account:
 
 ## Third-Party Services
 
-- **Yahoo Mail API** (for Live Monitoring only), under Yahoo's developer terms.
+- **Gmail API** (for Live Monitoring only), under Google's API terms. Yahoo and other email providers are not supported.
 - **Anthropic's Claude** generates scam analysis results. Message text you submit for scanning is sent to Claude to produce your result. Claude models also power the AI Chat assistant's responses.
 - **Firebase** (authentication and database) and **Amazon Web Services** (hosting and secrets storage) support the app.
 

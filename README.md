@@ -68,7 +68,7 @@ respectful, never rushed or condescending.
 | **3. Decide** | Ask a follow-up in **AI Chat** if you are unsure. | Clear, practical next steps, plus detailed explanations on request. |
 
 **Looking out for each other.** PhishNet will also keep a **History** of your
-past scans, offer optional Yahoo inbox monitoring with alerts, and include a
+past scans, offer optional Gmail inbox monitoring (Gmail accounts only) with alerts, and include a
 **Family/Social** screen so loved ones can help each other spot scams.
 
 > [!NOTE]
@@ -85,7 +85,7 @@ milestones, not features that are available today.
 | ✅ Built so far | 🛠️ Planned |
 | --- | --- |
 | Firebase Email/Password authentication | History of saved scans and a Home dashboard |
-| Signup validation for Gmail and Yahoo addresses | Yahoo inbox monitoring and push alerts |
+| Signup validation for Gmail and Yahoo addresses (Live Monitoring: Gmail only) | Gmail inbox monitoring is built and tested; always-on poll runs every 5 minutes |
 | Email verification and verified-account login checks | Family/Social sharing and scam-pattern insights |
 | Password reset by email | Saved AI Chat conversations |
 | Guest access to the capture flow | |
@@ -95,6 +95,7 @@ milestones, not features that are available today.
 | AI Chat for follow-up questions | |
 | Payment-plan backend | |
 | Guest mode with Firebase Anonymous sign-in (guest scans are not saved) | |
+| Trusted Contacts: up to 5 favorites with phone numbers, opened in Messages with the scan | |
 
 Follow day-to-day progress on the
 **[GitHub project board](https://github.com/users/Shiv05-code/projects/2)**.
@@ -109,8 +110,8 @@ windows and scheduled demos, and may change as work progresses.
 | Sprint | Window | Demo | Goal |
 | --- | --- | --- | --- |
 | **1 · Foundations** | Sep 30 – Oct 14, 2026 | Oct 21 | Accessible sign-in and account management, navigation and Settings, Payment Plans experience, Firebase and Claude prepared |
-| **2 · Message checking** | Oct 15 – Oct 28, 2026 | Nov 4 | Capture and Results connected to Claude scam analysis, photo capture and on-device OCR, AI Chat, Firestore scan storage, Yahoo monitoring setup begins |
-| **3 · Monitoring and history** | Oct 29 – Nov 11, 2026 | Nov 18 | History and Home dashboard, Yahoo monitoring with alerts |
+| **2 · Message checking** | Oct 15 – Oct 28, 2026 | Nov 4 | Capture and Results connected to Claude scam analysis, photo capture and on-device OCR, AI Chat, Firestore scan storage, Gmail monitoring setup begins |
+| **3 · Monitoring and history** | Oct 29 – Nov 11, 2026 | Nov 18 | History and Home dashboard, Gmail monitoring with alerts (Gmail accounts only) |
 | **4 · Sharing and polish** | Nov 12 – Nov 25, 2026 | Dec 2 (final demo) | Family/Social sharing, saved AI Chat conversations, scam-pattern insights, Payment Plans improvements |
 
 <details>
@@ -129,12 +130,12 @@ windows and scheduled demos, and may change as work progresses.
 - Capture and Results connected to Claude-powered scam analysis
 - Scan assessments saved to Firestore
 - Claude integrated into the AI Chat experience
-- AWS setup begins for Yahoo email monitoring
+- AWS setup begins for Gmail email monitoring
 
 **Sprint 3 — Monitoring and history**
 - History screen with saved scans and recent detections
 - Home dashboard with analytics
-- Yahoo authorization and scheduled inbox monitoring, with notifications for flagged messages
+- Gmail authorization, monitoring, and push alerts for flagged messages (Gmail accounts only). Built and verified on iPhone; always-on poll runs every 5 minutes
 
 **Sprint 4 — Sharing and polish**
 - Family/Social screen with sharing through the iOS Share Sheet
@@ -149,7 +150,7 @@ windows and scheduled demos, and may change as work progresses.
 
 PhishNet is an iOS-focused Flutter app backed by Firebase, AWS, and Claude.
 **Firebase Authentication, AWS Lambda, Secrets Manager, Firestore, and Claude are in use. 
-Scheduled monitoring is a disabled scaffold; Yahoo, push alers, and History are planned.**
+Gmail Live Monitoring is built and verified on iPhone, but scheduled checks are off until end-to-end testing is complete. Live Monitoring works with Gmail accounts only.**
 
 ```mermaid
 flowchart LR
@@ -189,22 +190,33 @@ flowchart LR
 | Service | Status | Purpose |
 | --- | --- | --- |
 | **Firebase Authentication** | Integrated | Email/password accounts and Anonymous sign in for guest mode |
-| **Cloud Firestore** | In use | Single database for scan history, chat records, monitoring settings, and restricted Yahoo authorization data |
-| **Firebase Cloud Messaging** | Planned | Phishing alerts on iPhone, delivered through Apple Push Notification service (APNs) |
+| **Cloud Firestore** | In use | Single database for scan history, chat records, device push tokens, and monitoring status |
+| **Firebase Cloud Messaging** | In use (iOS) | Phishing alerts on iPhone, delivered through Apple Push Notification service (APNs). Android deferred |
 | **Claude Haiku** | In use | Fast, routine message and email classification |
 | **Claude Sonnet** | In use | AI Chat and more detailed explanations |
-| **Yahoo OAuth 2.0** | Planned | Lets users authorize and disconnect inbox monitoring |
+| **Google OAuth 2.0 (Gmail)** | In use | Read-only `gmail.readonly` consent for Live Monitoring. Gmail accounts only |
 | **AWS Lambda (`phishnet-scan`)** | Deployed | Verifies the Firebase ID token (account or guest), then calls Claude. Region us-east-2. See [`docs/backend-scan-api.md`](docs/backend-scan-api.md) |
 | **AWS Secrets Manager** | In use | Secret `phishnet/prod` holds the Claude key and Firebase service account |
-| **Amazon EventBridge Scheduler** | Scaffold, disabled | Schedule targets a placeholder worker; no mailbox polling yet. Planned every 1–2 minutes |
+| **Amazon EventBridge Scheduler** | Not created | Planned daily schedule (12:00 Pacific) for Gmail checks. Not created until end-to-end testing passes |
 
 ### Privacy by design
 
 - **Screenshots stay on the phone.** Text recognition runs on the device, so images are not uploaded.
 - **Verified in code (`backend/lambda/handler.py`):** the scan endpoint does not store message text or log it. It saves only the analysis result (risk level, summary, red flags, next steps) and a timestamp to the user's scans. Account deletion removes the account-linked scan records and profile, but copies each scan's analysis fields to `anonymized_training_scans` without user IDs. Those unlinked assessments remain and may contain personal details from messages. No model training code exists in this repository. The app’s Delete My Account currently removes Firestore data directly and does not call the Lambda deletion action. Guest (Anonymous) users can scan, but their scans are not saved, and history and account deletion are denied for them.
-- **Users stay in control.** Yahoo inbox access requires explicit authorization and can be disconnected at any time.
+- **Users stay in control.** Gmail access requires explicit consent (read-only) and can be turned off at any time on the Home screen. Live Monitoring works with Gmail accounts only.
+- **Trusted Contacts are opt-in.** Phone numbers are saved only when a user picks a contact, are stored in that user's Firestore account, are readable only by that user, and are removed when the contact is deleted or the account is deleted. PhishNet never sends a message on the user's behalf; the user taps Send in Messages.
 - **Credentials stay out of the app.** The Claude API key and Firebase service account are read from AWS Secrets Manager (`phishnet/prod`) by the Lambda. They are not in the app, the repository, or environment variables, and the code never logs them.
-- **Restricted data.** Yahoo authorization data is planned to be accessible only to trusted backend services, not to other app users.
+- **Restricted data.** Gmail refresh tokens are stored only in the backend secret, never on the device or in the app. Monitoring status is read from the backend, and email content is never logged.
+
+### Validation requirements
+
+Anything that can change what a user is told must pass these checks before it ships. Tests for each rule live in `backend/tests` and `test`.
+
+- **Scan results (enforced in `handler.py`).** The score is a whole number from 0 to 100 and the risk level must match it (low 0-33, medium 34-66, high 67-100). The one-sentence description is 15 words or fewer, the summary is 30 words or fewer, and there are 1 to 3 next steps of 10 words or fewer. Red flags use a known category. A result that fails any check is retried once, then returns an error instead of a guess.
+- **AI Chat (enforced in `handler.py`).** A question is 1,000 characters or fewer, the backend reads only the last 10 turns, and answers are capped at 1,200 characters. Chat features that only reuse what is already on the phone, such as showing a scan or carrying a summary into a new chat, send nothing and do not count toward the daily limit.
+- **Scam-pattern insights (`backend/lambda/pattern_insights.py`).** A pattern needs an ID like `PI-001`, a known red-flag category, and short text. It may not contain an email address, link, phone number or account number. Only `approved` patterns, with a named reviewer and review date, can reach the prompt, and only when `PATTERN_INSIGHTS_ENABLED=true`. Run `python backend/scripts/check_patterns.py` before changing the library.
+- **Privacy.** Message text is never stored or logged. Insight and training data may hold analysis fields and hand-written examples only, never text copied from a user's message.
+- **Before merging.** One teammate approves the PR and the CI checks pass. Changes that touch the Lambda also need `python -m unittest discover -s tests` run from `backend/`, and a deploy is done by the owner after the merge.
 
 ---
 

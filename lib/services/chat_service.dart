@@ -7,7 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:math';
 import 'chat_history_repository.dart';
+import 'daily_limit.dart';
 
+import '../models/saved_scan.dart';
 import '../models/scan_result.dart';
 import 'image_text_reader.dart';
 import 'scan_service.dart';
@@ -20,10 +22,14 @@ class ChatMessage {
     required this.text,
     this.imagePath,
     this.riskLevel,
+    this.sentAt,
   });
 
   final bool fromUser;
   final String text;
+
+  /// When the message was sent. Null for chats saved before times were kept.
+  final DateTime? sentAt;
 
   /// A photo the user attached. Kept only on this phone.
   final String? imagePath;
@@ -35,6 +41,7 @@ class ChatMessage {
     'fromUser': fromUser,
     'text': text,
     if (riskLevel != null) 'riskLevel': riskLevel,
+    if (sentAt != null) 'sentAt': sentAt!.toUtc().toIso8601String(),
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -52,18 +59,43 @@ class ChatMessage {
       fromUser: fromUser,
       text: text,
       riskLevel: riskLevel as String?,
+      sentAt: _parseSentAt(json['sentAt']),
     );
   }
+}
+
+/// Reads a saved message time. A missing or unreadable time is null, so an
+/// old or damaged value never stops a chat from opening.
+DateTime? _parseSentAt(Object? value) {
+  if (value is Timestamp) return value.toDate().toUtc();
+  if (value is DateTime) return value.toUtc();
+  if (value is String) return DateTime.tryParse(value)?.toUtc();
+  return null;
 }
 
 /// The scan a conversation is about: the message that was checked and
 /// PhishNet's assessment of it. Both are optional on the backend.
 
 class ChatScanContext {
-  const ChatScanContext({required this.message, this.assessment, this.result});
+  const ChatScanContext({
+    required this.message,
+    this.assessment,
+    this.result,
+    this.scanId,
+    this.messageIsOriginal = true,
+  });
 
+  /// The text that was checked. For a scan opened from History this is the
+  /// saved short description instead, because the full text is never stored.
   final String message;
   final Map<String, dynamic>? assessment;
+
+  /// The saved scan this conversation is about, when it came from History.
+  /// Lets Chat find the conversation again instead of starting a second one.
+  final String? scanId;
+
+  /// False when [message] is only the saved description of the scan.
+  final bool messageIsOriginal;
 
   /// The scan itself, when the app has it. Chat uses it to show the summary.
   final ScanResult? result;
@@ -90,14 +122,38 @@ class ChatScanContext {
         },
       );
 
+  /// The context for a scan saved in History. Only its short description is
+  /// kept, so that stands in for the message.
+  factory ChatScanContext.fromSaved(SavedScan scan) {
+    final context = ChatScanContext.fromResult(scan.description, scan.result);
+    return ChatScanContext(
+      message: context.message,
+      assessment: context.assessment,
+      result: context.result,
+      scanId: scan.id,
+      messageIsOriginal: false,
+    );
+  }
+
+  /// Whether [other] is the same scan, so Chat can reuse its conversation.
+  bool isSameScanAs(ChatScanContext other) {
+    final a = scanId;
+    final b = other.scanId;
+    if (a != null || b != null) return a == b;
+    return message == other.message;
+  }
+
   Map<String, dynamic> toJson() => {
     'message': message,
     if (assessment != null) 'assessment': assessment,
+    if (scanId != null) 'scanId': scanId,
+    if (!messageIsOriginal) 'messageIsOriginal': false,
   };
 
   factory ChatScanContext.fromJson(Map<String, dynamic> json) {
     final message = json['message'];
     final assessment = json['assessment'];
+    final scanId = json['scanId'];
 
     if (message is! String || (assessment != null && assessment is! Map)) {
       throw const FormatException('Invalid chat scan context.');
@@ -108,6 +164,8 @@ class ChatScanContext {
       assessment: assessment == null
           ? null
           : Map<String, dynamic>.from(assessment),
+      scanId: scanId is String && scanId.isNotEmpty ? scanId : null,
+      messageIsOriginal: json['messageIsOriginal'] != false,
     );
   }
 }
@@ -273,6 +331,21 @@ class ChatService extends ChangeNotifier {
   /// Plain-language error for the last failed question, or null.
   String? get error => _error;
   bool get canRetry => _error != null && _pendingQuestion != null;
+
+  /// Set while the last request was refused because the free daily limit is
+  /// used up. [error] then says when usage resets.
+  DailyLimitInfo? get dailyLimit => _dailyLimit;
+  DailyLimitInfo? _dailyLimit;
+
+  String? _unsentQuestion;
+
+  /// The question that was refused because of the daily limit, once. The chat
+  /// screen puts it back in the input box so nothing the user typed is lost.
+  String? takeUnsentQuestion() {
+    final question = _unsentQuestion;
+    _unsentQuestion = null;
+    return question;
+  }
 
   String? _currentUserId;
   int _requestGeneration = 0;
@@ -550,6 +623,8 @@ class ChatService extends ChangeNotifier {
     _activeConversationId = null;
     _scan = null;
     _error = null;
+    _dailyLimit = null;
+    _unsentQuestion = null;
     _pendingQuestion = null;
 
     notifyListeners();
@@ -632,6 +707,84 @@ class ChatService extends ChangeNotifier {
     return true;
   }
 
+  /// A chat this many messages long is more than Chat can keep in mind: the
+  /// backend reads only the last [maxHistory] turns of it.
+  static const longChatLength = 30;
+
+  /// True once the conversation is long enough to suggest a fresh start.
+  bool get isLong => _messages.length >= longChatLength;
+
+  /// Starts a new conversation about the same scan, opened with a short note
+  /// of what was asked before. The long conversation stays in Recent Chats.
+  /// Nothing is sent to the backend, so this does not count toward the
+  /// daily limit.
+  bool continueInNewChat() {
+    if (_sending || !isLong) return false;
+
+    final scan = _scan;
+    final note = describeEarlierChat(_messages);
+
+    _saveCurrentConversation();
+
+    _activeConversationId = null;
+    _messages.clear();
+    _error = null;
+    _pendingQuestion = null;
+
+    final result = scan?.result;
+    if (scan != null && result != null) {
+      _messages.add(
+        ChatMessage(
+          fromUser: false,
+          text: describeScan(
+            result,
+            message: scan.message,
+            messageIsOriginal: scan.messageIsOriginal,
+          ),
+          riskLevel: result.riskLevel,
+        ),
+      );
+    }
+    _messages.add(ChatMessage(fromUser: false, text: note));
+
+    notifyListeners();
+    return true;
+  }
+
+  /// The opening note of a continued chat: the last few questions asked, and
+  /// the last one on its own. Plain text built on this phone, so it needs no
+  /// request and never counts toward the daily limit.
+  static String describeEarlierChat(List<ChatMessage> messages) {
+    String clip(String text) =>
+        text.length > 120 ? '${text.substring(0, 117)}...' : text;
+
+    final asked = [
+      for (final m in messages)
+        if (m.fromUser && m.imagePath == null && m.text.trim().isNotEmpty)
+          m.text.trim(),
+    ];
+
+    final b = StringBuffer('**🔄 Continued from an earlier chat**');
+    if (asked.isNotEmpty) {
+      final earlier = asked.sublist(0, asked.length - 1);
+      final recent = earlier.length > 4
+          ? earlier.sublist(earlier.length - 4)
+          : earlier;
+      if (recent.isNotEmpty) {
+        b.write('\n\n**You asked earlier**');
+        for (final question in recent) {
+          b.write('\n• ${clip(question)}');
+        }
+      }
+      b.write('\n\n**Your last question**\n“${clip(asked.last)}”');
+    }
+    b.write(
+      '\n\nI only remember the scan and this note, so ask again if you '
+      'need more. Your earlier chat is saved in Recent Chats.',
+    );
+    return b.toString();
+  }
+
   bool openConversation(String id) {
     if (_sending) return false;
 
@@ -667,13 +820,21 @@ class ChatService extends ChangeNotifier {
     return true;
   }
 
-  /// Call when Chat opens. Opening from a different scan starts a fresh
-  /// conversation about it; opening with no scan (e.g. from the menu) keeps
-  /// whatever conversation is already there.
+  /// Call when Chat opens. Opening about a scan that already has a
+  /// conversation continues it; a different scan starts a fresh conversation.
+  /// Opening with no scan (e.g. from the menu) keeps whatever conversation is
+  /// already there. Nothing is sent to the backend, so this never counts
+  /// toward the daily limit.
   void openFor(ChatScanContext? scan) {
     if (scan == null) return;
-    if (_scan?.message == scan.message) return;
+    final current = _scan;
+    if (current != null && current.isSameScanAs(scan)) return;
     if (_sending) return;
+
+    final existing = _conversations
+        .where((c) => c.scan?.isSameScanAs(scan) ?? false)
+        .firstOrNull;
+    if (existing != null && openConversation(existing.id)) return;
 
     _saveCurrentConversation();
     _activeConversationId = null;
@@ -683,12 +844,17 @@ class ChatService extends ChangeNotifier {
     _pendingQuestion = null;
     final result = scan.result;
     if (result != null) {
-      // Same summary as a photo scan, so every scan reads the same way in Chat.
+      // Same summary as a photo scan, with the message shown above it.
       _messages.add(
         ChatMessage(
           fromUser: false,
-          text: describeScan(result),
+          text: describeScan(
+            result,
+            message: scan.message,
+            messageIsOriginal: scan.messageIsOriginal,
+          ),
           riskLevel: result.riskLevel,
+          sentAt: DateTime.now(),
         ),
       );
     }
@@ -717,7 +883,9 @@ class ChatService extends ChangeNotifier {
     final clipped = text.length > maxQuestionLength
         ? text.substring(0, maxQuestionLength)
         : text;
-    _messages.add(ChatMessage(fromUser: true, text: clipped));
+    _messages.add(
+      ChatMessage(fromUser: true, text: clipped, sentAt: DateTime.now()),
+    );
     _saveCurrentConversation();
     await _send(clipped);
     return true;
@@ -743,10 +911,12 @@ class ChatService extends ChangeNotifier {
       fromUser: true,
       text: typed.isEmpty ? photoText : typed,
       imagePath: imagePath,
+      sentAt: DateTime.now(),
     );
     _messages.add(shown);
     _sending = true;
     _error = null;
+    _dailyLimit = null;
     _pendingQuestion = null;
     notifyListeners();
     try {
@@ -762,7 +932,7 @@ class ChatService extends ChangeNotifier {
       try {
         result = await _analyze(text);
       } on ScanException catch (e) {
-        throw _ChatFailure(e.message);
+        throw _ChatFailure(e.message, dailyLimit: e.dailyLimit);
       }
       // Signed out, or a different user signed in, while the photo was read.
       if (generation != _requestGeneration) return false;
@@ -773,6 +943,7 @@ class ChatService extends ChangeNotifier {
             fromUser: false,
             text: describeScan(result),
             riskLevel: result.riskLevel,
+            sentAt: DateTime.now(),
           ),
         );
       }
@@ -782,6 +953,7 @@ class ChatService extends ChangeNotifier {
     } on _ChatFailure catch (e) {
       _messages.remove(shown);
       _error = e.message;
+      _dailyLimit = e.dailyLimit;
     } finally {
       if (generation == _requestGeneration) _sending = false;
       notifyListeners();
@@ -795,7 +967,14 @@ class ChatService extends ChangeNotifier {
   }
 
   /// A short plain-language summary of a scan, shown as PhishNet's reply.
-  static String describeScan(ScanResult r) {
+  ///
+  /// With a [message], it is shown first: the text itself when
+  /// [messageIsOriginal], otherwise the saved description of the scan.
+  static String describeScan(
+    ScanResult r, {
+    String message = '',
+    bool messageIsOriginal = true,
+  }) {
     final level = switch (r.riskLevel) {
       'high' => 'High risk',
       'medium' => 'Medium risk',
@@ -808,7 +987,19 @@ class ChatService extends ChangeNotifier {
     };
     final pct = r.scamPercentage;
     final headline = pct == null ? level : '$level: $pct% likely a scam';
-    final b = StringBuffer('**$icon $headline**');
+    final b = StringBuffer();
+    final quoted = message.trim();
+    if (quoted.isNotEmpty) {
+      final shown = quoted.length > 300
+          ? '${quoted.substring(0, 297)}...'
+          : quoted;
+      b.write(
+        messageIsOriginal
+            ? '**📩 Your message**\n“$shown”\n\n'
+            : '**📩 About this message**\n$shown\n\n',
+      );
+    }
+    b.write('**$icon $headline**');
     b.write('\n\n${r.summary}');
     final flags = r.redFlags.take(3).toList();
     if (flags.isNotEmpty) {
@@ -843,6 +1034,7 @@ class ChatService extends ChangeNotifier {
 
     _sending = true;
     _error = null;
+    _dailyLimit = null;
     _pendingQuestion = question;
     notifyListeners();
 
@@ -851,7 +1043,9 @@ class ChatService extends ChangeNotifier {
 
       if (generation != _requestGeneration) return;
 
-      _messages.add(ChatMessage(fromUser: false, text: answer));
+      _messages.add(
+        ChatMessage(fromUser: false, text: answer, sentAt: DateTime.now()),
+      );
       _saveCurrentConversation();
 
       final conversationId = _activeConversationId;
@@ -868,12 +1062,55 @@ class ChatService extends ChangeNotifier {
     } on _ChatFailure catch (e) {
       if (generation != _requestGeneration) return;
       _error = e.message;
+      _dailyLimit = e.dailyLimit;
+      if (e.dailyLimit != null) _takeBackRefusedQuestion(question);
     } finally {
       if (generation == _requestGeneration) {
         _sending = false;
         notifyListeners();
       }
     }
+  }
+
+  /// A question refused for the daily limit was never answered, so it comes
+  /// back out of the conversation and is kept in [takeUnsentQuestion] for the
+  /// input box. A photo's own message stays, because its scan already happened.
+  void _takeBackRefusedQuestion(String question) {
+    if (_messages.isEmpty) return;
+    final last = _messages.last;
+    if (!last.fromUser || last.imagePath != null || last.text != question) {
+      return;
+    }
+    _messages.removeLast();
+    _pendingQuestion = null;
+    _unsentQuestion = question;
+    if (_messages.isEmpty) {
+      _discardActiveConversation();
+    } else {
+      _saveCurrentConversation();
+    }
+  }
+
+  /// Removes the open conversation, saved copy included. Used when nothing is
+  /// left in it.
+  void _discardActiveConversation() {
+    final id = _activeConversationId;
+    if (id == null) return;
+    _conversations.removeWhere((conversation) => conversation.id == id);
+    _activeConversationId = null;
+
+    final repository = _historyRepository;
+    final uid = _currentUserId;
+    if (repository == null || uid == null) return;
+
+    _pendingChatSave = _pendingChatSave
+        .then((_) async {
+          if (_currentUserId != uid) return;
+          await repository.deleteChat(uid: uid, conversationId: id);
+        })
+        .catchError((Object error) {
+          debugPrint('Could not remove empty chat: $error');
+        });
   }
 
   // Turns before the question being asked (it is the last message in the
@@ -928,6 +1165,12 @@ class ChatService extends ChangeNotifier {
       throw const _ChatFailure(offlineError);
     }
 
+    if (response.statusCode == 429) {
+      final limit = DailyLimitInfo.fromBody(response.body);
+      if (limit != null) {
+        throw _ChatFailure(limit.message(), dailyLimit: limit);
+      }
+    }
     if (response.statusCode == 401) throw const _ChatFailure(signInError);
     if (response.statusCode != 200) throw const _ChatFailure(genericError);
     try {
@@ -942,6 +1185,7 @@ class ChatService extends ChangeNotifier {
 }
 
 class _ChatFailure implements Exception {
-  const _ChatFailure(this.message);
+  const _ChatFailure(this.message, {this.dailyLimit});
   final String message;
+  final DailyLimitInfo? dailyLimit;
 }

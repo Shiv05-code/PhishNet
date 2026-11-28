@@ -5,7 +5,7 @@ import 'legal_screen.dart';
 /// Approved content — do not change wording without approval.
 const termsConditionsDocument = LegalDocument(
   heading: 'PhishNet Terms & Conditions',
-  lastUpdated: 'September 5, 2026',
+  lastUpdated: 'November 14, 2026',
   sections: [
     LegalSection(
       title: 'Acceptance of Terms',
@@ -19,10 +19,10 @@ const termsConditionsDocument = LegalDocument(
       title: 'What PhishNet Does',
       blocks: [
         LegalBullet(
-          'PhishNet scans messages, links, and emails to help identify potential phishing and scam attempts, using AI models to generate a risk assessment.',
+          'PhishNet scans messages, links, and emails to help identify phishing and scam attempts, using AI models to generate a risk assessment.',
         ),
         LegalBullet(
-          'PhishNet\'s results are a helpful guide, not a guarantee. We cannot catch every scam or phishing attempt, and a "safe" result doesn\'t mean a message is 100% trustworthy. Always use your own judgment, especially with anything asking for money, passwords, or personal information.',
+          'PhishNet\'s results are a helpful guide, **not a guarantee**. We can\'t catch every scam, and a "safe" result doesn\'t mean a message is 100% trustworthy. Use your own judgment, especially with requests for money, passwords, or personal information.',
         ),
       ],
     ),
@@ -30,21 +30,19 @@ const termsConditionsDocument = LegalDocument(
       title: 'Your Account',
       blocks: [
         LegalBullet(
-          'You\'re responsible for keeping your login credentials secure',
+          'You\'re responsible for keeping your login credentials secure.',
         ),
         LegalBullet(
-          'You must be old enough to legally use this app in your region',
+          'You must be old enough to use this app legally in your region.',
         ),
-        LegalBullet(
-          'You\'re responsible for any activity that happens under your account',
-        ),
+        LegalBullet('You\'re responsible for all activity under your account.'),
       ],
     ),
     LegalSection(
       title: 'Email Access (Live Monitoring)',
       blocks: [
         LegalBullet(
-          'If you choose to connect a Yahoo (or other) email account, you\'re granting PhishNet read-only access to scan incoming messages, as described in our Privacy Policy. You can disconnect this at any time in Settings.',
+          'Live Monitoring works only with Gmail accounts. If you connect a Gmail account, you grant PhishNet read-only access to scan incoming messages, as described in our Privacy Policy. You can turn off Live Monitoring at any time on the Home screen.',
         ),
       ],
     ),
@@ -52,7 +50,13 @@ const termsConditionsDocument = LegalDocument(
       title: 'Family/Social Sharing',
       blocks: [
         LegalBullet(
-          'Sharing a scan result is your choice and happens through your device\'s native share feature, not through PhishNet\'s servers. You\'re responsible for what you choose to share and with whom. PhishNet isn\'t responsible for how a recipient uses or responds to shared content.',
+          'Sharing a scan result is your choice. It happens through your device\'s share feature, not through PhishNet\'s servers. You\'re responsible for what you share and with whom. PhishNet isn\'t responsible for how a recipient uses or responds to shared content.',
+        ),
+        LegalBullet(
+          'If you add a contact to PhishNet, you **give us permission to hold onto it for you** as a convenience for Trusted Contacts.',
+        ),
+        LegalBullet(
+          'You confirm that any phone number you save is correct and that you have the contact\'s permission to store it. Messages to a Trusted Contact are sent from your own Messages app, and you decide whether to send them.',
         ),
       ],
     ),
@@ -71,7 +75,7 @@ const termsConditionsDocument = LegalDocument(
       title: 'No Liability',
       blocks: [
         LegalBullet(
-          'PhishNet is provided "as is." We\'re not liable for losses resulting from a scam or phishing attempt that our detection missed, or a legitimate message flagged incorrectly. Use PhishNet as one layer of protection, not your only one.',
+          'PhishNet is provided "as is." We\'re not liable for losses from a scam or phishing attempt our detection missed, or from a legitimate message flagged in error. Use PhishNet as one layer of protection, not your only one.',
         ),
       ],
     ),
@@ -87,7 +91,7 @@ const termsConditionsDocument = LegalDocument(
       title: 'Contact Us',
       blocks: [
         LegalBullet(
-          'Questions about these Terms? Reach us at phishnet05@gmail.com',
+          'Questions about these Terms? Reach us at **phishnet05@gmail.com**',
         ),
       ],
     ),

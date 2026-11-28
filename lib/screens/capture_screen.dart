@@ -18,6 +18,7 @@ import '../models/scan_result.dart';
 import '../services/mock_scans.dart';
 import '../services/scan_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/subscription_service.dart';
 
 class CaptureScreen extends StatefulWidget {
   final bool isGuest;
@@ -172,16 +173,38 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
       if (!mounted) return;
 
+      // Plus users see "In-app check" on fresh results, matching History.
+      final isPlus = await SubscriptionService.instance
+          .hasPlusAccess()
+          .catchError((_) => false);
+      if (!mounted) return;
+
       Navigator.of(context).push(
         slideRoute(
-          ResultsScreen(isGuest: widget.isGuest, message: text, result: result),
+          ResultsScreen(
+            isGuest: widget.isGuest,
+            message: text,
+            result: result,
+            monitored: isPlus ? false : null,
+          ),
         ),
       );
     } on ScanException catch (error) {
       if (mounted) {
+        final atLimit = error.dailyLimit != null;
+        if (atLimit) {
+          // Keep what was going to be scanned. A photo's text goes into the box
+          // too, so it can be scanned after usage resets without picking it again.
+          if (_textController.text.trim().isEmpty) {
+            _textController.text = text;
+          }
+          setState(() => _isTextMode = true);
+        }
         _showMessage(
           error.message,
           onRetry: error.retryable ? () => _submitText(text) : null,
+          // Longer than usual, so there is time to read when usage resets.
+          duration: atLimit ? const Duration(seconds: 10) : null,
         );
       }
     } finally {
@@ -207,14 +230,18 @@ class _CaptureScreenState extends State<CaptureScreen> {
     });
   }
 
-  void _showMessage(String message, {VoidCallback? onRetry}) {
+  void _showMessage(
+    String message, {
+    VoidCallback? onRetry,
+    Duration? duration,
+  }) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.cardSurface,
         elevation: 6,
-        duration: Duration(seconds: onRetry == null ? 4 : 10),
+        duration: duration ?? Duration(seconds: onRetry == null ? 4 : 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         action: onRetry == null
             ? null

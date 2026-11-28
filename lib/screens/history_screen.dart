@@ -3,12 +3,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/scan_history_cache.dart';
 import '../models/saved_scan.dart';
 import '../screens/app_colors.dart';
+import '../services/chat_service.dart';
 import '../services/scan_service.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/source_badge.dart';
 import '../widgets/figma_app_bar.dart';
 import '../widgets/figma_gradient_background.dart';
 import 'results_screen.dart';
 import 'dart:async';
+import '../services/subscription_service.dart';
 
 List<SavedScan> filterSavedScans(List<SavedScan> scans, String query) {
   final normalizedQuery = query.trim().toLowerCase();
@@ -66,6 +69,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     _ownsService = widget.scanService == null;
     _service = widget.scanService ?? ScanService();
+    _listenForPlus();
 
     _loadHistory();
 
@@ -205,7 +209,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  List<SavedScan> get _filteredScans => filterSavedScans(_scans, _query);
+  /// Source filter: all scans, Gmail live monitoring only, or in-app checks only.
+  static const _sourceOptions = [
+    ('all', 'All'),
+    ('monitor', 'Live Monitor'),
+    ('manual', 'In-app check'),
+  ];
+  String _source = 'all';
+  // Live Monitor labels and the filter are Plus-only.
+  bool _isPlus = false;
+  StreamSubscription<dynamic>? _plusSub;
+
+  List<SavedScan> get _filteredScans {
+    final bySearch = filterSavedScans(_scans, _query);
+    if (!_isPlus || _source == 'all') return bySearch;
+    final wantMonitored = _source == 'monitor';
+    return bySearch.where((s) => s.monitored == wantMonitored).toList();
+  }
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Date unavailable';
@@ -242,14 +262,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ResultsScreen(result: scan.result),
+        builder: (_) => ResultsScreen(
+          result: scan.result,
+          monitored: _isPlus ? scan.monitored : null,
+          chatScan: ChatScanContext.fromSaved(scan),
+        ),
       ),
     );
+  }
+
+  /// Plus status decides whether Live Monitor labels and the filter show.
+  /// Failing to read it (for example, no Firebase in tests) just keeps them hidden.
+  void _listenForPlus() {
+    try {
+      _plusSub = SubscriptionService.instance
+          .watchEffectiveSubscription()
+          .listen((data) {
+            final isPlus = SubscriptionService.isActivePlus(data);
+            if (mounted && isPlus != _isPlus) setState(() => _isPlus = isPlus);
+          }, onError: (_) {});
+    } catch (_) {
+      // Keep Plus-only UI hidden.
+    }
   }
 
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _plusSub?.cancel();
     _search.dispose();
 
     if (_ownsService) {
@@ -304,6 +344,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
                 ),
               ),
+              if (_isPlus)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final option in _sourceOptions)
+                        ChoiceChip(
+                          label: Text(
+                            option.$2,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          selected: _source == option.$1,
+                          selectedColor: AppColors.primaryBlue,
+                          labelStyle: TextStyle(
+                            color: _source == option.$1
+                                ? Colors.white
+                                : AppColors.text,
+                          ),
+                          onSelected: (_) =>
+                              setState(() => _source = option.$1),
+                        ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
@@ -351,7 +416,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                           color: AppColors.muted,
                                         ),
                                       ),
-                                      const SizedBox(height: 10),
+                                      const SizedBox(height: 8),
+                                      if (_isPlus) ...[
+                                        SourceBadge(monitored: scan.monitored),
+                                        const SizedBox(height: 10),
+                                      ],
                                       Text(
                                         scan.result.summary,
                                         maxLines: 3,
