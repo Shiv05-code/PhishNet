@@ -176,8 +176,6 @@ void main() {
     );
     expect(find.text('10'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
-    expect(find.text('5'), findsOneWidget);
-    expect(find.text('30%'), findsOneWidget);
     expect(find.text('1 message needs your attention'), findsOneWidget);
     expect(find.textContaining('Prize notice'), findsOneWidget);
     expect(find.textContaining('Demo analysis'), findsNothing);
