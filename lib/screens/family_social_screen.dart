@@ -426,10 +426,10 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
 
             FigmaGlassButton(
               onPressed: _chooseMessage,
-              child: const _GlassLabel(
-                icon: Icons.swap_horiz_rounded,
-                text: 'Switch Message',
-              ),
+              child: _GlassLabel(
+  icon: Icons.swap_horiz_rounded,
+  text: _selectedResult == null ? 'Choose Message' : 'Switch Message',
+),
             ),
 
             const SizedBox(height: 16),
