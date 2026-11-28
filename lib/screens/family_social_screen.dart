@@ -335,7 +335,19 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
   /// Opens Messages to the contact's number with the scan filled in. The
   /// row shows as sent after the user taps Send, until the scan changes.
   Future<void> _messageContact(TrustedContact contact) async {
+    if (_selectedResult == null || _selectedMessage.trim().isEmpty) {
+      _showMessageRequiredDialog();
+      return;
+    }
     final phone = contact.phone;
+
+    if (_selectedResult == null || _selectedMessage.trim().isEmpty) {
+      _showSnack(
+        'No message selected. Please go to Choose Message to choose a message, then share the analysis with family.',
+      );
+      return;
+    }
+
     if (phone == null) return;
 
     final body = buildFamilyShareText(
@@ -369,6 +381,25 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
         iconColor: AppColors.accentGreen,
         title: text,
         message: 'Your scan has been shared.',
+        actions: [
+          AppDialogButton(
+            label: 'OK',
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMessageRequiredDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AppDialog(
+        icon: Icons.info_outline,
+        iconColor: AppColors.primaryBlue,
+        title: 'No message selected',
+        message:
+            'Please go to Choose Message to select a message, then share the analysis with family.',
         actions: [
           AppDialogButton(
             label: 'OK',
@@ -427,9 +458,11 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
             FigmaGlassButton(
               onPressed: _chooseMessage,
               child: _GlassLabel(
-  icon: Icons.swap_horiz_rounded,
-  text: _selectedResult == null ? 'Choose Message' : 'Switch Message',
-),
+                icon: Icons.swap_horiz_rounded,
+                text: _selectedResult == null
+                    ? 'Choose Message'
+                    : 'Switch Message',
+              ),
             ),
 
             const SizedBox(height: 16),
@@ -627,7 +660,7 @@ class _FamilySocialScreenState extends State<FamilySocialScreen> {
                 contact: contact,
                 isFirst: index == 0,
                 isLast: index == _contacts.length - 1,
-                canMessage: hasMessage && contact.phone != null,
+                canMessage: contact.phone != null,
                 showSent: _sharedContactId == contact.id,
                 onMessage: () => _messageContact(contact),
                 onMoveUp: () => _moveContact(index, -1),
@@ -1414,7 +1447,10 @@ class _ContactRow extends StatelessWidget {
             ),
           ),
           TextButton.icon(
-            onPressed: canMessage ? onMessage : null,
+            onPressed: contact.phone == null ? null : onMessage,
+            style: TextButton.styleFrom(
+              foregroundColor: canMessage ? _actionBlue : Colors.grey,
+            ),
             icon: Icon(
               showSent ? Icons.check : Icons.chat_bubble_outline,
               size: 18,
