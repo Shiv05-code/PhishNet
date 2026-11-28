@@ -7,6 +7,7 @@ import 'package:phishnet_app/models/home_stats.dart';
 import 'package:phishnet_app/screens/home_screen.dart';
 import 'package:phishnet_app/services/home_stats_cache.dart';
 import 'package:phishnet_app/services/scan_service.dart';
+import 'package:phishnet_app/models/saved_scan.dart';
 
 import 'support/fake_auth_service.dart';
 import 'support/test_helpers.dart';
@@ -39,10 +40,33 @@ Map<String, dynamic> _payload({
   'data_source': source,
 };
 
+Map<String, dynamic> _scanJson(String id, String risk, {int daysAgo = 1}) => {
+  'id': id,
+  'brief_description': 'Scan $id',
+  'summary': 'Summary $id',
+  'risk_level': risk,
+  'scam_percentage': risk == 'high' ? 90 : (risk == 'medium' ? 50 : 5),
+  'red_flags': [],
+  'next_steps': [],
+  'createdAt': DateTime.now()
+      .subtract(Duration(days: daysAgo))
+      .toUtc()
+      .toIso8601String(),
+  'monitored': true,
+};
+
+/// 10 monitored scans this week: 3 high, 2 medium, 5 low.
+List<SavedScan> _history() => [
+  for (var i = 0; i < 3; i++) SavedScan.fromJson(_scanJson('h$i', 'high')),
+  for (var i = 0; i < 2; i++) SavedScan.fromJson(_scanJson('m$i', 'medium')),
+  for (var i = 0; i < 5; i++) SavedScan.fromJson(_scanJson('l$i', 'low')),
+];
+
 class FakeScanService extends Fake implements ScanService {
   FakeScanService(this.stats);
   final HomeStats stats;
   int calls = 0;
+  List<SavedScan> history = const [];
 
   @override
   Future<HomeStats> getHomeStats() async {
@@ -53,6 +77,9 @@ class FakeScanService extends Fake implements ScanService {
     }
     return stats;
   }
+
+  @override
+  Future<List<SavedScan>> getScanHistory() async => history;
 
   int transientFailuresRemaining = 0;
 }
@@ -128,7 +155,8 @@ void main() {
   });
 
   testWidgets('Home shows counts from the summary service', (tester) async {
-    final service = FakeScanService(HomeStats.fromJson(_payload(attention: 1)));
+    final service = FakeScanService(HomeStats.fromJson(_payload(attention: 1)))
+      ..history = _history();
     await pumpScreen(
       tester,
       HomeScreen(
@@ -148,6 +176,8 @@ void main() {
     );
     expect(find.text('10'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
+    expect(find.text('30%'), findsOneWidget);
     expect(find.text('1 message needs your attention'), findsOneWidget);
     expect(find.textContaining('Prize notice'), findsOneWidget);
     expect(find.textContaining('Demo analysis'), findsNothing);
