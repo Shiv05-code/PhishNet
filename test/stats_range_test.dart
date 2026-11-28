@@ -42,7 +42,11 @@ void main() {
   });
 
   test('scans with no date are ignored', () {
-    final s = computeRangeStats([_scan('x', 'high', null)], StatsRange.year, now);
+    final s = computeRangeStats(
+      [_scan('x', 'high', null)],
+      StatsRange.year,
+      now,
+    );
     expect(s.total, 0);
   });
 
