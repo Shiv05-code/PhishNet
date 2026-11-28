@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/home_stats.dart';
 import '../models/saved_scan.dart';
+import '../models/stats_range.dart';
 import '../screens/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/home_stats_cache.dart';
@@ -109,6 +110,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   ScanService? _ownedService;
   HomeStats _stats = HomeStats.empty;
+  StatsRange _range = StatsRange.week;
+  RangeStats? _rangeStats;
 
   // Live Monitoring state comes from the backend, never from local prefs.
   final MonitoringService _monitor = MonitoringService();
@@ -128,6 +131,7 @@ class _HomeScreenState extends State<HomeScreen>
     final key = _cacheKey();
     if (key != null) _stats = HomeStatsCache.peek(key) ?? HomeStats.empty;
     unawaited(_restoreStatsAndRefresh(key));
+    unawaited(_loadRangeStats(_range));
     _autoRefresh = Timer.periodic(
       const Duration(minutes: 2),
       (_) => _loadStats(force: true),
@@ -135,7 +139,10 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addObserver(this);
     _listenForPlus();
     _alertSub = PushService.alerts.listen((_) {
-      if (mounted) _loadStats(force: true);
+      if (mounted) {
+        _loadStats(force: true);
+        unawaited(_loadRangeStats(_range));
+      }
     });
   }
 
@@ -363,6 +370,32 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  Future<void> _selectRange(StatsRange r) async {
+    setState(() {
+      _range = r;
+      _rangeStats = null;
+    });
+    await _loadRangeStats(r);
+  }
+
+  /// Counts Live Monitoring scans from History for the chosen range.
+  Future<void> _loadRangeStats(StatsRange r) async {
+    try {
+      final service = widget.scanService ?? (_ownedService ??= ScanService());
+      final history = await service.getScanHistory();
+      if (!mounted || _range != r) return;
+      setState(
+        () => _rangeStats = computeRangeStats(
+          history.where((s) => s.monitored).toList(),
+          r,
+          DateTime.now(),
+        ),
+      );
+    } catch (error) {
+      debugPrint('Range stats failed: $error');
+    }
+  }
+
   Future<void> _openCapture() async {
     await Navigator.of(context).push(fadeRoute(const CaptureScreen()));
     // A scan may have been saved while on the capture screen.
@@ -408,6 +441,8 @@ class _HomeScreenState extends State<HomeScreen>
     final now = DateTime.now();
     final stats = _stats;
     final hasAnyScans = stats.lastCheckedAt != null || stats.weekTotal > 0;
+    final view = _rangeStats;
+    String show(int? v, {String suffix = ''}) => v == null ? '-' : '$v$suffix';
     // Attention alerts are Plus-only: non-Plus users never see the flagged count.
     final hasAttention = _isPlus && stats.attention48h > 0;
 
@@ -444,7 +479,10 @@ class _HomeScreenState extends State<HomeScreen>
       body: FigmaGradientBackground(
         child: RefreshIndicator(
           color: AppColors.primaryBlue,
-          onRefresh: () => _loadStats(force: true),
+          onRefresh: () async {
+            await _loadStats(force: true);
+            await _loadRangeStats(_range);
+          },
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
@@ -543,6 +581,38 @@ class _HomeScreenState extends State<HomeScreen>
               ],
               _Reveal(
                 animation: _enter,
+                start: 0.35,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.72),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<StatsRange>(
+                        value: _range,
+                        borderRadius: BorderRadius.circular(14),
+                        style: const TextStyle(
+                          fontSize: AppTypography.label,
+                          color: AppColors.text,
+                        ),
+                        items: [
+                          for (final r in StatsRange.values)
+                            DropdownMenuItem(value: r, child: Text(r.label)),
+                        ],
+                        onChanged: (r) {
+                          if (r != null) _selectRange(r);
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              _Reveal(
+                animation: _enter,
                 start: 0.4,
                 child: IntrinsicHeight(
                   child: Row(
@@ -551,9 +621,9 @@ class _HomeScreenState extends State<HomeScreen>
                       Expanded(
                         child: _StatCard(
                           icon: Icons.mark_email_read,
-                          value: '${stats.weekTotal}',
+                          value: show(view?.total),
                           boldLabel: 'Emails',
-                          restLabel: ' checked this week',
+                          restLabel: ' checked ${_range.phrase}',
                           color: AppColors.primaryBlue,
                         ),
                       ),
@@ -561,7 +631,7 @@ class _HomeScreenState extends State<HomeScreen>
                       Expanded(
                         child: _StatCard(
                           icon: Icons.warning_amber_rounded,
-                          value: '${stats.weekHigh}',
+                          value: show(view?.high),
                           boldLabel: 'Possible scams',
                           restLabel: ' found',
                           color: AppColors.dangerRed,
@@ -582,7 +652,7 @@ class _HomeScreenState extends State<HomeScreen>
                       Expanded(
                         child: _StatCard(
                           icon: Icons.check_circle,
-                          value: '${stats.weekLow}',
+                          value: show(view?.low),
                           boldLabel: 'Safe',
                           restLabel: ' emails',
                           color: AppColors.accentGreen,
@@ -592,7 +662,7 @@ class _HomeScreenState extends State<HomeScreen>
                       Expanded(
                         child: _StatCard(
                           icon: Icons.shield,
-                          value: '${stats.scamRate}%',
+                          value: show(view?.scamRate, suffix: '%'),
                           boldLabel: 'Scam rate',
                           restLabel: ' of emails',
                           color: AppColors.cautionAmber,
@@ -661,6 +731,7 @@ class _TypedGreetingState extends State<_TypedGreeting> {
   Timer? _timer;
   int _shown = 0;
   bool _started = false;
+  bool _done = false;
 
   String get _full => '${widget.prefix}${widget.name}';
 
@@ -671,10 +742,14 @@ class _TypedGreetingState extends State<_TypedGreeting> {
     _started = true;
     if (MediaQuery.disableAnimationsOf(context)) {
       _shown = _full.length;
+      _done = true;
     } else {
       _timer = Timer.periodic(_tick, (t) {
         setState(() => _shown++);
-        if (_shown >= _full.length) t.cancel();
+        if (_shown >= _full.length) {
+          _done = true;
+          t.cancel();
+        }
       });
     }
   }
@@ -688,7 +763,9 @@ class _TypedGreetingState extends State<_TypedGreeting> {
   @override
   Widget build(BuildContext context) {
     final full = _full;
-    final shown = full.substring(0, _shown.clamp(0, full.length));
+    final shown = _done
+        ? full
+        : full.substring(0, _shown.clamp(0, full.length));
     final p = shown.length < widget.prefix.length ? shown : widget.prefix;
     final n = shown.length > widget.prefix.length
         ? shown.substring(widget.prefix.length)
