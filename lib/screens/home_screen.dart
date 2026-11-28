@@ -731,6 +731,7 @@ class _TypedGreetingState extends State<_TypedGreeting> {
   Timer? _timer;
   int _shown = 0;
   bool _started = false;
+  bool _done = false;
 
   String get _full => '${widget.prefix}${widget.name}';
 
@@ -741,10 +742,14 @@ class _TypedGreetingState extends State<_TypedGreeting> {
     _started = true;
     if (MediaQuery.disableAnimationsOf(context)) {
       _shown = _full.length;
+      _done = true;
     } else {
       _timer = Timer.periodic(_tick, (t) {
         setState(() => _shown++);
-        if (_shown >= _full.length) t.cancel();
+        if (_shown >= _full.length) {
+          _done = true;
+          t.cancel();
+        }
       });
     }
   }
@@ -758,7 +763,9 @@ class _TypedGreetingState extends State<_TypedGreeting> {
   @override
   Widget build(BuildContext context) {
     final full = _full;
-    final shown = full.substring(0, _shown.clamp(0, full.length));
+    final shown = _done
+        ? full
+        : full.substring(0, _shown.clamp(0, full.length));
     final p = shown.length < widget.prefix.length ? shown : widget.prefix;
     final n = shown.length > widget.prefix.length
         ? shown.substring(widget.prefix.length)
